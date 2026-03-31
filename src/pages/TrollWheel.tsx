@@ -29,18 +29,16 @@ const TROLLMOND_TIERS = [
 
 export default function TrollWheel() {
   const { profile } = useAuthStore();
-  const { troll_coins: coins, trollmonds, refreshCoins } = useCoins();
-  const [trollmondBalance, setTrollmondBalance] = useState(0);
+  const { refreshCoins } = useCoins();
   const [topSpinners, setTopSpinners] = useState<TopSpinner[]>([]);
   const [bigWinners, setBigWinners] = useState<BigWinner[]>([]);
   const [loading, setLoading] = useState(true);
+  const [trollmondBalance, setTrollmondBalance] = useState(profile?.trollmonds ?? 0);
+  const userBalance = trollmondBalance;
   
-  // Use coins directly from useCoins hook - this stays in sync with sidebar
-  const userBalance = coins ?? 0;
-  
-  // Initialize trollmonds from profile
+  // Sync trollmondBalance when profile changes
   useEffect(() => {
-    if (profile?.trollmonds) {
+    if (profile?.trollmonds !== undefined) {
       setTrollmondBalance(profile.trollmonds);
     }
   }, [profile?.trollmonds]);
@@ -117,26 +115,20 @@ export default function TrollWheel() {
   }, []);
 
   const handleBalanceChange = async (newBalance: number) => {
-    // Refresh coins from database after spin to sync with sidebar
-    await refreshCoins();
+    // Optimistically update local state
+    setTrollmondBalance(newBalance);
+    // Sync sidebar by updating the global store profile
+    if (profile) {
+      useAuthStore.getState().setProfile({ ...profile, trollmonds: newBalance });
+    }
   };
 
   const handleTrollmondChange = async (newBalance: number) => {
+    // Optimistically update local state
     setTrollmondBalance(newBalance);
-    // Refresh profile from database to get updated trollmonds
-    if (profile?.id) {
-      try {
-        const { data } = await supabase
-          .from('user_profiles')
-          .select('trollmonds')
-          .eq('id', profile.id)
-          .single();
-        if (data?.trollmonds !== undefined) {
-          setTrollmondBalance(data.trollmonds);
-        }
-      } catch (err) {
-        console.warn('Failed to refresh trollmonds:', err);
-      }
+    // Sync sidebar by updating the global store profile
+    if (profile) {
+      useAuthStore.getState().setProfile({ ...profile, trollmonds: newBalance });
     }
   };
 
@@ -152,7 +144,7 @@ export default function TrollWheel() {
   const discountTier = getDiscountTier();
 
   // Under construction - show only the construction message
-  const IS_UNDER_CONSTRUCTION = true;
+  const IS_UNDER_CONSTRUCTION = false;
 
   if (IS_UNDER_CONSTRUCTION) {
     return (
@@ -189,7 +181,7 @@ export default function TrollWheel() {
               Troll Wheel
             </h1>
             <p className="text-slate-400 text-xs md:text-sm">
-              Spin to win! 125 coins per spin
+              Spin to win! 10 Trollmonds per spin
             </p>
           </div>
         </div>
@@ -212,13 +204,11 @@ export default function TrollWheel() {
                 className="w-full flex items-center justify-between text-white"
               >
                 <div className="flex items-center gap-2">
-                  <Coins className="w-5 h-5 text-yellow-400" />
-                  <span className="font-bold">{userBalance.toLocaleString()}</span>
-                  <span className="text-yellow-400 text-sm">coins</span>
+                  <Gem className="w-5 h-5 text-purple-400" />
+                  <span className="font-bold">{trollmondBalance.toLocaleString()}</span>
+                  <span className="text-purple-300 text-sm">Trollmonds</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Gem className="w-4 h-4 text-purple-400" />
-                  <span className="text-purple-300 text-sm">{trollmondBalance}</span>
                   {showMobileInfo ? <X size={16} /> : <Minus size={16} />}
                 </div>
               </button>

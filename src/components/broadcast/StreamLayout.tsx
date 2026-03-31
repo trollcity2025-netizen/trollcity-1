@@ -29,6 +29,7 @@ export default function StreamLayout({
   const [chatWidth, setChatWidth] = useState(320)
   const [dragging, setDragging] = useState(false)
   const [viewMode, setViewMode] = useState<'dashboard' | 'fullscreen'>('dashboard')
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
 
   const startDrag = () => setDragging(true)
   const stopDrag = () => setDragging(false)
@@ -45,7 +46,7 @@ export default function StreamLayout({
   if (viewMode === 'fullscreen') {
     return (
       <div
-        className="h-dvh w-full bg-black text-white flex flex-col overflow-hidden"
+        className="relative h-dvh w-full bg-black text-white flex flex-col overflow-hidden"
         onMouseMove={onDrag}
         onMouseUp={stopDrag}
       >
@@ -122,28 +123,42 @@ export default function StreamLayout({
   // ─── DASHBOARD GRID MODE ───
   return (
       <div
-        className="h-dvh w-full bg-[#0c0c10] text-white flex flex-col overflow-hidden"
+        className="relative h-dvh w-full bg-[#0c0c10] text-white flex flex-col overflow-hidden"
         onMouseMove={onDrag}
         onMouseUp={stopDrag}
       >
-      {/* TOP BAR */}
-      <div className="h-11 bg-[#13131a] border-b border-white/5 flex items-center justify-between px-4 shrink-0 z-50">
-        <div className="flex items-center gap-3">
-          <LayoutDashboard size={13} className="text-violet-400" />
-          <span className="text-[10px] font-bold text-white uppercase tracking-wider">Dashboard</span>
-          <div className="w-px h-4 bg-white/10" />
-          {header}
+      {/* TOP BAR - Collapsible */}
+      {headerCollapsed ? (
+        <div className="h-6 bg-[#13131a] border-b border-white/5 flex items-center justify-center shrink-0 z-50 cursor-pointer hover:bg-[#1a1a24] transition-colors"
+          onClick={() => setHeaderCollapsed(false)}>
+          <Minimize2 size={10} className="text-white/30 rotate-180" />
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode('fullscreen')}
-            className="w-7 h-7 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all"
-            title="Fullscreen View"
-          >
-            <Maximize2 size={12} />
-          </button>
+      ) : (
+        <div className="h-11 bg-[#13131a] border-b border-white/5 flex items-center justify-between px-4 shrink-0 z-50">
+          <div className="flex items-center gap-3">
+            <LayoutDashboard size={13} className="text-violet-400" />
+            <span className="text-[10px] font-bold text-white uppercase tracking-wider">Dashboard</span>
+            <div className="w-px h-4 bg-white/10" />
+            {header}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setHeaderCollapsed(true)}
+              className="w-7 h-7 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all"
+              title="Collapse Header"
+            >
+              <Minimize2 size={12} />
+            </button>
+            <button
+              onClick={() => setViewMode('fullscreen')}
+              className="w-7 h-7 rounded bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all"
+              title="Fullscreen View"
+            >
+              <Maximize2 size={12} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* GRID LAYOUT - uses remaining height after header */}
       <div className="flex-1 min-h-0 grid grid-cols-3 gap-1.5 p-1.5 overflow-hidden">

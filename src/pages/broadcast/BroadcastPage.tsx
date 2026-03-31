@@ -34,12 +34,16 @@ import {
 } from '../../config/broadcastCategories'
 import ChallengeManager from '../../components/broadcast/ChallengeManager'
 import { useFiveVFiveBattle } from '../../hooks/useFiveVFiveBattle'
+import { useBattleSubscriber } from '../../hooks/useBattleSubscriber'
 import FiveVFiveBattleOverlay from '../../components/broadcast/FiveVFiveBattleOverlay'
 import BattleStartModal from '../../components/broadcast/BattleStartModal'
 
-import { Loader2 } from 'lucide-react'
+import { Loader2, Shield } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStreamSeats } from '../../hooks/useStreamSeats'
+import { useBroadcastAbilities } from '../../hooks/useBroadcastAbilities'
+import AbilityBox from '../../components/broadcast/AbilityBox'
+import BroadcastAbilityEffects from '../../components/broadcast/BroadcastAbilityEffects'
 
 function BroadcastPage() {
   const params = useParams()
@@ -129,6 +133,18 @@ function BroadcastPage() {
   const getGiftUserPositionsRef = useRef<() => Record<string, { top: number; left: number; width: number; height: number }>>(() => ({}))
   const giftNameMapRef = useRef<Record<string, string>>({})
   // const playGiftAnimation = useAnimationStore((state) => state.playGiftAnimation)
+
+  // Broadcast Abilities
+  const {
+    abilities: userAbilities,
+    activeEffects: abilityActiveEffects,
+    loading: abilityLoading,
+    useAbility: activateAbility,
+    isEffectActive,
+    getCooldownRemaining,
+    getEffectRemaining,
+  } = useBroadcastAbilities(streamId)
+  const [isAbilityBoxOpen, setIsAbilityBoxOpen] = useState(false)
 
   const handleGetUserPositions = useCallback((getPositions: () => Record<string, { top: number; left: number; width: number; height: number }>) => {
     getGiftUserPositionsRef.current = getPositions;
@@ -652,6 +668,120 @@ function BroadcastPage() {
     isHost,
     category: stream?.category || 'general',
   });
+
+  // Battle subscriber for non-host viewers on this stream
+  const { state: subscriberBattleState, resetBattle: subscriberResetBattle } = useBattleSubscriber(stream);
+
+  // Use host's battle state if host, otherwise use subscriber state
+  const effectiveBattleState = isHost ? fiveVFiveState : subscriberBattleState;
+  const effectiveResetBattle = isHost ? fiveVFiveReset : subscriberResetBattle;
+
+  // ─── BATTLE ROOM SWITCHING ───
+  // When stream enters battle mode, switch LiveKit to shared battle room
+  // so both broadcasters and all viewers see the same video
+  const prevBattleIdRef = useRef<string | null>(null);
+  const originalRoomRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const isBattle = stream?.is_battle;
+    const battleId = stream?.battle_id;
+
+    if (isBattle && battleId && battleId !== prevBattleIdRef.current) {
+      // Entering battle mode - switch to shared battle room
+      prevBattleIdRef.current = battleId;
+      if (!originalRoomRef.current) {
+        originalRoomRef.current = stream.id; // Save original room name
+      }
+
+      const battleRoomName = `battle-${battleId}`;
+      const currentRoom = roomRef.current;
+      const wasConnected = currentRoom && currentRoom.state === 'connected';
+
+      const switchRoom = async () => {
+        try {
+          // Disconnect from current room
+          if (currentRoom) {
+            try { currentRoom.disconnect().catch(() => {}); } catch {}
+          }
+
+          // Get token for battle room
+          const userIdentity = user?.id || userSeat?.guest_id || anonymousViewerIdRef.current;
+          const shouldPublish = isHost || !!userSeat;
+          const { data, error } = await supabase.functions.invoke('livekit-token', {
+            body: {
+              room: battleRoomName,
+              identity: shouldPublish ? userIdentity : `viewer-${userIdentity.substring(0, 12)}`,
+              name: profile?.username || user?.email || 'User',
+              role: shouldPublish ? 'publisher' : 'audience',
+              isHost: shouldPublish
+            }
+          });
+          if (error || !data?.token) {
+            console.warn('[BattleRoom] Could not get battle room token:', error);
+            return;
+          }
+
+          // Create new room and connect
+          const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud';
+          const newRoom = shouldPublish
+            ? new Room({ adaptiveStream: true, dynacast: true })
+            : new Room({ adaptiveStream: true, dynacast: true });
+
+          // Set up event listeners
+          newRoom.on('participantConnected', (p: RemoteParticipant) => {
+            setRemoteParticipants(prev => new Map(prev).set(p.identity, p));
+          });
+          newRoom.on('participantDisconnected', (p: RemoteParticipant) => {
+            setRemoteParticipants(prev => {
+              const next = new Map(prev);
+              next.delete(p.identity);
+              return next;
+            });
+            handleParticipantDisconnected(p.identity);
+          });
+          newRoom.on('trackSubscribed', (track, pub, participant) => {
+            setRemoteParticipants(prev => new Map(prev).set(participant.identity, participant));
+          });
+
+          await newRoom.connect(livekitUrl, data.token);
+          roomRef.current = newRoom;
+
+          // If publisher, publish local tracks
+          if (shouldPublish && localTracksRef.current) {
+            const [audioTrack, videoTrack] = localTracksRef.current;
+            if (audioTrack) {
+              try { await newRoom.localParticipant.publishTrack(audioTrack); } catch {}
+            }
+            if (videoTrack) {
+              try { await newRoom.localParticipant.publishTrack(videoTrack); } catch {}
+            }
+          }
+
+          console.log('[BattleRoom] Switched to battle room:', battleRoomName);
+        } catch (err) {
+          console.error('[BattleRoom] Error switching to battle room:', err);
+        }
+      };
+
+      switchRoom();
+
+    } else if (!isBattle && prevBattleIdRef.current && originalRoomRef.current) {
+      // Battle ended - switch back to original room
+      prevBattleIdRef.current = null;
+      const originalRoom = originalRoomRef.current;
+      originalRoomRef.current = null;
+
+      const currentRoom = roomRef.current;
+      if (currentRoom) {
+        try { currentRoom.disconnect().catch(() => {}); } catch {}
+      }
+
+      // Re-initialize LiveKit connection to original stream room
+      hasJoinedRef.current = false;
+      setRemoteParticipants(new Map());
+      setStream((prev: any) => prev ? { ...prev } : prev); // Trigger re-init
+    }
+  }, [stream?.is_battle, stream?.battle_id]);
 
   const canPublish = isHost || !!userSeat
 
@@ -2696,7 +2826,7 @@ function BroadcastPage() {
             onChallengeBroadcaster={undefined}
             hasPendingChallenge={false}
             onFiveVFiveBattle={isHost && stream.status === 'live' && fiveVFiveIsGeneralChat ? fiveVFiveFindMatch : undefined}
-            fiveVFiveBattleActive={fiveVFiveState.active}
+            fiveVFiveBattleActive={effectiveBattleState.active}
             isLive={stream.status === 'live'}
           />
         }
@@ -2739,16 +2869,39 @@ function BroadcastPage() {
               }}
             />
             {/* 5v5 Battle Overlay */}
-            {fiveVFiveState.phase !== 'idle' && (
+            {effectiveBattleState.phase !== 'idle' && (
               <FiveVFiveBattleOverlay
-                state={fiveVFiveState}
+                state={effectiveBattleState}
                 currentUserId={user?.id || ''}
-                onUseAbility={fiveVFiveUseAbility}
-                onRequestRematch={fiveVFiveRequestRematch}
+                onUseAbility={isHost ? fiveVFiveUseAbility : () => {}}
+                onRequestRematch={isHost ? fiveVFiveRequestRematch : () => {}}
                 TEAM_FREEZE_COOLDOWN={TEAM_FREEZE_COOLDOWN}
                 REVERSE_COOLDOWN={REVERSE_COOLDOWN}
                 DOUBLE_XP_COOLDOWN={DOUBLE_XP_COOLDOWN}
+                userAbilities={userAbilities}
+                currentUsername={profile?.username || 'Someone'}
+                localTracks={localTracks}
+                remoteParticipants={Array.from(remoteParticipants.values())}
+                isHost={isHost}
               />
+            )}
+            {/* Broadcast Ability Effects Overlay */}
+            <BroadcastAbilityEffects activeEffects={abilityActiveEffects} />
+            
+            {/* Ability Box Floating Button */}
+            {userAbilities.length > 0 && (
+              <div className="absolute bottom-20 right-3 z-[50] pointer-events-auto">
+                <button
+                  onClick={() => setIsAbilityBoxOpen(true)}
+                  className="relative bg-purple-600/90 hover:bg-purple-500 text-white p-3 rounded-full shadow-lg shadow-purple-500/30 transition-all hover:scale-110"
+                  title="Ability Box"
+                >
+                  <Shield className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                    {userAbilities.reduce((sum, a) => sum + a.quantity, 0)}
+                  </span>
+                </button>
+              </div>
             )}
           </>
         }
@@ -2772,7 +2925,7 @@ function BroadcastPage() {
                 const totalAmount = giftData.coinCost * quantity;
                 
                 // 5v5 Battle gift processing
-                if (fiveVFiveState.active && fiveVFiveState.phase === 'active') {
+                if (effectiveBattleState.active && effectiveBattleState.phase === 'active' && isHost) {
                   const giftAmount = giftData.coinCost * quantity;
                   if (target.type === 'all') {
                     const allRecipients = [stream.user_id, ...activeUserIds];
@@ -2892,11 +3045,30 @@ function BroadcastPage() {
 
             {/* 5v5 Battle Start Modal */}
             <BattleStartModal
-              isOpen={fiveVFiveState.phase === 'pre_battle'}
-              participants={fiveVFiveState.participants}
-              countdown={fiveVFiveState.timerSeconds}
+              isOpen={effectiveBattleState.phase === 'pre_battle'}
+              participants={effectiveBattleState.participants}
+              countdown={effectiveBattleState.timerSeconds}
               currentUserId={user?.id || ''}
-              onClose={fiveVFiveReset}
+              onClose={effectiveResetBattle}
+              userAbilities={userAbilities}
+            />
+
+            {/* Ability Box Modal */}
+            <AbilityBox
+              isOpen={isAbilityBoxOpen}
+              onClose={() => setIsAbilityBoxOpen(false)}
+              abilities={userAbilities}
+              activeEffects={abilityActiveEffects}
+              onActivate={async (abilityId, targetUserId, targetUsername) => {
+                const success = await activateAbility(abilityId, targetUserId, targetUsername);
+                if (success) setIsAbilityBoxOpen(false);
+                return success;
+              }}
+              getCooldownRemaining={getCooldownRemaining}
+              isEffectActive={isEffectActive}
+              getEffectRemaining={getEffectRemaining}
+              isInBroadcast={true}
+              loading={abilityLoading}
             />
           </>
         }

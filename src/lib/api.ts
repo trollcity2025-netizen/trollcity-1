@@ -373,15 +373,30 @@ async function request<T = any>(
     if (error instanceof AuthApiError) {
       console.error(`[Auth Error ${requestId}] AuthApiError detected:`, error.message)
       if (error.message.includes('Invalid Refresh Token') || error.message.includes('Refresh Token Not Found')) {
-        console.log(`[Auth Error ${requestId}] Invalid refresh token - logging out user`)
-        // Import the store dynamically to avoid circular imports
+        console.log(`[Auth Error ${requestId}] Invalid refresh token - attempting recovery before logout`)
+        // Try to recover the session before forcing logout
+        try {
+          const { supabase: supabaseClient } = await import('./supabase')
+          const { data: recoverData } = await supabaseClient.auth.refreshSession()
+          if (recoverData.session?.access_token) {
+            console.log(`[Auth Error ${requestId}] Session recovered successfully`)
+            return {
+              success: false,
+              error: 'Session was refreshed. Please retry your request.',
+              debug: { requestId, ...errorDetails },
+            }
+          }
+        } catch (recoveryErr) {
+          console.warn(`[Auth Error ${requestId}] Session recovery failed:`, recoveryErr)
+        }
+        // Recovery failed - log out
+        console.log(`[Auth Error ${requestId}] Session recovery failed - logging out user`)
         import('./store').then(({ useAuthStore }) => {
           return useAuthStore.getState().logout()
         }).then(() => {
           console.log('Logout completed successfully')
         }).catch(storeError => {
           console.error('Failed to import store for logout:', storeError)
-          // Fallback: clear local storage and reload
           localStorage.removeItem('troll-city-auth')
           window.location.href = '/auth'
         })

@@ -24,6 +24,7 @@ import { supabase } from '../lib/supabase';
  * @param config.role - 'publisher' | 'viewer'
  * @param config.audioOnly - Whether room is audio-only (pods)
  * @param config.publish - Whether user should publish (host/speaker/guest)
+ * @param config.isAdmin - Whether user is admin (1080p) vs regular (720p)
  * @param config.onUserJoined - Callback when user joins
  * @param config.onUserLeft - Callback when user leaves
  * @param config.onError - Error callback
@@ -34,6 +35,7 @@ export function useLiveKitRoom({
   role = 'viewer',
   audioOnly = false,
   publish = false,
+  isAdmin = false,
   onUserJoined,
   onUserLeft,
   onError
@@ -86,6 +88,9 @@ export function useLiveKitRoom({
     }
   }, [publish]);
 
+  // Resolve video preset based on admin status
+  const videoPreset = isAdmin ? VideoPresets.h1080 : VideoPresets.h720;
+
   // Create local tracks based on room type
   const createLocalTracks = useCallback(async () => {
     try {
@@ -95,7 +100,7 @@ export function useLiveKitRoom({
 
       // Video track - only create if not audio-only room
       if (!audioOnly && roomType !== 'pod') {
-        const videoTrack = await LocalVideoTrack.create(VideoPresets.hd);
+        const videoTrack = await LocalVideoTrack.create(videoPreset);
         setLocalVideoTrack(videoTrack);
       }
 
@@ -104,7 +109,7 @@ export function useLiveKitRoom({
       console.error('[useLiveKitRoom] Error creating local tracks:', err);
       throw err;
     }
-  }, [audioOnly, roomType]);
+  }, [audioOnly, roomType, videoPreset]);
 
   // Handle participant joined
   const handleParticipantJoined = useCallback((participant: RemoteParticipant) => {
@@ -171,7 +176,7 @@ export function useLiveKitRoom({
         adaptiveStream: true,
         dynacast: true,
         videoCaptureDefaults: {
-          ...VideoPresets.hd,
+          ...videoPreset,
           facingMode: 'user'
         },
         audioCaptureDefaults: {
@@ -248,7 +253,7 @@ export function useLiveKitRoom({
 
           // Create video track if not audio-only
           if (!audioOnly && roomType !== 'pod') {
-            const videoTrack = await LocalVideoTrack.create(VideoPresets.hd);
+            const videoTrack = await LocalVideoTrack.create(videoPreset);
             setLocalVideoTrack(videoTrack);
             await room.localParticipant.publishTrack(videoTrack);
           }
@@ -300,7 +305,7 @@ export function useLiveKitRoom({
         }
       }
     }
-  }, [roomId, publish, audioOnly, roomType, fetchToken, handleParticipantJoined, handleParticipantLeft, handleTrackSubscribed, handleTrackUnsubscribed, onError]);
+  }, [roomId, publish, audioOnly, roomType, videoPreset, fetchToken, handleParticipantJoined, handleParticipantLeft, handleTrackSubscribed, handleTrackUnsubscribed, onError]);
 
   // Join as viewer (LiveKit)
   const joinAsAudience = useCallback(async (userId: string) => {
@@ -480,14 +485,14 @@ export function useLiveKitRoom({
         await roomRef.current.localParticipant.unpublishTrack(localVideoTrack);
         localVideoTrack.stop();
       } else {
-        const newTrack = await LocalVideoTrack.create(VideoPresets.hd);
+        const newTrack = await LocalVideoTrack.create(videoPreset);
         setLocalVideoTrack(newTrack);
         await roomRef.current.localParticipant.publishTrack(newTrack);
       }
     } catch (err) {
       console.error('[useLiveKitRoom] Error toggling camera:', err);
     }
-  }, [localVideoTrack]);
+  }, [localVideoTrack, videoPreset]);
 
   // Toggle microphone
   const toggleMicrophone = useCallback(async () => {

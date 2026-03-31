@@ -469,12 +469,26 @@ function AppContent() {
         message.includes('Invalid Refresh Token') ||
         message.includes('Refresh Token Not Found')
       ) {
-        console.warn('Caught invalid refresh token error, signing out...');
+        console.warn('Caught invalid refresh token error, attempting recovery...');
         event.preventDefault(); // Prevent default console error
         
-        // Clear session and redirect to auth
-        useAuthStore.getState().logout()
-        window.location.href = '/auth';
+        // Don't immediately logout - attempt session recovery first
+        // The background refresh hook will handle logout if recovery truly fails
+        supabase.auth.getSession().then(({ data }) => {
+          if (!data.session?.access_token) {
+            // Try refreshing once before giving up
+            supabase.auth.refreshSession().then(({ data: refreshData }) => {
+              if (!refreshData.session?.access_token) {
+                console.warn('Session recovery failed, signing out...')
+                useAuthStore.getState().logout()
+                window.location.href = '/auth'
+              }
+            }).catch(() => {
+              useAuthStore.getState().logout()
+              window.location.href = '/auth'
+            })
+          }
+        })
       }
     };
 
@@ -878,11 +892,19 @@ function AppContent() {
     const onRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason
       
-      // Handle Invalid Refresh Token error by logging out
+      // Handle Invalid Refresh Token error - attempt recovery before logging out
       const reasonMsg = reason?.message || String(reason)
       if (reasonMsg.includes('Invalid Refresh Token') || reasonMsg.includes('Refresh Token Not Found')) {
-        console.warn('Invalid refresh token detected, logging out...')
-        useAuthStore.getState().logout()
+        console.warn('Invalid refresh token detected, attempting recovery...')
+        // Attempt session recovery instead of immediate logout
+        supabase.auth.refreshSession().then(({ data }) => {
+          if (!data.session?.access_token) {
+            console.warn('Session recovery failed, logging out...')
+            useAuthStore.getState().logout()
+          }
+        }).catch(() => {
+          useAuthStore.getState().logout()
+        })
         return
       }
 

@@ -41,6 +41,7 @@ export interface FiveVFiveBattleState {
   rematchOffered: boolean;
   rematchAccepted: { A: boolean; B: boolean };
   rematchCountdown: number;
+  abilityEffects: Array<{ id: string; type: string; team?: 'A' | 'B'; username: string; timestamp: number }>;
 }
 
 const BATTLE_DURATION = 180; // 3 minutes
@@ -71,6 +72,7 @@ const INITIAL_STATE: FiveVFiveBattleState = {
   rematchOffered: false,
   rematchAccepted: { A: false, B: false },
   rematchCountdown: 0,
+  abilityEffects: [],
 };
 
 export interface UseFiveVFiveBattleProps {
@@ -126,13 +128,45 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
     toast.loading('Searching for opponent...', { id: 'battle-matchmaking' });
 
     try {
-      const { data: opponents, error } = await supabase.rpc('find_5v5_match', {
-        p_stream_id: streamId,
-      });
+      let opponent: { id: string; user_id: string; title: string; category: string; current_viewers: number } | null = null;
 
-      if (error) throw error;
+      // Try TM (Troll Match) matchmaking first - use users you've matched with
+      try {
+        const { data: tmMatches } = await supabase.rpc('get_tm_matches', {
+          p_user_id: user.id,
+          p_dating: false,
+          p_limit: 20,
+        });
 
-      const opponent = Array.isArray(opponents) && opponents.length > 0 ? opponents[0] : null;
+        if (tmMatches && tmMatches.length > 0) {
+          // Find which matched users have a live stream in general chat
+          const matchedUserIds = tmMatches.map((m: any) => m.user_id);
+          const { data: liveStreams } = await supabase
+            .from('streams')
+            .select('id, user_id, title, category, current_viewers')
+            .in('user_id', matchedUserIds)
+            .eq('is_live', true)
+            .eq('category', 'general')
+            .neq('id', streamId)
+            .gt('current_viewers', 0);
+
+          if (liveStreams && liveStreams.length > 0) {
+            // Pick a random matched user's stream
+            opponent = liveStreams[Math.floor(Math.random() * liveStreams.length)];
+          }
+        }
+      } catch (tmErr) {
+        console.warn('[FiveVFive] TM matchmaking unavailable, falling back to random:', tmErr);
+      }
+
+      // Fallback: random matching via find_5v5_match
+      if (!opponent) {
+        const { data: opponents, error } = await supabase.rpc('find_5v5_match', {
+          p_stream_id: streamId,
+        });
+        if (error) throw error;
+        opponent = Array.isArray(opponents) && opponents.length > 0 ? opponents[0] : null;
+      }
 
       if (!opponent || !opponent.id) {
         toast.dismiss('battle-matchmaking');
@@ -261,6 +295,18 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
         console.warn('[FiveVFive] Could not save battle to DB:', battleError.message);
       }
 
+      // Set both streams to battle mode so ALL viewers on both sides see the battle
+      await Promise.all([
+        supabase
+          .from('streams')
+          .update({ is_battle: true, battle_id: battleId })
+          .eq('id', streamId),
+        supabase
+          .from('streams')
+          .update({ is_battle: true, battle_id: battleId })
+          .eq('id', opponent.id),
+      ]);
+
       // Subscribe to battle channel
       const channel = supabase.channel(`5v5-battle:${battleId}`);
       channel.on('broadcast', { event: '*' }, (payload) => {
@@ -309,13 +355,15 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
     countdownRef.current = setInterval(() => {
       countdown--;
       setState(prev => ({ ...prev, timerSeconds: countdown }));
+      // Broadcast countdown so ALL participants see the same timer
+      broadcastState('timer_sync', { remaining: countdown, phase: 'pre_battle' });
 
       if (countdown <= 0) {
         if (countdownRef.current) clearInterval(countdownRef.current);
         startBattleTimer(battleId, participants, abilities);
       }
     }, 1000);
-  }, []);
+  }, [broadcastState]);
 
   // ─── BATTLE TIMER ───
   const startBattleTimer = useCallback((
@@ -387,26 +435,40 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
   }, [broadcastState]);
 
   // ─── END BATTLE ───
-  const endBattle = useCallback(() => {
+  const endBattle = useCallback(async () => {
     cleanup();
-    setState(prev => {
-      const winner = prev.teamAScore > prev.teamBScore ? 'A' :
-        prev.teamBScore > prev.teamAScore ? 'B' : 'draw';
 
-      broadcastState('battle_ended', {
-        winner,
-        teamAScore: prev.teamAScore,
-        teamBScore: prev.teamBScore,
-      });
+    const currentState = stateRef.current;
+    const winner = currentState.teamAScore > currentState.teamBScore ? 'A' :
+      currentState.teamBScore > currentState.teamAScore ? 'B' : 'draw';
 
-      return {
-        ...prev,
-        phase: 'ended',
-        winner,
-        active: false,
-        rematchCountdown: REMATCH_DURATION,
-      };
+    broadcastState('battle_ended', {
+      winner,
+      teamAScore: currentState.teamAScore,
+      teamBScore: currentState.teamBScore,
     });
+
+    // Clear battle mode on ALL streams that reference this battle
+    if (currentState.battleId) {
+      // Also try to clear by battle_id in case stream IDs differ
+      await supabase
+        .from('streams')
+        .update({ is_battle: false, battle_id: null })
+        .eq('battle_id', currentState.battleId);
+      // Also clear our own stream explicitly
+      await supabase
+        .from('streams')
+        .update({ is_battle: false, battle_id: null })
+        .eq('id', streamId);
+    }
+
+    setState(prev => ({
+      ...prev,
+      phase: 'ended',
+      winner,
+      active: false,
+      rematchCountdown: REMATCH_DURATION,
+    }));
 
     // Start rematch countdown
     let rematchTime = REMATCH_DURATION;
@@ -418,7 +480,7 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
         resetBattle();
       }
     }, 1000);
-  }, [cleanup, broadcastState]);
+  }, [cleanup, broadcastState, streamId]);
 
   // ─── RESET ───
   const resetBattle = useCallback(() => {
@@ -512,12 +574,20 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
             activeEndsAt: now + TEAM_FREEZE_DURATION * 1000,
           };
           toast.success('❄️ Opposing team frozen!');
+          const freezeEffect = {
+            id: `freeze-${Date.now()}`,
+            type: 'team_freeze',
+            team: participant.team === 'A' ? 'B' as const : 'A' as const,
+            username: participant.username,
+            timestamp: Date.now(),
+          };
           broadcastState('ability_used', {
             userId,
             ability: 'team_freeze',
             team: participant.team,
             targetTeam: participant.team === 'A' ? 'B' : 'A',
           });
+          broadcastState('ability_visual', { effect: freezeEffect });
           break;
         }
         case 'reverse': {
@@ -529,26 +599,26 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
             available: true,
             cooldownEndsAt: now + REVERSE_COOLDOWN * 1000,
           };
-          // Check if opposing team has an active freeze - reverse it
           const opposingTeam = participant.team === 'A' ? 'B' : 'A';
           const isOpposingFrozen = opposingTeam === 'A' ? prev.frozenTeams.A : prev.frozenTeams.B;
           if (isOpposingFrozen) {
             toast.success('🔄 Reverse! Freeze sent back!');
-            broadcastState('ability_used', {
-              userId,
-              ability: 'reverse',
-              team: participant.team,
-              reversed: true,
-            });
           } else {
             toast('🔄 Reverse activated - no freeze to reverse', { icon: '⚡' });
-            broadcastState('ability_used', {
-              userId,
-              ability: 'reverse',
-              team: participant.team,
-              reversed: false,
-            });
           }
+          const reverseEffect = {
+            id: `reverse-${Date.now()}`,
+            type: 'reverse',
+            username: participant.username,
+            timestamp: Date.now(),
+          };
+          broadcastState('ability_used', {
+            userId,
+            ability: 'reverse',
+            team: participant.team,
+            reversed: isOpposingFrozen,
+          });
+          broadcastState('ability_visual', { effect: reverseEffect });
           break;
         }
         case 'double_xp': {
@@ -563,11 +633,19 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
             activeEndsAt: now + DOUBLE_XP_DURATION * 1000,
           };
           toast.success('💰 Double XP activated!');
+          const dxpEffect = {
+            id: `dxp-${Date.now()}`,
+            type: 'double_xp',
+            team: participant.team,
+            username: participant.username,
+            timestamp: Date.now(),
+          };
           broadcastState('ability_used', {
             userId,
             ability: 'double_xp',
             team: participant.team,
           });
+          broadcastState('ability_visual', { effect: dxpEffect });
           break;
         }
       }
@@ -658,10 +736,21 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
         break;
       }
       case 'timer_sync': {
-        setState(prev => ({
-          ...prev,
-          timerSeconds: data.remaining,
-        }));
+        setState(prev => {
+          // Handle pre_battle countdown ending
+          if (data.phase === 'pre_battle' && data.remaining <= 0 && prev.phase === 'pre_battle') {
+            return {
+              ...prev,
+              phase: 'active',
+              timerSeconds: BATTLE_DURATION,
+              totalDuration: BATTLE_DURATION,
+            };
+          }
+          return {
+            ...prev,
+            timerSeconds: data.remaining,
+          };
+        });
         break;
       }
       case 'gift_scored': {
@@ -687,6 +776,21 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
           toast(`❄️ Team ${targetTeam} has been frozen!`, { icon: '❄️' });
         } else if (ability === 'double_xp') {
           toast(`💰 Team ${team} has Double XP!`, { icon: '💰' });
+        }
+        break;
+      }
+      case 'ability_visual': {
+        if (data.effect) {
+          setState(prev => ({
+            ...prev,
+            abilityEffects: [...prev.abilityEffects, data.effect],
+          }));
+          setTimeout(() => {
+            setState(prev => ({
+              ...prev,
+              abilityEffects: prev.abilityEffects.filter(e => e.id !== data.effect.id),
+            }));
+          }, 3000);
         }
         break;
       }

@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, Shield, Snowflake, RotateCcw, Zap, Gift, Coins, Users, Clock, Info, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { BattleParticipant } from '../../hooks/useFiveVFiveBattle';
+import type { UserAbility } from '../../types/broadcastAbilities';
+import { getAbilityById } from '../../types/broadcastAbilities';
 
 interface BattleStartModalProps {
   isOpen: boolean;
@@ -10,6 +12,7 @@ interface BattleStartModalProps {
   countdown: number;
   currentUserId: string;
   onClose: () => void;
+  userAbilities?: UserAbility[];
 }
 
 export default function BattleStartModal({
@@ -18,6 +21,7 @@ export default function BattleStartModal({
   countdown,
   currentUserId,
   onClose,
+  userAbilities = [],
 }: BattleStartModalProps) {
   if (!isOpen) return null;
 
@@ -154,36 +158,49 @@ export default function BattleStartModal({
                 </div>
               </div>
 
-              {/* Abilities */}
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <Zap size={12} className="text-yellow-400" />
-                  YOUR ABILITIES
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="text-center">
-                    <div className="w-10 h-10 mx-auto rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center mb-1.5">
-                      <Snowflake size={18} className="text-cyan-400" />
+              {/* Abilities - only show earned ones */}
+              {(() => {
+                const battleAbilityIds = ['team_freeze', 'reverse', 'double_xp'];
+                const earnedBattleAbilities = userAbilities
+                  .filter(a => battleAbilityIds.includes(a.ability_id) && a.quantity > 0)
+                  .map(a => ({ ...getAbilityById(a.ability_id as any), quantity: a.quantity }))
+                  .filter(Boolean);
+
+                if (earnedBattleAbilities.length === 0) {
+                  return (
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-center">
+                      <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5 justify-center">
+                        <Zap size={12} className="text-yellow-400" />
+                        BATTLE ABILITIES
+                      </div>
+                      <p className="text-[10px] text-zinc-500">Spin the Troll Wheel to earn battle abilities!</p>
                     </div>
-                    <div className="text-[10px] font-bold text-cyan-400">Freeze</div>
-                    <div className="text-[8px] text-zinc-500 mt-0.5">Freeze opposing team</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="w-10 h-10 mx-auto rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center mb-1.5">
-                      <RotateCcw size={18} className="text-orange-400" />
+                  );
+                }
+
+                return (
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <Zap size={12} className="text-yellow-400" />
+                      YOUR ABILITIES
                     </div>
-                    <div className="text-[10px] font-bold text-orange-400">Reverse</div>
-                    <div className="text-[8px] text-zinc-500 mt-0.5">Bounce freeze back</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="w-10 h-10 mx-auto rounded-xl bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center mb-1.5">
-                      <Zap size={18} className="text-yellow-400" />
+                    <div className="grid grid-cols-3 gap-3">
+                      {earnedBattleAbilities.map((ability: any) => (
+                        <div key={ability.id} className="text-center">
+                          <div
+                            className="w-10 h-10 mx-auto rounded-xl border flex items-center justify-center mb-1.5"
+                            style={{ backgroundColor: `${ability.color}20`, borderColor: `${ability.color}50` }}
+                          >
+                            <span className="text-lg">{ability.icon}</span>
+                          </div>
+                          <div className="text-[10px] font-bold" style={{ color: ability.color }}>{ability.name}</div>
+                          <div className="text-[8px] text-zinc-500 mt-0.5">x{ability.quantity}</div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="text-[10px] font-bold text-yellow-400">2x XP</div>
-                    <div className="text-[8px] text-zinc-500 mt-0.5">Double team score</div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Scoring */}
               <div className="bg-white/5 border border-white/10 rounded-xl p-4">

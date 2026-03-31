@@ -15,6 +15,7 @@ import { supabase } from "../lib/supabase";
 interface UseRoomOptions {
   url?: string;
   token?: string;
+  isAdmin?: boolean;
   onConnected?: (room: Room) => void;
   onDisconnected?: () => void;
 }
@@ -27,7 +28,7 @@ const extractRoomName = (url?: string): string => {
   return parts[parts.length - 1] || '';
 };
 
-export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOptions = {}) {
+export function useRoom({ url, token, isAdmin = false, onConnected, onDisconnected }: UseRoomOptions = {}) {
   const [room, _setRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
@@ -111,11 +112,13 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
           }
         }
 
+        const videoPreset = isAdmin ? VideoPresets.h1080 : VideoPresets.h720;
+
         const livekitRoom = new Room({
           adaptiveStream: true,
           dynacast: true,
           videoCaptureDefaults: {
-            ...VideoPresets.hd,
+            ...videoPreset,
             facingMode: 'user'
           },
           audioCaptureDefaults: {
@@ -154,7 +157,7 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
 
         // Create and publish local tracks
         const audioTrack = await LocalAudioTrack.create(AudioPresets.audio);
-        const videoTrack = await LocalVideoTrack.create(VideoPresets.hd);
+        const videoTrack = await LocalVideoTrack.create(videoPreset);
         
         await livekitRoom.localParticipant.publishTrack(audioTrack);
         await livekitRoom.localParticipant.publishTrack(videoTrack);
@@ -194,12 +197,13 @@ export function useRoom({ url, token, onConnected, onDisconnected }: UseRoomOpti
 
   const toggleCamera = async () => {
     if (localVideoTrack && roomRef.current) {
+      const videoPreset = isAdmin ? VideoPresets.h1080 : VideoPresets.h720;
       try {
         if (isCameraEnabled) {
           await roomRef.current.localParticipant.unpublishTrack(localVideoTrack);
           localVideoTrack.stop();
         } else {
-          const newTrack = await LocalVideoTrack.create(VideoPresets.hd);
+          const newTrack = await LocalVideoTrack.create(videoPreset);
           setLocalVideoTrack(newTrack);
           await roomRef.current.localParticipant.publishTrack(newTrack);
         }

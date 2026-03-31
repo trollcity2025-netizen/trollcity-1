@@ -15,6 +15,30 @@ export function useBackgroundSessionRefresh() {
   const isActiveRef = useRef(false)
   const lastRefreshTimeRef = useRef<number>(Date.now())
   
+  // Attempt session refresh with retry logic
+  const attemptRefresh = async (retries = 2): Promise<boolean> => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const { data, error } = await supabase.auth.refreshSession()
+        if (!error && data?.session?.access_token) {
+          return true
+        }
+        // If refresh returned but no token, check if we still have a valid session
+        const { data: checkSession } = await supabase.auth.getSession()
+        if (checkSession.session?.access_token) {
+          return true
+        }
+      } catch (err) {
+        console.warn(`[BackgroundSession] Refresh attempt ${attempt + 1} failed:`, err)
+      }
+      // Wait before retry (exponential backoff)
+      if (attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
+      }
+    }
+    return false
+  }
+
   // Function to refresh session and profile
   const doRefresh = useCallback(async () => {
     if (!user) return
@@ -28,29 +52,17 @@ export function useBackgroundSessionRefresh() {
     sessionStorage.setItem(refreshKey, '1')
     
     try {
-      // First, try to refresh the session
-      const { data: sessionData, error: sessionError } = await supabase.auth.refreshSession()
+      const refreshSucceeded = await attemptRefresh(2)
       
-      if (sessionError) {
-        console.warn('[BackgroundSession] Session refresh error:', sessionError.message)
-        // If session refresh fails, try to get a new session
-        const { data: newSession } = await supabase.auth.getSession()
-        if (!newSession.session) {
-          console.warn('[BackgroundSession] No active session after refresh failure')
-          // Session might be completely expired - don't reload, just log out
-          // This prevents infinite reload loops
+      if (!refreshSucceeded) {
+        console.warn('[BackgroundSession] All refresh attempts failed, checking session state')
+        // Final check - maybe Supabase auto-refresh already handled it
+        const { data: finalCheck } = await supabase.auth.getSession()
+        if (!finalCheck.session?.access_token) {
+          console.warn('[BackgroundSession] No valid session after all attempts, logging out')
           useAuthStore.getState().logout()
           return
         }
-      }
-      
-      // Verify we have a valid access token
-      const { data: verifySession } = await supabase.auth.getSession()
-      if (!verifySession.session?.access_token) {
-        console.warn('[BackgroundSession] No valid access token, logging out')
-        // Don't reload - just log out to prevent infinite loop
-        useAuthStore.getState().logout()
-        return
       }
 
       // Force a soft refresh periodically to ensure UI stays in sync
@@ -100,12 +112,22 @@ export function useBackgroundSessionRefresh() {
       doRefresh()
     }, SESSION_REFRESH_INTERVAL)
 
+    // Refresh immediately when tab becomes visible again (fixes backgrounded tab logout)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[BackgroundSession] Tab became visible, refreshing session')
+        doRefresh()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       isActiveRef.current = false
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [user?.id, doRefresh]) // Only re-run when user ID changes
 }

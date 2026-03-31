@@ -21,6 +21,8 @@ import {
   supportsBattles,
   getMatchingTerminology,
 } from '../../config/broadcastCategories'
+import { useBattleSubscriber } from '../../hooks/useBattleSubscriber'
+import FiveVFiveBattleOverlay from '../../components/broadcast/FiveVFiveBattleOverlay'
 
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -66,6 +68,9 @@ function ViewerPage() {
 
   // Determine host status
   const isHost = stream?.user_id === user?.id
+
+  // Battle subscriber - detects when stream enters battle mode and subscribes
+  const { state: battleSubscriberState } = useBattleSubscriber(stream)
 
   // Set broadcast mode to disable TrollEngine when watching a broadcast
   useEffect(() => {
@@ -915,6 +920,22 @@ function ViewerPage() {
                 setRecentGifts(prev => prev.filter(g => g.id !== giftId));
               }}
             />
+            {/* 5v5 Battle Overlay - visible to all viewers */}
+            {battleSubscriberState.phase !== 'idle' && (
+              <FiveVFiveBattleOverlay
+                state={battleSubscriberState}
+                currentUserId={user?.id || ''}
+                onUseAbility={() => {}}
+                onRequestRematch={() => {}}
+                TEAM_FREEZE_COOLDOWN={30}
+                REVERSE_COOLDOWN={20}
+                DOUBLE_XP_COOLDOWN={25}
+                userAbilities={[]}
+                currentUsername={profile?.username || 'Viewer'}
+                remoteParticipants={remoteParticipants}
+                isHost={false}
+              />
+            )}
           </>
         }
         

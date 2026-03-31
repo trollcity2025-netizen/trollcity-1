@@ -240,7 +240,7 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
           adaptiveStream: true,
           dynacast: true,
           videoCaptureDefaults: {
-            ...VideoPresets.hd,
+            ...VideoPresets.h720,
             facingMode: 'user'
           },
           audioCaptureDefaults: {
@@ -421,7 +421,7 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
       await roomRef.current.localParticipant.publishTrack(audioTrack);
 
       if (callType === 'video') {
-        const videoTrack = await LocalVideoTrack.create(VideoPresets.hd);
+        const videoTrack = await LocalVideoTrack.create(VideoPresets.h720);
         localVideoTrackRef.current = videoTrack;
         await roomRef.current.localParticipant.publishTrack(videoTrack);
         
@@ -506,7 +506,7 @@ export default function Call({ roomId: propRoomId, callType: propCallType, other
     
     try {
       if (shouldTurnOn) {
-        const newTrack = await LocalVideoTrack.create(VideoPresets.hd);
+        const newTrack = await LocalVideoTrack.create(VideoPresets.h720);
         localVideoTrackRef.current = newTrack;
         await roomRef.current.localParticipant.publishTrack(newTrack);
         

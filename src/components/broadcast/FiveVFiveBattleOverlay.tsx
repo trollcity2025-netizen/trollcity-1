@@ -1,8 +1,20 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Swords, Shield, Clock, Coins, Gift, Zap, Snowflake, RotateCcw, Star, Timer, Users, Trophy, Flame } from 'lucide-react';
+import { LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
+import { Swords, Shield, Clock, Coins, Gift, Zap, Snowflake, RotateCcw, Star, Timer, Users, Trophy, Flame, User, Crown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { FiveVFiveBattleState, BattleParticipant } from '../../hooks/useFiveVFiveBattle';
+import type { UserAbility } from '../../types/broadcastAbilities';
+import { getAbilityById } from '../../types/broadcastAbilities';
+import BattleAbilityVisuals from './BattleAbilityVisuals';
+
+interface BattleAbilityEffect {
+  id: string;
+  type: string;
+  team?: 'A' | 'B';
+  username: string;
+  timestamp: number;
+}
 
 interface FiveVFiveBattleOverlayProps {
   state: FiveVFiveBattleState;
@@ -12,6 +24,123 @@ interface FiveVFiveBattleOverlayProps {
   TEAM_FREEZE_COOLDOWN: number;
   REVERSE_COOLDOWN: number;
   DOUBLE_XP_COOLDOWN: number;
+  userAbilities?: UserAbility[];
+  currentUsername?: string;
+  onBroadcastEffect?: (effect: BattleAbilityEffect) => void;
+  localTracks?: [LocalAudioTrack | undefined, LocalVideoTrack | undefined];
+  remoteParticipants?: RemoteParticipant[];
+  isHost?: boolean;
+}
+
+// ─── LIVEKIT VIDEO PLAYER ───
+
+function LiveKitVideoPlayer({
+  videoTrack,
+  isLocal,
+}: {
+  videoTrack: LocalVideoTrack | RemoteVideoTrack | undefined;
+  isLocal: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const attachedTrackIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!videoTrack || !containerRef.current) return;
+
+    const currentTrackId = videoTrack.sid || (videoTrack as any).id;
+    if (attachedTrackIdRef.current === currentTrackId && videoElementRef.current) return;
+
+    if (containerRef.current.querySelector('video')) {
+      try { videoTrack.detach(); } catch {}
+    }
+
+    try {
+      const videoElement = videoTrack.attach();
+      videoElement.style.width = '100%';
+      videoElement.style.height = '100%';
+      videoElement.style.objectFit = 'cover';
+      videoElement.autoplay = true;
+      videoElement.playsInline = true;
+      if (isLocal) videoElement.muted = true;
+
+      containerRef.current.appendChild(videoElement);
+      videoElementRef.current = videoElement;
+      attachedTrackIdRef.current = currentTrackId;
+    } catch (err) {
+      console.error('[FiveVFiveBattleOverlay] Error attaching video:', err);
+    }
+
+    return () => {
+      try {
+        if (videoElementRef.current) {
+          videoTrack.detach();
+          videoElementRef.current = null;
+          attachedTrackIdRef.current = null;
+        }
+      } catch {}
+    };
+  }, [videoTrack, isLocal]);
+
+  return <div ref={containerRef} className="absolute inset-0" />;
+}
+
+function BattleParticipantCard({
+  participant,
+  videoTrack,
+  audioTrack,
+  hasVideo,
+  hasAudio,
+  isLocal,
+  teamColor,
+}: {
+  participant: BattleParticipant;
+  videoTrack: LocalVideoTrack | RemoteVideoTrack | undefined;
+  audioTrack: LocalAudioTrack | RemoteAudioTrack | undefined;
+  hasVideo: boolean;
+  hasAudio: boolean;
+  isLocal: boolean;
+  teamColor: 'red' | 'blue';
+}) {
+  const bgClass = teamColor === 'red' ? 'bg-red-950/40 border-red-500/20' : 'bg-blue-950/40 border-blue-500/20';
+  const avatarBgClass = teamColor === 'red' ? 'bg-red-500/30 border-red-500/50' : 'bg-blue-500/30 border-blue-500/50';
+  const textClass = teamColor === 'red' ? 'text-red-300' : 'text-blue-300';
+  const nameClass = teamColor === 'red' ? 'text-red-200' : 'text-blue-200';
+  const coinClass = teamColor === 'red' ? 'text-red-400/60' : 'text-blue-400/60';
+
+  return (
+    <div className={cn("border rounded-lg flex flex-col items-center justify-center p-2 min-h-0 relative overflow-hidden", bgClass)}>
+      {hasVideo && videoTrack ? (
+        <>
+          <LiveKitVideoPlayer videoTrack={videoTrack} isLocal={isLocal} />
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              {participant.role === 'host' && <Crown size={8} className="text-yellow-400" />}
+              <span className="text-[10px] md:text-xs font-bold text-white truncate max-w-[80px] drop-shadow-lg">{participant.username}</span>
+            </div>
+            <span className={cn("text-[8px] font-medium drop-shadow-lg", coinClass)}>+{participant.coinsEarned.toLocaleString()}</span>
+          </div>
+          {!hasAudio && (
+            <div className="absolute bottom-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full" />
+          )}
+        </>
+      ) : (
+        <>
+          <div className={cn("w-10 h-10 md:w-14 md:h-14 rounded-full border-2 flex items-center justify-center mb-1", avatarBgClass)}>
+            <span className={cn("text-sm md:text-lg font-black", textClass)}>{participant.username.charAt(0).toUpperCase()}</span>
+          </div>
+          <span className={cn("text-[10px] md:text-xs font-bold truncate max-w-full", nameClass)}>{participant.username}</span>
+          <div className="flex items-center gap-1 mt-0.5">
+            {participant.role === 'host' && <Crown size={8} className="text-yellow-400" />}
+            <span className={cn("text-[8px] font-medium", coinClass)}>+{participant.coinsEarned.toLocaleString()}</span>
+          </div>
+          {!participant.isActive && (
+            <span className="text-[8px] text-zinc-500 mt-0.5">Offline</span>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function FiveVFiveBattleOverlay({
@@ -22,8 +151,20 @@ export default function FiveVFiveBattleOverlay({
   TEAM_FREEZE_COOLDOWN,
   REVERSE_COOLDOWN,
   DOUBLE_XP_COOLDOWN,
+  userAbilities = [],
+  currentUsername = 'Someone',
+  onBroadcastEffect,
+  localTracks,
+  remoteParticipants = [],
+  isHost = false,
 }: FiveVFiveBattleOverlayProps) {
   const { phase } = state;
+  const [abilityEffects, setAbilityEffects] = useState<BattleAbilityEffect[]>([]);
+
+  // Check which battle abilities the user has earned
+  const hasFreeze = userAbilities.some(a => a.ability_id === 'team_freeze' && a.quantity > 0);
+  const hasReverse = userAbilities.some(a => a.ability_id === 'reverse' && a.quantity > 0);
+  const hasDoubleXp = userAbilities.some(a => a.ability_id === 'double_xp' && a.quantity > 0);
 
   const myTeam = useMemo(() => {
     return state.participants.find(p => p.userId === currentUserId)?.team || 'A';
@@ -39,8 +180,15 @@ export default function FiveVFiveBattleOverlay({
     [state.participants]
   );
 
+  // Cooldown state from battle
   const myAbilities = state.abilities[currentUserId];
   const now = Date.now();
+
+  // Merge local effects with battle channel effects
+  const allEffects = useMemo(() => {
+    const channelEffects = (state as any).abilityEffects || [];
+    return [...abilityEffects, ...channelEffects];
+  }, [abilityEffects, state]);
 
   const freezeOnCooldown = myAbilities?.teamFreeze.cooldownEndsAt > now;
   const freezeCooldownLeft = freezeOnCooldown ? Math.ceil((myAbilities.teamFreeze.cooldownEndsAt - now) / 1000) : 0;
@@ -54,6 +202,43 @@ export default function FiveVFiveBattleOverlay({
   const timerPercent = state.totalDuration > 0 ? (state.timerSeconds / state.totalDuration) * 100 : 0;
 
   const scoreDiff = state.teamAScore - state.teamBScore;
+
+  // ─── LIVEKIT TRACK HELPERS ───
+  const findRemoteParticipant = useCallback((userId: string): RemoteParticipant | undefined => {
+    return remoteParticipants.find(p => p.identity === userId || p.identity.startsWith(userId));
+  }, [remoteParticipants]);
+
+  const getVideoTrack = useCallback((participant: RemoteParticipant | undefined): RemoteVideoTrack | undefined => {
+    if (!participant) return undefined;
+    const pubs = participant.videoTrackPublications as unknown as Map<string, { track?: RemoteVideoTrack }>;
+    if (!pubs) return undefined;
+    const values = Array.from(pubs.values());
+    const pub = values.find(p => p.track?.kind === 'video');
+    return pub?.track;
+  }, []);
+
+  const getAudioTrack = useCallback((participant: RemoteParticipant | undefined): RemoteAudioTrack | undefined => {
+    if (!participant) return undefined;
+    const pubs = participant.audioTrackPublications as unknown as Map<string, { track?: RemoteAudioTrack }>;
+    if (!pubs) return undefined;
+    const values = Array.from(pubs.values());
+    const pub = values.find(p => p.track?.kind === 'audio');
+    return pub?.track;
+  }, []);
+
+  const hasVideoEnabled = useCallback((participant: RemoteParticipant | undefined): boolean => {
+    if (!participant) return false;
+    const pubs = participant.videoTrackPublications as unknown as Map<string, { track?: RemoteVideoTrack }>;
+    if (!pubs) return false;
+    return Array.from(pubs.values()).some(p => p.track?.kind === 'video' && p.track.isEnabled);
+  }, []);
+
+  const hasAudioEnabled = useCallback((participant: RemoteParticipant | undefined): boolean => {
+    if (!participant) return false;
+    const pubs = participant.audioTrackPublications as unknown as Map<string, { track?: RemoteAudioTrack }>;
+    if (!pubs) return false;
+    return Array.from(pubs.values()).some(p => p.track?.kind === 'audio' && p.track.isEnabled);
+  }, []);
 
   if (phase === 'idle') return null;
 
@@ -94,11 +279,11 @@ export default function FiveVFiveBattleOverlay({
               </h2>
 
               {/* Teams preview */}
-              <div className="flex items-start gap-8 justify-center mt-6">
+              <div className="flex items-start gap-4 md:gap-8 justify-center mt-4 md:mt-6 px-2">
                 {/* Team A */}
                 <div className="text-center">
-                  <div className="text-xs font-bold text-red-400 uppercase tracking-wider mb-3 flex items-center gap-1 justify-center">
-                    <Shield size={12} /> Team A
+                  <div className="text-[10px] md:text-xs font-bold text-red-400 uppercase tracking-wider mb-2 md:mb-3 flex items-center gap-1 justify-center">
+                    <Shield size={10} className="md:w-3 md:h-3" /> Team A
                   </div>
                   <div className="space-y-2">
                     {teamAParticipants.map(p => (
@@ -119,12 +304,12 @@ export default function FiveVFiveBattleOverlay({
                   </div>
                 </div>
 
-                <div className="text-3xl font-black text-zinc-600 self-center mt-4">VS</div>
+                <div className="text-2xl md:text-3xl font-black text-zinc-600 self-center mt-2 md:mt-4">VS</div>
 
                 {/* Team B */}
                 <div className="text-center">
-                  <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-1 justify-center">
-                    <Swords size={12} /> Team B
+                  <div className="text-[10px] md:text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 md:mb-3 flex items-center gap-1 justify-center">
+                    <Swords size={10} className="md:w-3 md:h-3" /> Team B
                   </div>
                   <div className="space-y-2">
                     {teamBParticipants.map(p => (
@@ -155,11 +340,11 @@ export default function FiveVFiveBattleOverlay({
   // ─── ACTIVE BATTLE ───
   if (phase === 'active') {
     return (
-      <div className="absolute inset-0 z-40 pointer-events-none">
+      <div className="absolute inset-0 z-50 bg-[#0a0a0f] flex flex-col">
         {/* Top HUD - Score + Timer */}
-        <div className="absolute top-0 left-0 right-0 z-50 pointer-events-auto">
+        <div className="shrink-0 z-50">
           <div className="flex items-start justify-center pt-3 px-4">
-            <div className="bg-black/85 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-2.5 shadow-2xl flex items-center gap-4 max-w-md w-full">
+            <div className="bg-black/85 backdrop-blur-xl border border-white/10 rounded-2xl px-3 py-2 md:px-4 md:py-2.5 shadow-2xl flex items-center gap-3 md:gap-4 max-w-md w-full mx-2 md:mx-0">
               {/* Team A Score */}
               <div className="flex-1 text-center">
                 <div className="text-[9px] font-bold text-red-400 uppercase tracking-wider mb-0.5">Team A</div>
@@ -187,7 +372,6 @@ export default function FiveVFiveBattleOverlay({
                 )}>
                   {timerMinutes}:{timerSeconds.toString().padStart(2, '0')}
                 </div>
-                {/* Progress bar */}
                 <div className="w-full h-1 bg-white/10 rounded-full mt-1.5 overflow-hidden">
                   <motion.div
                     className={cn(
@@ -248,104 +432,185 @@ export default function FiveVFiveBattleOverlay({
           </AnimatePresence>
         </div>
 
-        {/* Last Gift Toast */}
-        <AnimatePresence>
-          {state.lastGiftUser && (
-            <motion.div
-              key={`${state.lastGiftUser.username}-${state.lastGiftUser.amount}-${Date.now()}`}
-              initial={{ opacity: 0, x: state.lastGiftUser.team === 'A' ? -50 : 50, y: 0 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className={cn(
-                "absolute top-28 z-50 pointer-events-none",
-                state.lastGiftUser.team === 'A' ? 'left-4' : 'right-4'
-              )}
-            >
-              <div className={cn(
-                "bg-black/80 backdrop-blur-md border rounded-xl px-3 py-2 shadow-xl flex items-center gap-2",
-                state.lastGiftUser.team === 'A' ? 'border-red-500/30' : 'border-blue-500/30'
-              )}>
-                <Gift size={14} className={state.lastGiftUser.team === 'A' ? 'text-red-400' : 'text-blue-400'} />
-                <div>
-                  <div className="text-[10px] font-bold text-white">{state.lastGiftUser.username}</div>
-                  <div className={cn("text-xs font-black", state.lastGiftUser.team === 'A' ? 'text-red-400' : 'text-blue-400')}>
-                    +{state.lastGiftUser.amount.toLocaleString()} pts
-                  </div>
+        {/* Battle Arena - Both teams visible */}
+        <div className="flex-1 flex min-h-0 px-2 pb-2 gap-1">
+          {/* Team A Column */}
+          <div className="flex-1 flex flex-col gap-1">
+            <div className="text-center py-1">
+              <span className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center justify-center gap-1">
+                <Shield size={10} /> Team A
+              </span>
+            </div>
+            <div className="flex-1 grid grid-cols-2 gap-1 auto-rows-fr">
+              {teamAParticipants.map((p) => {
+                const lkParticipant = p.userId === currentUserId && isHost && localTracks
+                  ? undefined
+                  : findRemoteParticipant(p.userId);
+                const isLocal = p.userId === currentUserId && isHost;
+                const videoTrack = isLocal ? localTracks?.[1] : getVideoTrack(lkParticipant);
+                const audioTrack = isLocal ? localTracks?.[0] : getAudioTrack(lkParticipant);
+                const hasVideo = isLocal ? !!localTracks?.[1] : hasVideoEnabled(lkParticipant);
+                const hasAudio = isLocal ? !!localTracks?.[0] : hasAudioEnabled(lkParticipant);
+                return (
+                  <BattleParticipantCard
+                    key={p.userId}
+                    participant={p}
+                    videoTrack={videoTrack}
+                    audioTrack={audioTrack}
+                    hasVideo={hasVideo}
+                    hasAudio={hasAudio}
+                    isLocal={isLocal}
+                    teamColor="red"
+                  />
+                );
+              })}
+              {Array.from({ length: Math.max(0, 5 - teamAParticipants.length) }).map((_, i) => (
+                <div key={`empty-a-${i}`} className="bg-white/5 border border-white/5 rounded-lg flex items-center justify-center opacity-30">
+                  <User size={16} className="text-zinc-600" />
                 </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              ))}
+            </div>
+          </div>
 
-        {/* Abilities Bar (bottom) */}
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
-          <div className="bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-2.5 shadow-2xl flex items-center gap-3">
-            {/* Team Freeze */}
-            <AbilityButton
-              icon={Snowflake}
-              label="Freeze"
-              color="cyan"
-              cooldown={freezeCooldownLeft}
-              maxCooldown={TEAM_FREEZE_COOLDOWN}
-              onClick={() => onUseAbility('team_freeze')}
-              description="Freeze opponents"
-            />
+          {/* Center VS divider */}
+          <div className="flex flex-col items-center justify-center w-10 shrink-0">
+            <div className="w-px flex-1 bg-gradient-to-b from-transparent via-red-500/30 to-transparent" />
+            <span className="text-xs font-black text-zinc-500 my-2">VS</span>
+            <div className="w-px flex-1 bg-gradient-to-b from-transparent via-blue-500/30 to-transparent" />
+          </div>
 
-            <div className="w-px h-8 bg-white/10" />
-
-            {/* Reverse */}
-            <AbilityButton
-              icon={RotateCcw}
-              label="Reverse"
-              color="orange"
-              cooldown={reverseCooldownLeft}
-              maxCooldown={REVERSE_COOLDOWN}
-              onClick={() => onUseAbility('reverse')}
-              description="Reverse freeze"
-            />
-
-            <div className="w-px h-8 bg-white/10" />
-
-            {/* Double XP */}
-            <AbilityButton
-              icon={Zap}
-              label="2x XP"
-              color="yellow"
-              cooldown={dxpCooldownLeft}
-              maxCooldown={DOUBLE_XP_COOLDOWN}
-              onClick={() => onUseAbility('double_xp')}
-              description="Double points"
-            />
+          {/* Team B Column */}
+          <div className="flex-1 flex flex-col gap-1">
+            <div className="text-center py-1">
+              <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center justify-center gap-1">
+                Team B <Swords size={10} />
+              </span>
+            </div>
+            <div className="flex-1 grid grid-cols-2 gap-1 auto-rows-fr">
+              {teamBParticipants.map((p) => {
+                const lkParticipant = p.userId === currentUserId && isHost && localTracks
+                  ? undefined
+                  : findRemoteParticipant(p.userId);
+                const isLocal = p.userId === currentUserId && isHost;
+                const videoTrack = isLocal ? localTracks?.[1] : getVideoTrack(lkParticipant);
+                const audioTrack = isLocal ? localTracks?.[0] : getAudioTrack(lkParticipant);
+                const hasVideo = isLocal ? !!localTracks?.[1] : hasVideoEnabled(lkParticipant);
+                const hasAudio = isLocal ? !!localTracks?.[0] : hasAudioEnabled(lkParticipant);
+                return (
+                  <BattleParticipantCard
+                    key={p.userId}
+                    participant={p}
+                    videoTrack={videoTrack}
+                    audioTrack={audioTrack}
+                    hasVideo={hasVideo}
+                    hasAudio={hasAudio}
+                    isLocal={isLocal}
+                    teamColor="blue"
+                  />
+                );
+              })}
+              {Array.from({ length: Math.max(0, 5 - teamBParticipants.length) }).map((_, i) => (
+                <div key={`empty-b-${i}`} className="bg-white/5 border border-white/5 rounded-lg flex items-center justify-center opacity-30">
+                  <User size={16} className="text-zinc-600" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Team Labels on grid sides */}
-        <div className="absolute top-1/2 left-2 -translate-y-1/2 z-30 pointer-events-none hidden md:block">
-          <div className="bg-red-600/80 backdrop-blur-sm text-white text-xs font-black px-2 py-1 rounded-lg -rotate-90 origin-center tracking-wider">
-            TEAM A
-          </div>
-        </div>
-        <div className="absolute top-1/2 right-2 -translate-y-1/2 z-30 pointer-events-none hidden md:block">
-          <div className="bg-blue-600/80 backdrop-blur-sm text-white text-xs font-black px-2 py-1 rounded-lg rotate-90 origin-center tracking-wider">
-            TEAM B
-          </div>
-        </div>
+        {/* Battle Ability Visuals */}
+        <BattleAbilityVisuals
+          effects={allEffects}
+          onEffectComplete={(id) => setAbilityEffects(prev => prev.filter(e => e.id !== id))}
+        />
 
-        {/* Score bar at bottom showing lead */}
-        <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
-          <div className="flex h-1.5">
-            <motion.div
-              className="bg-gradient-to-r from-red-600 to-red-500"
-              animate={{ width: `${state.teamAScore + state.teamBScore > 0 ? (state.teamAScore / (state.teamAScore + state.teamBScore)) * 100 : 50}%` }}
-              transition={{ duration: 0.5 }}
-            />
-            <motion.div
-              className="bg-gradient-to-r from-blue-500 to-blue-600"
-              animate={{ width: `${state.teamAScore + state.teamBScore > 0 ? (state.teamBScore / (state.teamAScore + state.teamBScore)) * 100 : 50}%` }}
-              transition={{ duration: 0.5 }}
-            />
+        {/* Abilities Bar - only shows earned abilities */}
+        {(hasFreeze || hasReverse || hasDoubleXp) && (
+          <div className="shrink-0 pb-2 flex justify-center pointer-events-auto">
+            <div className="bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-2.5 shadow-2xl flex items-center gap-3">
+              {hasFreeze && (
+                <AbilityButton
+                  icon={Snowflake}
+                  label="Freeze"
+                  color="cyan"
+                  cooldown={freezeCooldownLeft}
+                  maxCooldown={TEAM_FREEZE_COOLDOWN}
+                  onClick={() => {
+                    onUseAbility('team_freeze');
+                    const effect: BattleAbilityEffect = {
+                      id: `freeze-${Date.now()}`,
+                      type: 'team_freeze',
+                      team: state.participants.find(p => p.userId === currentUserId)?.team === 'A' ? 'B' : 'A',
+                      username: currentUsername,
+                      timestamp: Date.now(),
+                    };
+                    setAbilityEffects(prev => [...prev, effect]);
+                    onBroadcastEffect?.(effect);
+                  }}
+                  description="Freeze opponents"
+                />
+              )}
+              {hasFreeze && (hasReverse || hasDoubleXp) && <div className="w-px h-8 bg-white/10" />}
+              {hasReverse && (
+                <AbilityButton
+                  icon={RotateCcw}
+                  label="Reverse"
+                  color="orange"
+                  cooldown={reverseCooldownLeft}
+                  maxCooldown={REVERSE_COOLDOWN}
+                  onClick={() => {
+                    onUseAbility('reverse');
+                    const effect: BattleAbilityEffect = {
+                      id: `reverse-${Date.now()}`,
+                      type: 'reverse',
+                      username: currentUsername,
+                      timestamp: Date.now(),
+                    };
+                    setAbilityEffects(prev => [...prev, effect]);
+                    onBroadcastEffect?.(effect);
+                  }}
+                  description="Reverse freeze"
+                />
+              )}
+              {hasReverse && hasDoubleXp && <div className="w-px h-8 bg-white/10" />}
+              {hasDoubleXp && (
+                <AbilityButton
+                  icon={Zap}
+                  label="2x XP"
+                  color="yellow"
+                  cooldown={dxpCooldownLeft}
+                  maxCooldown={DOUBLE_XP_COOLDOWN}
+                  onClick={() => {
+                    onUseAbility('double_xp');
+                    const effect: BattleAbilityEffect = {
+                      id: `dxp-${Date.now()}`,
+                      type: 'double_xp',
+                      team: state.participants.find(p => p.userId === currentUserId)?.team,
+                      username: currentUsername,
+                      timestamp: Date.now(),
+                    };
+                    setAbilityEffects(prev => [...prev, effect]);
+                    onBroadcastEffect?.(effect);
+                  }}
+                  description="Double points"
+                />
+              )}
+            </div>
           </div>
+        )}
+
+        {/* Score bar at bottom */}
+        <div className="shrink-0 h-1.5 flex">
+          <motion.div
+            className="bg-gradient-to-r from-red-600 to-red-500"
+            animate={{ width: `${state.teamAScore + state.teamBScore > 0 ? (state.teamAScore / (state.teamAScore + state.teamBScore)) * 100 : 50}%` }}
+            transition={{ duration: 0.5 }}
+          />
+          <motion.div
+            className="bg-gradient-to-r from-blue-500 to-blue-600"
+            animate={{ width: `${state.teamAScore + state.teamBScore > 0 ? (state.teamBScore / (state.teamAScore + state.teamBScore)) * 100 : 50}%` }}
+            transition={{ duration: 0.5 }}
+          />
         </div>
       </div>
     );

@@ -77,6 +77,13 @@ export default function SetupPage() {
     profile.is_staff ||
     (profile.level !== undefined && profile.level >= 50)
   );
+
+  // Determine if user is admin for quality settings (1080p admin, 720p regular)
+  const isStreamAdmin = !!(profile && (
+    profile.role === 'admin' || profile.is_admin ||
+    profile.role === 'superadmin' || profile.is_superadmin ||
+    profile.role === 'owner'
+  ));
   
   // Pre-generate stream ID for token optimization
   const [streamId] = useState(() => generateUUID());
@@ -511,8 +518,8 @@ export default function SetupPage() {
           autoGainControl: true
         },
         video: enableVideo ? {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: isStreamAdmin ? 1920 : 1280 },
+          height: { ideal: isStreamAdmin ? 1080 : 720 },
           facingMode: videoFacingMode
         } : false
       };
@@ -833,8 +840,8 @@ export default function SetupPage() {
         // Get new video track using native browser API
         const newNativeStream = await navigator.mediaDevices.getUserMedia({
           video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: isStreamAdmin ? 1920 : 1280 },
+            height: { ideal: isStreamAdmin ? 1080 : 720 },
             facingMode: newFacingMode
           }
         });

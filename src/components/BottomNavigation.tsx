@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, MessageSquare, Video, User, Shield, Gavel, Star, DollarSign, Users, AlertTriangle, Ban, Settings, Heart, LogOut, FileText, ShoppingBag, Briefcase, Banknote, Camera, Mic, Menu, X, LogIn, UserPlus, Trash2 } from 'lucide-react'
+import { Home, MessageSquare, Video, Shield, Gavel, LogOut, FileText, ShoppingBag, Banknote, Mic, Menu, X, LogIn, UserPlus, Trash2, Building2, Landmark, Warehouse, Package, Store, Coins, TrendingUp, Shuffle, Scale, Crown, LifeBuoy, Waves, Globe, Gamepad2, Compass, Lock, BookOpen, Radio, LayoutDashboard, Newspaper, DollarSign, Users, AlertTriangle, Settings, Star, Eye, Siren, ClipboardList, BarChart3, MonitorDot, ScrollText, Calendar, Wallet, Trophy, Bell, Megaphone, Database } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
+import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '@/lib/supabase'
+import { supabase, UserRole } from '@/lib/supabase'
 import { toast } from 'sonner'
 
 interface RecentMessage {
@@ -18,6 +19,7 @@ interface RecentMessage {
 
 export default function BottomNavigation() {
   const { user, profile, logout } = useAuthStore()
+  const { isBroadcastLockedDown } = useBroadcastLockdown()
   const location = useLocation()
   const navigate = useNavigate()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -369,86 +371,160 @@ export default function BottomNavigation() {
     })
   }, [isOverRemoveZone])
 
-  // Determine Role
+  // Determine Role - matches Sidebar.tsx role detection
   const role = profile?.role || 'viewer'
+  const isAdmin = profile?.role === UserRole.ADMIN || profile?.troll_role === UserRole.ADMIN || profile?.role === UserRole.HR_ADMIN || (profile as any)?.is_admin;
+  const isSecretary = profile?.role === UserRole.SECRETARY || profile?.troll_role === UserRole.SECRETARY;
+  const isLead = profile?.role === UserRole.LEAD_TROLL_OFFICER || (profile as any)?.is_lead_officer || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
+  const isOfficer = profile?.role === UserRole.TROLL_OFFICER || (profile as any)?.is_troll_officer;
+  const canSeeCourt = isOfficer || profile?.role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
+
+  const canBroadcast = () => {
+    return !isBroadcastLockedDown && (profile?.role === 'broadcaster' || profile?.is_broadcaster || profile?.troll_role === 'broadcaster')
+  }
 
   // Get role display name and icon
   const getRoleInfo = () => {
-    switch (role as string) {
-      case 'admin':
-        return { label: 'Admin', icon: Shield, color: 'from-red-500 to-orange-500' }
-      case 'broadcaster':
-        return { label: 'Broadcaster', icon: Video, color: 'from-purple-500 to-blue-500' }
-      case 'officer':
-        return { label: 'Officer', icon: Gavel, color: 'from-blue-500 to-cyan-500' }
-      case 'vip':
-        return { label: 'VIP', icon: Star, color: 'from-yellow-500 to-amber-500' }
-      default:
-        return { label: 'Menu', icon: Menu, color: 'from-purple-600 to-blue-600' }
-    }
+    if (isAdmin) return { label: 'Admin', icon: Shield, color: 'from-red-500 to-orange-500' }
+    if (isLead) return { label: 'Lead Officer', icon: Star, color: 'from-yellow-500 to-amber-500' }
+    if (isOfficer) return { label: 'Officer', icon: Gavel, color: 'from-blue-500 to-cyan-500' }
+    if (isSecretary) return { label: 'Secretary', icon: ScrollText, color: 'from-pink-500 to-rose-500' }
+    if (role === 'broadcaster') return { label: 'Broadcaster', icon: Video, color: 'from-purple-500 to-blue-500' }
+    return { label: 'Menu', icon: Menu, color: 'from-purple-600 to-blue-600' }
   }
 
   const roleInfo = getRoleInfo()
 
-  // Menu Options - Unified for all users with all navigation options
-  const getMenuOptions = () => {
-    const baseOptions = [
-      { category: 'Navigation', label: 'Home', icon: Home, path: '/' },
-      { category: 'Navigation', label: 'Live Streams', icon: Video, path: '/live' },
-      { category: 'Navigation', label: 'Messages', icon: MessageSquare, path: '/tcps', badge: totalUnreadCount, onClick: handleMessagesClick },
-      { category: 'Navigation', label: 'My Profile', icon: User, path: `/profile/${profile?.username || profile?.id}` },
-    ]
+  // Base pages available to all users
+  const basePages = [
+    // City Center
+    { category: 'City Center', label: 'Home', icon: Home, path: '/' },
+    { category: 'City Center', label: 'Troll Town', icon: Building2, path: '/trollstown' },
+    { category: 'City Center', label: 'City Hall', icon: Landmark, path: '/city-hall' },
+    { category: 'City Center', label: 'Living', icon: Warehouse, path: '/living' },
+    { category: 'City Center', label: 'Inventory', icon: Package, path: '/inventory' },
+    { category: 'City Center', label: 'Marketplace', icon: Store, path: '/marketplace' },
+    { category: 'City Center', label: 'Leaderboard', icon: Trophy, path: '/leaderboard' },
+    { category: 'City Center', label: 'Credit Scores', icon: TrendingUp, path: '/credit-scores' },
+    { category: 'City Center', label: 'Coin Store', icon: Coins, path: '/store' },
+    { category: 'City Center', label: 'Creator Switch', icon: Shuffle, path: '/creator-switch' },
+    { category: 'City Center', label: 'Troll Court', icon: Scale, path: '/troll-court' },
+    { category: 'City Center', label: 'Troll President', icon: Crown, path: '/president' },
+    // Public Services
+    { category: 'Public Services', label: 'Jail', icon: Lock, path: '/jail' },
+    { category: 'Public Services', label: 'Troll Church', icon: BookOpen, path: '/church' },
+    { category: 'Public Services', label: 'Support', icon: LifeBuoy, path: '/support' },
+    { category: 'Public Services', label: 'Safety', icon: Shield, path: '/safety' },
+    { category: 'Public Services', label: 'Trollified', icon: ShoppingBag, path: '/trollifieds' },
+    { category: 'Public Services', label: 'Neighbors', icon: Building2, path: '/neighbors' },
+    // Social
+    { category: 'Social', label: 'Postal Service', icon: MessageSquare, path: '/tcps', badge: totalUnreadCount, onClick: handleMessagesClick },
+    { category: 'Social', label: 'Troll Pods', icon: Mic, path: '/pods' },
+    { category: 'Social', label: 'Public Pool', icon: Waves, path: '/pool' },
+    { category: 'Social', label: 'Universe Event', icon: Globe, path: '/universe-event' },
+    { category: 'Social', label: 'Troll Wheel', icon: Gamepad2, path: '/troll-wheel' },
+    // City Registry
+    { category: 'City Registry', label: 'Careers', icon: FileText, path: '/application' },
+    { category: 'City Registry', label: 'Interview Room', icon: Video, path: '/interview-room' },
+    { category: 'City Registry', label: 'Wallet', icon: Banknote, path: '/wallet' },
+    { category: 'City Registry', label: 'Appeals', icon: Scale, path: '/city-registry' },
+  ]
 
-    // Unified menu for all users - includes all navigation options
-    return [
-      ...baseOptions,
-      // Streaming
-      { category: 'Streaming', label: 'Start Stream', icon: Video, path: '/broadcast/setup' },
-      { category: 'Streaming', label: 'Stream Summary', icon: FileText, path: '/broadcast/summary' },
-      { category: 'Streaming', label: 'My Guests', icon: Users, path: '/guests' },
-      // Management
-      { category: 'Management', label: 'Court', icon: Gavel, path: '/troll-court' },
-      { category: 'Management', label: 'Ban Management', icon: Ban, path: '/admin/ban-management' },
-      { category: 'Management', label: 'City Control', icon: Shield, path: '/admin/city-control' },
-      { category: 'Management', label: 'Safety Center', icon: AlertTriangle, path: '/admin/safety' },
-      // Content
-      { category: 'Content', label: 'Applications', icon: FileText, path: '/admin/applications' },
-      { category: 'Content', label: 'Marketplace', icon: ShoppingBag, path: '/marketplace' },
-      { category: 'Content', label: 'Reports', icon: Shield, path: '/admin/officer-reports' },
-      { category: 'Content', label: 'Live Dashboard', icon: Video, path: '/admin/live' },
-      // Stats
-      { category: 'Stats', label: 'Stats', icon: Star, path: '/stats' },
-      // Finance
-      { category: 'Finance', label: 'Earnings', icon: DollarSign, path: '/earnings' },
-      { category: 'Finance', label: 'Payments', icon: Banknote, path: '/payments' },
-      { category: 'Finance', label: 'Payouts', icon: DollarSign, path: '/payouts' },
-      { category: 'Finance', label: 'Wallet', icon: Banknote, path: '/wallet' },
-      // System
-      { category: 'System', label: 'System Tools', icon: Settings, path: '/admin/system/health' },
-      { category: 'System', label: 'Policies', icon: FileText, path: '/admin/policies' },
-      { category: 'System', label: 'Policies Docs', icon: FileText, path: '/admin/policies-docs' },
-      // Community
-      { category: 'Community', label: 'Leaderboard', icon: Star, path: '/leaderboard' },
-      { category: 'Community', label: 'Family Wars', icon: Users, path: '/family-wars' },
-      { category: 'Community', label: 'Troll Pods', icon: Mic, path: '/pods' },
-      // Store
-      { category: 'Store', label: 'Coin Store', icon: ShoppingBag, path: '/store' },
-      { category: 'Store', label: 'Troll Wheel', icon: Star, path: '/troll-wheel' },
-      // Support
-      { category: 'Support', label: 'Support', icon: Heart, path: '/support' },
-    ]
+  // Government Sector pages - shown to officers, lead, secretary, admin
+  const governmentPages = []
+  if (isOfficer || isSecretary) {
+    governmentPages.push({ category: 'Government', label: 'Streams', icon: Radio, path: '/government/streams' })
+  }
+  if (isOfficer || isSecretary || isAdmin) {
+    governmentPages.push({ category: 'Government', label: 'City Government', icon: Landmark, path: '/government' })
+  }
+  if (canSeeCourt) {
+    governmentPages.push({ category: 'Government', label: 'Court Dockets', icon: Gavel, path: '/admin/court-dockets' })
+  }
+  if (isOfficer) {
+    governmentPages.push(
+      { category: 'Government', label: 'Officer Dashboard', icon: LayoutDashboard, path: '/officer/dashboard' },
+      { category: 'Government', label: 'Officer Lounge', icon: Users, path: '/officer/lounge' },
+      { category: 'Government', label: 'Moderation', icon: Eye, path: '/officer/moderation' },
+      { category: 'Government', label: 'Scheduling', icon: Calendar, path: '/officer/scheduling' },
+      { category: 'Government', label: 'OWC Dashboard', icon: LayoutDashboard, path: '/officer/owc' },
+      { category: 'Government', label: 'Officer Payroll', icon: DollarSign, path: '/officer/payroll' },
+    )
+  }
+  if (isLead) {
+    governmentPages.push(
+      { category: 'Government', label: 'Lead HQ', icon: Star, path: '/lead-officer' },
+      { category: 'Government', label: 'Interviews', icon: Video, path: '/admin/interviews' },
+      { category: 'Government', label: 'Weekly Reports', icon: BarChart3, path: '/admin/reports/weekly' },
+      { category: 'Government', label: 'Creator Approvals', icon: ClipboardList, path: '/admin/creator-approvals' },
+    )
+  }
+  if (isSecretary || isAdmin) {
+    governmentPages.push(
+      { category: 'Government', label: 'Secretary Console', icon: LayoutDashboard, path: '/secretary' },
+      { category: 'Government', label: 'Appeals', icon: ScrollText, path: '/admin/appeals' },
+      { category: 'Government', label: 'Manual Orders', icon: FileText, path: '/admin/manual-orders' },
+    )
+  }
+  if ((profile as any)?.is_journalist || (profile as any)?.is_news_caster || (profile as any)?.is_chief_news_caster || isAdmin) {
+    governmentPages.push({ category: 'Government', label: 'TCNN Dashboard', icon: Newspaper, path: '/tcnn/dashboard' })
   }
 
-  // Helper for icons not in top import
-  const MicOffIcon = ({ size, className }: { size: number, className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <line x1="1" y1="1" x2="23" y2="23"></line>
-      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
-      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
-      <line x1="12" y1="19" x2="12" y2="23"></line>
-      <line x1="8" y1="23" x2="16" y2="23"></line>
-    </svg>
-  )
+  // Admin pages
+  const adminPages = []
+  if (isAdmin) {
+    adminPages.push(
+      // City Management
+      { category: 'Admin - City', label: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
+      { category: 'Admin - City', label: 'Control Panel', icon: Settings, path: '/admin/control-panel' },
+      { category: 'Admin - City', label: 'City Control', icon: MonitorDot, path: '/admin/system/health' },
+      { category: 'Admin - City', label: 'User Search', icon: Users, path: '/admin/user-search' },
+      { category: 'Admin - City', label: 'Role Management', icon: Shield, path: '/admin/role-management' },
+      { category: 'Admin - City', label: 'Verified Users', icon: Eye, path: '/admin/verified-users' },
+      // Moderation
+      { category: 'Admin - Moderation', label: 'Ban Management', icon: AlertTriangle, path: '/admin/ban-management' },
+      { category: 'Admin - Moderation', label: 'Chat Moderation', icon: MessageSquare, path: '/admin/chat-moderation' },
+      { category: 'Admin - Moderation', label: 'Reports Queue', icon: FileText, path: '/admin/reports-queue' },
+      { category: 'Admin - Moderation', label: 'Stream Monitor', icon: MonitorDot, path: '/admin/stream-monitor' },
+      { category: 'Admin - Moderation', label: 'Critical Alerts', icon: Siren, path: '/admin/critical-alerts' },
+      { category: 'Admin - Moderation', label: 'Jail Management', icon: Lock, path: '/admin/jail-management' },
+      // Officers
+      { category: 'Admin - Officers', label: 'Officer Management', icon: Gavel, path: '/admin/officer-management' },
+      { category: 'Admin - Officers', label: 'Officer Shifts', icon: Calendar, path: '/admin/officer-shifts' },
+      { category: 'Admin - Officers', label: 'Officer Reports', icon: FileText, path: '/admin/officer-reports' },
+      { category: 'Admin - Officers', label: 'Live Officers', icon: MonitorDot, path: '/admin/officers-live' },
+      { category: 'Admin - Officers', label: 'Officer Ops', icon: ClipboardList, path: '/admin/officer-operations' },
+      // Content
+      { category: 'Admin - Content', label: 'Applications', icon: FileText, path: '/admin/applications' },
+      { category: 'Admin - Content', label: 'Announcements', icon: Megaphone, path: '/admin/announcements' },
+      { category: 'Admin - Content', label: 'Send Notifications', icon: Bell, path: '/admin/send-notifications' },
+      { category: 'Admin - Content', label: 'Media Library', icon: Eye, path: '/admin/media-library' },
+      { category: 'Admin - Content', label: 'Marketplace Admin', icon: Store, path: '/admin/marketplace' },
+      // Finance
+      { category: 'Admin - Finance', label: 'Finance', icon: DollarSign, path: '/admin/finance' },
+      { category: 'Admin - Finance', label: 'Payouts', icon: Wallet, path: '/admin/payouts' },
+      { category: 'Admin - Finance', label: 'Payments', icon: Banknote, path: '/admin/payments' },
+      { category: 'Admin - Finance', label: 'Earnings', icon: BarChart3, path: '/admin/earnings' },
+      { category: 'Admin - Finance', label: 'Payment Logs', icon: FileText, path: '/admin/payment-logs' },
+      { category: 'Admin - Finance', label: 'Cashout Manager', icon: DollarSign, path: '/admin/cashout-manager' },
+      { category: 'Admin - Finance', label: 'Grant Coins', icon: Coins, path: '/admin/grant-coins' },
+      // System
+      { category: 'Admin - System', label: 'Export Data', icon: FileText, path: '/admin/export-data' },
+      { category: 'Admin - System', label: 'Policies', icon: FileText, path: '/admin/docs/policies' },
+      { category: 'Admin - System', label: 'Errors', icon: AlertTriangle, path: '/admin/errors' },
+      { category: 'Admin - System', label: 'Buckets', icon: Database, path: '/admin/buckets' },
+      { category: 'Admin - System', label: 'Changelog', icon: ScrollText, path: '/changelog' },
+    )
+  }
+
+  // Menu Options - Role-based
+  const getMenuOptions = () => {
+    return [
+      ...basePages,
+      ...governmentPages,
+      ...adminPages,
+    ]
+  }
 
   const menuOptions = getMenuOptions()
 
@@ -644,6 +720,42 @@ export default function BottomNavigation() {
                 ) : (
                   // Authenticated User View
                   <div className="space-y-6 mt-4">
+                    {/* Go Live Button */}
+                    <div>
+                      {canBroadcast() ? (
+                        <Link
+                          to="/broadcast/setup"
+                          onClick={() => setIsMenuOpen(false)}
+                          className="relative flex items-center justify-center gap-3 w-full p-4 bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-600 hover:from-yellow-500 hover:via-yellow-300 hover:to-yellow-500 text-black font-bold rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.5)] transition-all duration-300 hover:scale-[1.02] border border-yellow-200/50"
+                        >
+                          <Video size={22} className="text-black" />
+                          <span className="uppercase tracking-wide text-base">Go Live</span>
+                        </Link>
+                      ) : (
+                        <div className="relative flex items-center justify-center gap-3 w-full p-4 bg-gray-600/50 text-gray-400 font-bold rounded-xl border border-gray-500/30 cursor-not-allowed">
+                          <Video size={22} className="text-gray-500" />
+                          <span className="uppercase tracking-wide text-base">Go Live</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Explorer Feed */}
+                    <div>
+                      <Link
+                        to="/explore"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-4 p-3.5 bg-gradient-to-r from-indigo-600/[0.1] to-purple-600/[0.1] hover:from-indigo-600/[0.18] hover:to-purple-600/[0.18] rounded-xl border border-indigo-500/[0.2] transition-all duration-200 group"
+                      >
+                        <div className="p-2.5 rounded-lg bg-indigo-500/[0.12] text-indigo-400 group-hover:bg-indigo-500/[0.2] transition-colors">
+                          <Compass size={22} />
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-white font-bold text-sm block">Explorer Feed</span>
+                          <span className="text-slate-400 text-xs">Discover new content</span>
+                        </div>
+                      </Link>
+                    </div>
+
                     {Object.entries(
                       menuOptions.reduce((acc: any, opt: any) => {
                         const cat = opt.category || 'General'

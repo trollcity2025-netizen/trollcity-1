@@ -1,10 +1,11 @@
-// TrollWheelGame.tsx - Enhanced Troll Wheel with Bankruptcy, Special Items, Ghost Mode, and Featured Broadcaster
+// TrollWheelGame.tsx - Enhanced Troll Wheel with Bankruptcy, Special Items, Ghost Mode, and Broadcast Abilities
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Gem, RotateCw, Ghost, Star, Package, Zap, Shield, Sparkles } from 'lucide-react';
+import { BROADCAST_ABILITIES, getAbilityById, getRarityColor, getRarityGlow, AbilityId } from '@/types/broadcastAbilities';
 
 // Sound effects using Web Audio API for generating sounds
 const playSpinSound = () => {
@@ -108,7 +109,7 @@ interface TrollWheelProps {
 
 interface WheelReward {
   id: number;
-  type: 'coins' | 'trollmonds' | 'bankrupt' | 'trolled' | 'free_perk' | 'free_insurance' | 'free_entrance' | 'ghost_mode' | 'featured_broadcaster';
+  type: 'trollmonds' | 'bankrupt' | 'trolled' | 'free_perk' | 'free_insurance' | 'free_entrance' | 'ghost_mode' | 'featured_broadcaster' | 'broadcast_ability';
   coins: number;
   label: string;
   description: string;
@@ -116,12 +117,12 @@ interface WheelReward {
   color: string;
   glowColor: string;
   icon: string;
+  abilityId?: AbilityId;
 }
 
-// Enhanced wheel rewards: 14 coin amounts + 1 bankrupt + 1 troll (24hr lock)
-// Changed to Trollmonds - 85% more valuable than Troll Coins
+// Enhanced wheel rewards: 14 trollmond amounts + 1 bankrupt + 1 troll (24hr lock)
 const WHEEL_REWARDS: WheelReward[] = [
-  // Coin rewards (14 segments) - now Trollmonds
+  // Trollmond rewards (14 segments)
   { id: 0, type: 'trollmonds', coins: 1, label: '+1', description: '+1 Trollmond', rarity: 'common', color: '#22c55e', glowColor: '#4ade80', icon: '💎' },
   { id: 1, type: 'trollmonds', coins: 5, label: '+5', description: '+5 Trollmonds', rarity: 'common', color: '#22c55e', glowColor: '#4ade80', icon: '💎' },
   { id: 2, type: 'trollmonds', coins: 10, label: '+10', description: '+10 Trollmonds', rarity: 'common', color: '#22c55e', glowColor: '#4ade80', icon: '💎' },
@@ -137,7 +138,7 @@ const WHEEL_REWARDS: WheelReward[] = [
   { id: 12, type: 'trollmonds', coins: 500, label: '+500', description: '+500 Trollmonds', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '💎' },
   { id: 13, type: 'trollmonds', coins: 550, label: '+550', description: '+550 Trollmonds', rarity: 'legendary', color: '#ef4444', glowColor: '#f87171', icon: '💎' },
   // Special rewards
-  { id: 14, type: 'bankrupt', coins: 0, label: 'BANKRUPT', description: 'Lose all coins!', rarity: 'special', color: '#1a1a1a', glowColor: '#000000', icon: '💀' },
+  { id: 14, type: 'bankrupt', coins: 0, label: 'BANKRUPT', description: 'Lose ALL your Trollmonds!', rarity: 'special', color: '#1a1a1a', glowColor: '#000000', icon: '💀' },
   { id: 15, type: 'trolled', coins: 0, label: 'TROLLED!', description: 'No spins for 24 hours!', rarity: 'special', color: '#dc2626', glowColor: '#ef4444', icon: '🤡' },
 ];
 
@@ -149,14 +150,24 @@ const SPECIAL_REWARDS: WheelReward[] = [
   { id: 19, type: 'free_entrance', coins: 0, label: 'FREE ENTRANCE', description: 'Get a free entrance effect!', rarity: 'special', color: '#a855f7', glowColor: '#c084fc', icon: '🎆' },
 ];
 
-const SPIN_COST = 125;
+// Broadcast Ability rewards - very rare wheel prizes
+const ABILITY_REWARDS: WheelReward[] = BROADCAST_ABILITIES.map((ability, i) => ({
+  id: 20 + i,
+  type: 'broadcast_ability' as const,
+  coins: 0,
+  label: `${ability.icon} ${ability.name.toUpperCase()}`,
+  description: ability.description,
+  rarity: ability.rarity as 'rare' | 'epic' | 'legendary',
+  color: ability.color,
+  glowColor: ability.glowColor,
+  icon: ability.icon,
+  abilityId: ability.id,
+}));
+
+const SPIN_COST = 10;
+const FREE_SPINS_PER_DAY = 5;
 const SEGMENT_ANGLE = 360 / WHEEL_REWARDS.length;
 
-// Maximum percentage of bid that can be paid with Trollmonds (35%)
-const TROLLMOND_PAYMENT_PERCENT = 0.35;
-
-// Bankrupt deduction percentage (protected from full bankrupt - 25%)
-const BANKRUPT_DEDUCTION_PERCENT = 0.25;
 
 // Dynamic bid multipliers - cost scales with bid amount
 // Formula: cost = bid * SPIN_COST (e.g., 10x bid costs 1250)
@@ -331,11 +342,12 @@ const TireTreadPattern = ({ size }: { size: number }) => (
 );
 
 // Center Hub Component
-const CenterHub = ({ size, onSpin, disabled, isSpinning }: { 
+const CenterHub = ({ size, onSpin, disabled, isSpinning, isFreeSpin }: { 
   size: number; 
   onSpin: () => void; 
   disabled: boolean;
   isSpinning: boolean;
+  isFreeSpin?: boolean;
 }) => {
   const hubSize = size * 0.25;
   
@@ -385,7 +397,7 @@ const CenterHub = ({ size, onSpin, disabled, isSpinning }: {
         ) : (
           <>
             <span className="text-lg font-black text-white drop-shadow-lg">SPIN</span>
-            <span className="text-[10px] text-purple-200 font-bold">{disabled ? 'NO COINS' : 'PLAY'}</span>
+            <span className="text-[10px] text-purple-200 font-bold">{disabled ? 'LOW BAL' : isFreeSpin ? 'FREE' : 'PLAY'}</span>
           </>
         )}
       </div>
@@ -496,14 +508,15 @@ export default function TrollWheelGame({
   const [rotation, setRotation] = useState(0);
   const [selectedMultiplier, setSelectedMultiplier] = useState(1);
   const [winningIndex, setWinningIndex] = useState<number | null>(null);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [lastWin, setLastWin] = useState<{ type: string; label: string; description: string; coins: number; multiplier: number } | null>(null);
-  const [showWinModal, setShowWinModal] = useState(false);
   
-  // Wheel balance state (separate from user's troll_coins)
+  // Wheel balance state (separate from user's trollmonds)
   const [wheelBalance, setWheelBalance] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionData, setSessionData] = useState<{ bankrupt_landed: boolean; total_spins: number } | null>(null);
+  const [freeSpinsUsed, setFreeSpinsUsed] = useState(0);
+  
+  const freeSpinsRemaining = Math.max(0, FREE_SPINS_PER_DAY - freeSpinsUsed);
+  const isFreeSpin = freeSpinsRemaining > 0;
   
   // Check if user is currently locked from the wheel
   const isWheelLocked = profile?.wheel_troll_locked_until 
@@ -536,26 +549,15 @@ export default function TrollWheelGame({
   
   // Dynamic cost calculation: bid * base_cost
   // MAX (value 0) uses user's entire balance
-  // Now supports Trollmonds payment up to 35% of bid
-  const getBidCost = (multiplier: number, balance: number, trollmondBalance: number): { totalCost: number; coinsPaid: number; trollmondsPaid: number } => {
-    let totalCost: number;
+  const getBidCost = (multiplier: number, balance: number): number => {
     if (multiplier === 0) {
       // MAX - use entire balance, minimum 125
-      totalCost = Math.max(balance, SPIN_COST);
-    } else {
-      totalCost = multiplier * SPIN_COST;
+      return Math.max(balance, SPIN_COST);
     }
-    
-    // Calculate how much can be paid with Trollmonds (up to 35%)
-    const maxTrollmondsPayment = Math.floor(totalCost * TROLLMOND_PAYMENT_PERCENT);
-    const trollmondsPaid = Math.min(trollmondBalance, maxTrollmondsPayment);
-    const coinsPaid = totalCost - trollmondsPaid;
-    
-    return { totalCost, coinsPaid, trollmondsPaid };
+    return multiplier * SPIN_COST;
   };
   
-  const currentBidCostInfo = getBidCost(selectedMultiplier, userBalance, trollmondBalance);
-  const currentBidCost = currentBidCostInfo.totalCost;
+  const currentBidCost = getBidCost(selectedMultiplier, userBalance);
   
   // Load wheel balance and session on mount
   useEffect(() => {
@@ -579,16 +581,40 @@ export default function TrollWheelGame({
         setWheelBalance(profileData.wheel_balance);
       }
       
-      // Get or create today's session
-      const { data: session } = await supabase
-        .rpc('get_or_create_wheel_session');
+      // Load today's free spins used from DB
+      try {
+        const { data: spinsUsed } = await supabase
+          .rpc('get_daily_free_spins', { p_user_id: profile.id });
+        setFreeSpinsUsed(spinsUsed || 0);
+      } catch (e) {
+        // Fallback: query the table directly
+        try {
+          const { data: record } = await supabase
+            .from('daily_free_spins')
+            .select('spins_used')
+            .eq('user_id', profile.id)
+            .eq('spins_date', new Date().toISOString().split('T')[0])
+            .single();
+          setFreeSpinsUsed(record?.spins_used || 0);
+        } catch (e2) {
+          console.warn('[TrollWheel] Failed to load free spins:', e2);
+        }
+      }
       
-      if (session && session.length > 0) {
-        setSessionId(session[0].id);
-        setSessionData({
-          bankrupt_landed: session[0].bankrupt_landed,
-          total_spins: session[0].total_spins
-        });
+      // Get or create today's session
+      try {
+        const { data: session } = await supabase
+          .rpc('get_or_create_wheel_session');
+        
+        if (session && session.length > 0) {
+          setSessionId(session[0].id);
+          setSessionData({
+            bankrupt_landed: session[0].bankrupt_landed,
+            total_spins: session[0].total_spins
+          });
+        }
+      } catch (e) {
+        console.warn('[TrollWheel] Session load failed:', e);
       }
       
       // Load inventory
@@ -616,7 +642,7 @@ export default function TrollWheelGame({
     }
   };
   
-  const MIN_BALANCE_TO_SPIN = 750;
+  const MIN_BALANCE_TO_SPIN = 10;
   
   const handleSpin = async () => {
     if (!profile?.id) {
@@ -637,59 +663,111 @@ export default function TrollWheelGame({
       }
     }
     
-    // Check minimum balance requirement - now considers Trollmonds payment
-    const bidInfo = getBidCost(selectedMultiplier, userBalance, trollmondBalance);
-    const totalRequired = bidInfo.coinsPaid + (bidInfo.trollmondsPaid * 100); // Treat trollmonds as worth 100 coins each
+    // Calculate cost (free if within daily free spins)
+    const bidCost = isFreeSpin ? 0 : getBidCost(selectedMultiplier, userBalance);
     
-    if (userBalance + (trollmondBalance * 100) < MIN_BALANCE_TO_SPIN) {
-      toast.error(`Need at least ${MIN_BALANCE_TO_SPIN.toLocaleString()} coins (including Trollmonds value) to spin!`);
-      return;
-    }
-    
-    // Check if user has enough coins (after Trollmonds payment)
-    if (userBalance < bidInfo.coinsPaid) {
-      const bidLabel = selectedMultiplier === 0 ? 'MAX' : `${selectedMultiplier}x`;
-      toast.error(`Not enough coins! Need ${bidInfo.coinsPaid.toLocaleString()} coins for ${bidLabel} bid.`);
-      return;
+    // Only check balance if not a free spin
+    if (!isFreeSpin) {
+      if (userBalance < MIN_BALANCE_TO_SPIN) {
+        toast.error(`Need at least ${MIN_BALANCE_TO_SPIN.toLocaleString()} Trollmonds to spin!`);
+        return;
+      }
+      
+      if (userBalance < bidCost) {
+        const bidLabel = selectedMultiplier === 0 ? 'MAX' : `${selectedMultiplier}x`;
+        toast.error(`Not enough Trollmonds! Need ${bidCost.toLocaleString()} for ${bidLabel} bid.`);
+        return;
+      }
     }
     
     // Play spin sound
     playSpinSound();
     
-    // Deduct cost IMMEDIATELY when spin starts - both coins and trollmonds
-    const newBalance = userBalance - bidInfo.coinsPaid;
-    const newTrollmondBalance = trollmondBalance - bidInfo.trollmondsPaid;
-    onBalanceChange(newBalance);
-    if (onTrollmondChange) {
-      onTrollmondChange(newTrollmondBalance);
+    // Deduct cost only if not a free spin
+    let newBalance = userBalance;
+    if (bidCost > 0) {
+      newBalance = userBalance - bidCost;
+      onBalanceChange(newBalance);
+      // Save cost deduction to database
+      try {
+        await supabase
+          .from('user_profiles')
+          .update({ trollmonds: newBalance })
+          .eq('id', profile.id);
+      } catch (e) {
+        console.warn('Failed to save spin cost:', e);
+      }
     }
-    setIsSpinning(true);
-    setLastWin(null);
-    setWinningIndex(null);
-    setShowConfetti(false);
-    setShowWinModal(false);
     
-    // === RANDOM SPIN WITH 1 IN 15 CHANCE FOR SPECIAL WINS ===
+    // Increment free spins used - persist to DB
+    setFreeSpinsUsed(prev => prev + 1);
+    try {
+      await supabase.rpc('use_daily_free_spin', { p_user_id: profile.id });
+    } catch (e) {
+      // Fallback: direct upsert
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const { data: existing } = await supabase
+          .from('daily_free_spins')
+          .select('id, spins_used')
+          .eq('user_id', profile.id)
+          .eq('spins_date', today)
+          .single();
+        if (existing) {
+          await supabase
+            .from('daily_free_spins')
+            .update({ spins_used: existing.spins_used + 1, updated_at: new Date().toISOString() })
+            .eq('id', existing.id);
+        } else {
+          await supabase
+            .from('daily_free_spins')
+            .insert({ user_id: profile.id, spins_date: today, spins_used: 1 });
+        }
+      } catch (e2) {
+        console.warn('[TrollWheel] Failed to persist free spin:', e2);
+      }
+    }
+    
+    setIsSpinning(true);
+    setWinningIndex(null);
+    
+    // === RANDOM SPIN WITH SPECIAL CHANCES ===
     let resultIndex: number;
+    let abilityResult: WheelReward | null = null;
     
     // Check if user is admin/ceo (bypass session bankrupt limit)
     const isAdmin = profile?.is_admin || profile?.is_ceo;
     
-    // 1 in 15 chance for special result (bankrupt or trolled)
-    // If user already hit bankrupt in this session, skip bankrupt chance (unless admin)
-    const roll = Math.random() * 15;
+    // Rolls
+    const specialRoll = Math.random() * 15;
+    const abilityRoll = Math.random() * 30; // 1 in 30 chance for ability
     const canGetBankrupt = isAdmin || !sessionData?.bankrupt_landed;
     
-    if (roll < 1 && canGetBankrupt) {
+    if (specialRoll < 1 && canGetBankrupt) {
       // Special result - either bankrupt (50%) or trolled (50%)
       resultIndex = Math.random() < 0.5 ? 14 : 15; // 14 = bankrupt, 15 = trolled
+    } else if (abilityRoll < 1) {
+      // Rare ability reward - pick a random ability weighted by wheelWeight
+      const totalWeight = ABILITY_REWARDS.reduce((sum, a) => sum + (a.abilityId ? (getAbilityById(a.abilityId)?.wheelWeight || 4) : 4), 0);
+      let pick = Math.random() * totalWeight;
+      for (const ability of ABILITY_REWARDS) {
+        const weight = ability.abilityId ? (getAbilityById(ability.abilityId)?.wheelWeight || 4) : 4;
+        pick -= weight;
+        if (pick <= 0) {
+          abilityResult = ability;
+          break;
+        }
+      }
+      if (!abilityResult) abilityResult = ABILITY_REWARDS[ABILITY_REWARDS.length - 1];
+      // Still spin to a random visual position (abilities don't have wheel segments)
+      resultIndex = Math.floor(Math.random() * 14);
     } else {
-      // Regular result - random coin reward
-      resultIndex = Math.floor(Math.random() * 14); // 0-13 = coin rewards
+      // Regular result - random trollmond reward
+      resultIndex = Math.floor(Math.random() * 14); // 0-13 = trollmond rewards
     }
     
-    // Get the reward
-    const result = WHEEL_REWARDS[resultIndex];
+    // Get the result - ability overrides the wheel segment result
+    const result = abilityResult || WHEEL_REWARDS[resultIndex];
     
     // Calculate segment angle
     const segmentAngle = 360 / WHEEL_REWARDS.length;
@@ -713,12 +791,12 @@ export default function TrollWheelGame({
     // Wait for spin animation to finish, then show result
     // Use setTimeout with a callback to ensure it runs
     setTimeout(() => {
-      finishSpin(result, newBalance, newTrollmondBalance);
+      finishSpin(result, newBalance);
     }, 4000);
   };
   
   // Separate function to handle spin completion - ensures it always runs
-  const finishSpin = async (result: WheelReward, newBalance: number, newTrollmondBalance: number) => {
+  const finishSpin = async (result: WheelReward, newBalance: number) => {
     if (!profile?.id) {
       setIsSpinning(false);
       setSpinKey(k => k + 1);
@@ -729,75 +807,39 @@ export default function TrollWheelGame({
       let finalCoins = 0;
       let message = '';
       
-      if (result.type === 'coins') {
+      if (result.type === 'trollmonds') {
         finalCoins = result.coins * selectedMultiplier;
-        const finalUserBalance = newBalance + finalCoins;
-        onBalanceChange(finalUserBalance);
+        const finalBalance = newBalance + finalCoins;
+        // Update balance via callback
+        onBalanceChange(finalBalance);
+        // Save to database - set the correct final balance
         try {
-          await supabase.rpc('add_troll_coins', { p_user_id: profile.id, p_amount: finalCoins });
-        } catch (e) { /* ignore */ }
-        playWinSound();
-        message = `🎉 WIN! x${selectedMultiplier}: +${finalCoins} coins`;
-      } else if (result.type === 'trollmonds') {
-        finalCoins = result.coins * selectedMultiplier;
-        const finalTrollmondBalance = trollmondBalance + finalCoins;
-        // Update trollmond balance via onTrollmondChange callback
-        if (onTrollmondChange) {
-          onTrollmondChange(finalTrollmondBalance);
-        }
-        // Also save to database by updating user_profiles directly
-        try {
-          // First try the RPC function
-          await supabase.rpc('increment_trollmonds', { p_user_id: profile.id, p_amount: finalCoins });
+          await supabase
+            .from('user_profiles')
+            .update({ trollmonds: finalBalance })
+            .eq('id', profile.id);
         } catch (e) {
-          // RPC might fail if column doesn't exist, try direct update
-          try {
-            const { data: current } = await supabase
-              .from('user_profiles')
-              .select('trollmonds')
-              .eq('id', profile.id)
-              .single();
-            const newBalance = (current?.trollmonds || 0) + finalCoins;
-            await supabase
-              .from('user_profiles')
-              .update({ trollmonds: newBalance })
-              .eq('id', profile.id);
-          } catch (e2) {
-            console.warn('Failed to update trollmonds:', e2);
-          }
+          console.warn('Failed to update trollmonds:', e);
         }
-        // Refresh the global auth profile so sidebar and broadcast update
-        useAuthStore.getState().refreshProfile();
         playWinSound();
         message = `💎 WIN! x${selectedMultiplier}: +${finalCoins} Trollmonds`;
        } else if (result.type === 'bankrupt') {
-           // Deduct 10% of user's balance (protected from full bankrupt)
-           // This is deducted from BOTH Troll Coins AND Trollmonds
-           const coinsDeducted = Math.floor(newBalance * BANKRUPT_DEDUCTION_PERCENT);
-           const trollmondsDeducted = Math.floor(newTrollmondBalance * BANKRUPT_DEDUCTION_PERCENT);
+           // Lose ALL trollmonds
+           const trollmondsLost = newBalance;
+           const finalBalance = 0;
            
-           const finalBalance = newBalance - coinsDeducted;
-           const finalTrollmondBalance = newTrollmondBalance - trollmondsDeducted;
-           
-           // Update balance - already deducted at spin time, just confirm with DB
+           // Update balance to 0
            onBalanceChange(finalBalance);
-           if (onTrollmondChange) {
-             onTrollmondChange(finalTrollmondBalance);
-           }
            playBankruptSound();
            try {
-             // Update both troll_coins and trollmonds in database
              await supabase
                .from('user_profiles')
                .update({ 
-                 troll_coins: finalBalance,
-                 trollmonds: finalTrollmondBalance
+                 trollmonds: 0
                })
                .eq('id', profile.id);
            } catch (e) { /* ignore */ }
-           // Refresh profile to update global state
-           useAuthStore.getState().refreshProfile();
-           message = `💸 BANKRUPT! Lost 25% of your balance (-${coinsDeducted.toLocaleString()} coins, -${trollmondsDeducted} Trollmonds)!`;
+           message = `💸 BANKRUPT! Lost ALL Trollmonds (-${trollmondsLost.toLocaleString()})!`;
         } else if (result.type === 'trolled') {
         playTrolledSound();
         const trollLockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -827,22 +869,49 @@ export default function TrollWheelGame({
         playWinSound();
         message = '🎆 FREE ENTRANCE! Free entrance effect!';
         await addToInventory('free_entrance', 'Free Entrance Effect', 'Get any entrance effect for free');
+      } else if (result.type === 'broadcast_ability' && result.abilityId) {
+        const abilityDef = getAbilityById(result.abilityId);
+        if (abilityDef) {
+          playWinSound();
+          message = `${abilityDef.icon} RARE ABILITY: ${abilityDef.name}!`;
+          // Add to user's ability inventory
+          try {
+            await supabase.rpc('add_ability_to_inventory', {
+              p_user_id: profile.id,
+              p_ability_id: result.abilityId,
+            });
+          } catch (e) {
+            // Fallback: direct insert/upsert
+            try {
+              const { data: existing } = await supabase
+                .from('user_abilities')
+                .select('id, quantity')
+                .eq('user_id', profile.id)
+                .eq('ability_id', result.abilityId)
+                .single();
+              if (existing) {
+                await supabase
+                  .from('user_abilities')
+                  .update({ quantity: existing.quantity + 1 })
+                  .eq('id', existing.id);
+              } else {
+                await supabase
+                  .from('user_abilities')
+                  .insert({ user_id: profile.id, ability_id: result.abilityId, quantity: 1 });
+              }
+            } catch (e2) {
+              console.warn('Failed to add ability:', e2);
+            }
+          }
+        }
       }
       
-      // Set last win for display
-      setLastWin({ 
-        type: result.type,
-        label: result.label, 
-        description: result.description,
-        coins: finalCoins, 
-        multiplier: selectedMultiplier 
-      });
-      
-      // Show win modal
-      setShowWinModal(true);
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 3000);
-      toast.success(message);
+      // Show toast based on result type
+      if (result.type === 'bankrupt' || result.type === 'trolled') {
+        toast.error(message);
+      } else {
+        toast.success(message);
+      }
       
       // Record spin
       try {
@@ -970,18 +1039,33 @@ export default function TrollWheelGame({
               </div>
             </motion.div>
           )}
-          {/* Always show Troll Coins */}
+          {/* Always show Trollmonds Balance */}
           {!isWheelLocked && (
           <motion.div 
-            className="flex items-center gap-2 md:gap-3 bg-black/70 backdrop-blur-md px-4 md:px-6 py-2 md:py-3 rounded-full border-2 border-yellow-500/50 shadow-[0_0_25px_rgba(234,179,8,0.4)]"
+            className="flex items-center gap-2 md:gap-3 bg-black/70 backdrop-blur-md px-4 md:px-6 py-2 md:py-3 rounded-full border-2 border-purple-500/50 shadow-[0_0_25px_rgba(168,85,247,0.4)]"
             whileHover={{ scale: 1.02 }}
           >
-            <div className="p-1.5 md:p-2 bg-yellow-500/20 rounded-full">
-              <Coins className="w-4 md:w-5 h-4 md:h-5 text-yellow-400" />
+            <div className="p-1.5 md:p-2 bg-purple-500/20 rounded-full">
+              <Gem className="w-4 md:w-5 h-4 md:h-5 text-purple-400" />
             </div>
             <div>
-              <p className="text-xs text-yellow-400/70 font-bold uppercase tracking-wider">Troll Coins</p>
+              <p className="text-xs text-purple-400/70 font-bold uppercase tracking-wider">Trollmonds</p>
               <p className="text-lg md:text-xl font-black text-white">{userBalance.toLocaleString()}</p>
+            </div>
+          </motion.div>
+          )}
+          {/* Free Spins Counter */}
+          {!isWheelLocked && freeSpinsRemaining > 0 && (
+          <motion.div 
+            className="flex items-center gap-2 md:gap-3 bg-black/70 backdrop-blur-md px-4 md:px-6 py-2 md:py-3 rounded-full border-2 border-green-500/50 shadow-[0_0_25px_rgba(34,197,94,0.4)]"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="p-1.5 md:p-2 bg-green-500/20 rounded-full">
+              <Zap className="w-4 md:w-5 h-4 md:h-5 text-green-400" />
+            </div>
+            <div>
+              <p className="text-xs text-green-400/70 font-bold uppercase tracking-wider">Free Spins</p>
+              <p className="text-lg md:text-xl font-black text-white">{freeSpinsRemaining}</p>
             </div>
           </motion.div>
           )}
@@ -1069,18 +1153,15 @@ export default function TrollWheelGame({
         <div className="w-full max-w-md px-1 md:px-2">
           <div className="flex items-center justify-between mb-2 md:mb-3">
             <span className="text-xs md:text-sm text-cyan-300 font-bold">BID AMOUNT</span>
-            <span className="text-base md:text-lg font-black text-yellow-400">
-              {currentBidCostInfo.trollmondsPaid > 0 ? 
-                `${currentBidCostInfo.coinsPaid.toLocaleString()} + ${currentBidCostInfo.trollmondsPaid}💎` : 
-                `${currentBidCost.toLocaleString()} coins`
-              }
+            <span className={`text-base md:text-lg font-black ${isFreeSpin ? 'text-green-400' : 'text-yellow-400'}`}>
+              {isFreeSpin ? 'FREE ✨' : `${currentBidCost.toLocaleString()} 💎`}
             </span>
           </div>
           <div className="flex flex-wrap gap-2 md:gap-3 justify-center">
             {BID_MULTIPLIERS.map((bid) => {
-              const bidInfo = getBidCost(bid.value, userBalance, trollmondBalance);
+              const bidCost = getBidCost(bid.value, userBalance);
               const isMax = bid.value === 0;
-              const isDisabled = isSpinning || (isMax ? userBalance < SPIN_COST : userBalance < bidInfo.coinsPaid);
+              const isDisabled = isSpinning || (!isFreeSpin && (isMax ? userBalance < SPIN_COST : userBalance < bidCost));
               
               return (
                 <motion.button
@@ -1100,11 +1181,7 @@ export default function TrollWheelGame({
                   <div className="flex flex-col items-center gap-0.5">
                     <span>{bid.label}</span>
                     <span className="text-[9px] md:text-[10px] opacity-70">
-                      {isMax ? `${userBalance.toLocaleString()}` : 
-                        bidInfo.trollmondsPaid > 0 ? 
-                          `${bidInfo.coinsPaid.toLocaleString()}+${bidInfo.trollmondsPaid}💎` : 
-                          bidInfo.totalCost.toLocaleString()
-                      }
+                      {isFreeSpin ? 'FREE' : `${bidCost.toLocaleString()}💎`}
                     </span>
                   </div>
                 </motion.button>
@@ -1137,8 +1214,9 @@ export default function TrollWheelGame({
             <CenterHub 
               size={size} 
               onSpin={handleSpin} 
-              disabled={userBalance < currentBidCostInfo.coinsPaid || isWheelLocked}
+              disabled={(!isFreeSpin && userBalance < currentBidCost) || isWheelLocked}
               isSpinning={isSpinning}
+              isFreeSpin={isFreeSpin}
             />
           </motion.div>
           
@@ -1148,67 +1226,10 @@ export default function TrollWheelGame({
           {/* Spark effects - stay fixed */}
           <TireSparks />
           
-          {/* Coin particles */}
-          <CoinParticles show={showConfetti} />
         </div>
         
-        {/* Win Display - Always visible after spin */}
-        {lastWin && (
-          <div className="bg-black/80 backdrop-blur-md border-2 border-yellow-500/50 px-4 md:px-8 py-3 md:py-4 rounded-2xl shadow-[0_0_40px_rgba(234,179,8,0.5)]">
-            <div className="text-center">
-              <p className="text-cyan-300 text-xs md:text-sm font-bold uppercase tracking-wider">🎉 YOU WON! 🎉</p>
-              <p className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 mt-1">
-                {lastWin.type === 'coins' ? `+${lastWin.coins * lastWin.multiplier} COINS` : lastWin.type === 'trollmonds' ? `+${lastWin.coins * lastWin.multiplier} TROLLMONDS` : lastWin.label}
-              </p>
-              <p className="text-gray-300 text-xs md:text-sm mt-1">{lastWin.description}</p>
-              {lastWin.coins > 0 && (
-                <div className="flex items-center justify-center gap-4 mt-2">
-                  <span className="text-green-400 font-bold text-lg md:text-xl">+{lastWin.coins * lastWin.multiplier} coins</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        
-        {/* Win Modal - Shows prominently after spin */}
-        {showWinModal && lastWin && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-gradient-to-br from-purple-900 to-black border-4 border-yellow-500 p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(234,179,8,0.6)] max-w-sm md:max-w-md mx-4 text-center"
-            >
-              <div className="text-5xl md:text-6xl mb-3 md:mb-4">
-                {lastWin.type === 'coins' ? '🪙' : lastWin.type === 'trollmonds' ? '💎' : lastWin.type === 'bankrupt' ? '💀' : lastWin.type === 'trolled' ? '🤡' : '🎁'}
-              </div>
-              <h2 className="text-2xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 mb-2">
-                YOU WON!
-              </h2>
-              <p className="text-3xl md:text-5xl font-black text-green-400 mb-2">
-                {lastWin.type === 'coins' ? `+${lastWin.coins * lastWin.multiplier}` : lastWin.type === 'trollmonds' ? `+${lastWin.coins * lastWin.multiplier}` : lastWin.label}
-              </p>
-              <p className="text-gray-300 mb-3 md:mb-4">{lastWin.description}</p>
-              {lastWin.type === 'coins' ? (
-                <p className="text-lg md:text-xl font-bold text-yellow-400">
-                  +{lastWin.coins * lastWin.multiplier} COINS ADDED!
-                </p>
-              ) : lastWin.type === 'trollmonds' ? (
-                <p className="text-lg md:text-xl font-bold text-cyan-400">
-                  +{lastWin.coins * lastWin.multiplier} TROLLMONDS ADDED!
-                </p>
-              ) : null}
-              <button
-                onClick={() => setShowWinModal(false)}
-                className="mt-4 md:mt-6 bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold px-6 md:px-8 py-2 md:py-3 rounded-xl hover:scale-105 transition-transform"
-              >
-                AWESOME!
-              </button>
-            </motion.div>
-          </div>
-        )}
-        
         <p className="text-gray-400 text-xs md:text-sm text-center max-w-md px-2">
-          Spin the wheel and win coins, special items, or even GHOST MODE! Higher bids multiply your coin winnings.
+          Spin the wheel and win Trollmonds, special items, or even GHOST MODE! Higher bids multiply your winnings.
         </p>
       </div>
     </div>
