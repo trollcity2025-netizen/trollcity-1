@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from '../lib/supabase';
+import { DECK_PAIR_STORAGE_KEY, sendToDeckPair } from '../hooks/useDeckPair';
 
 export type DeckConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type DeckSessionStatus = 'active' | 'expired' | 'none';
@@ -120,6 +121,9 @@ interface DeckState {
   deckInstalled: boolean;
   installDismissedAt: number | null;
 
+  // Pair code for cross-device connection
+  pairCode: string | null;
+
   // Actions
   setSession: (session: DeckSession | null) => void;
   validateSession: () => boolean;
@@ -155,9 +159,14 @@ interface DeckState {
   dismissInstallPrompt: () => void;
   shouldShowInstallPrompt: () => boolean;
 
+  setPairCode: (code: string | null) => void;
+
   // Sync with phone broadcast page
   syncToPhone: () => void;
   syncFromPhone: (config: Partial<DeckStreamConfig>) => void;
+
+  // Send message to deck via Supabase Realtime
+  sendToDeck: (msg: { type: string; payload?: Record<string, unknown> }) => Promise<void>;
 
   // Start/end broadcast from Deck
   triggerBroadcastStart: () => Promise<{ success: boolean; error?: string }>;
@@ -216,6 +225,7 @@ export const useDeckStore = create<DeckState>()(
       isSidePanelOpen: true,
       deckInstalled: false,
       installDismissedAt: null,
+      pairCode: localStorage.getItem(DECK_PAIR_STORAGE_KEY) || null,
 
       setSession: (session) => {
         set({
@@ -409,6 +419,25 @@ export const useDeckStore = create<DeckState>()(
         if (!installDismissedAt) return true;
         const daysSinceDismissed = (Date.now() - installDismissedAt) / (1000 * 60 * 60 * 24);
         return daysSinceDismissed > 7;
+      },
+
+      setPairCode: (code) => {
+        set({ pairCode: code });
+        if (code) {
+          localStorage.setItem(DECK_PAIR_STORAGE_KEY, code);
+        } else {
+          localStorage.removeItem(DECK_PAIR_STORAGE_KEY);
+        }
+      },
+
+      sendToDeck: async (msg) => {
+        const { pairCode } = get();
+        if (!pairCode) return;
+        try {
+          await sendToDeckPair(pairCode, msg as any);
+        } catch {
+          // Supabase send failed
+        }
       },
 
       syncToPhone: () => {

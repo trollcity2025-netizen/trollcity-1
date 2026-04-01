@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { useDeckStore } from '../../stores/deckStore';
+import { DECK_PAIR_STORAGE_KEY } from '../../hooks/useDeckPair';
 import { useDeckPWA } from '../../pwa/useDeckPWA';
 import { Radio, Mail, Lock, AlertCircle, Info, Loader2 } from 'lucide-react';
 
@@ -10,6 +11,7 @@ const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
 export default function DeckAuth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setAuth, setProfile } = useAuthStore();
   const { setSession } = useDeckStore();
   useDeckPWA();
@@ -18,6 +20,15 @@ export default function DeckAuth() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const pairCode = searchParams.get('pair');
+
+  // Save pair code to localStorage so DeckDashboard can read it
+  useEffect(() => {
+    if (pairCode) {
+      localStorage.setItem(DECK_PAIR_STORAGE_KEY, pairCode);
+    }
+  }, [pairCode]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +104,20 @@ export default function DeckAuth() {
           <p className="deck-auth-subtitle">
             Broadcast control companion. Sign in with your Troll City account.
           </p>
+
+          {pairCode && (
+            <div style={{
+              background: 'rgba(106, 0, 255, 0.1)',
+              border: '1px solid rgba(106, 0, 255, 0.3)',
+              borderRadius: 8,
+              padding: '8px 12px',
+              marginBottom: 12,
+              fontSize: 12,
+              color: '#a855f7',
+            }}>
+              Pairing with code: <strong>{pairCode}</strong>
+            </div>
+          )}
 
           <div className="deck-auth-info">
             <Info size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />

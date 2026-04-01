@@ -1,7 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { useDeckStore } from '../../stores/deckStore';
+import { useDeckPair, DECK_PAIR_STORAGE_KEY } from '../../hooks/useDeckPair';
+import type { DeckPairMessage } from '../../hooks/useDeckPair';
 import { useDeckPWA } from '../../pwa/useDeckPWA';
 import DeckLayout from '../../components/deck/DeckLayout';
 import DeckStreamSetup from '../../components/deck/DeckStreamSetup';
@@ -11,8 +13,6 @@ import DeckAlerts from '../../components/deck/DeckAlerts';
 import DeckModeration from '../../components/deck/DeckModeration';
 import DeckAddonsEditor from '../../components/deck/DeckAddonsEditor';
 import '../../features/deck/styles/deck.css';
-
-const DECK_SYNC_CHANNEL = 'trollcity-deck-sync';
 
 export default function DeckDashboard() {
   const navigate = useNavigate();
@@ -30,15 +30,23 @@ export default function DeckDashboard() {
     setHasQualityUpgrade,
   } = useDeckStore();
 
+  const [pairCode, setPairCode] = useState<string | null>(null);
+
+  // Read pair code from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem(DECK_PAIR_STORAGE_KEY);
+    if (stored) {
+      setPairCode(stored);
+    }
+  }, []);
+
   // Validate session on mount
   useEffect(() => {
     if (!session || !validateSession()) {
-      // Check if the main auth session exists
       if (!user) {
         navigate('/deck/auth', { replace: true });
         return;
       }
-      // User is auth'd but Deck session expired - redirect to re-auth
       if (!session) {
         navigate('/deck/auth', { replace: true });
         return;
@@ -53,95 +61,86 @@ export default function DeckDashboard() {
     }
   }, [profile, setHasQualityUpgrade]);
 
-  // Listen for phone sync signals
-  useEffect(() => {
-    let channel: BroadcastChannel | null = null;
-    try {
-      channel = new BroadcastChannel(DECK_SYNC_CHANNEL);
-      channel.onmessage = (event) => {
-        const { type, payload } = event.data || {};
-
-        switch (type) {
-          case 'phone-sync':
-            syncFromPhone(payload);
-            setPhoneLink({
-              status: 'connected',
-              phoneReady: true,
-              lastSeen: Date.now(),
-              streamId: payload?.streamId || null,
-            });
-            break;
-          case 'phone-ready':
-            setPhoneLink({
-              status: 'connected',
-              phoneReady: true,
-              lastSeen: Date.now(),
-              streamId: payload?.streamId || null,
-            });
-            break;
-          case 'phone-stream-stats':
-            setStreamStats(payload);
-            break;
-          case 'phone-chat-message':
-            addChatMessage(payload);
-            break;
-          case 'phone-alert':
-            addAlert(payload);
-            break;
-          case 'phone-stream-started':
-            useDeckStore.getState().updateStreamConfig({
-              isLive: true,
-              streamId: payload?.streamId || null,
-            });
-            setPhoneLink({
-              status: 'connected',
-              phoneReady: true,
-              streamId: payload?.streamId || null,
-              lastSeen: Date.now(),
-            });
-            break;
-          case 'phone-stream-ended':
-            useDeckStore.getState().updateStreamConfig({
-              isLive: false,
-              streamId: null,
-            });
-            break;
-        }
-      };
-    } catch {
-      // BroadcastChannel not supported
+  const handlePairMessage = useCallback((msg: DeckPairMessage) => {
+    switch (msg.type) {
+      case 'phone-sync':
+        syncFromPhone(msg.payload as any);
+        setPhoneLink({
+          status: 'connected',
+          phoneReady: true,
+          lastSeen: Date.now(),
+          streamId: (msg.payload as any)?.streamId || null,
+        });
+        break;
+      case 'phone-ready':
+        setPhoneLink({
+          status: 'connected',
+          phoneReady: true,
+          lastSeen: Date.now(),
+          streamId: (msg.payload as any)?.streamId || null,
+        });
+        break;
+      case 'phone-stream-stats':
+        setStreamStats(msg.payload as any);
+        break;
+      case 'phone-chat-message':
+        addChatMessage(msg.payload as any);
+        break;
+      case 'phone-alert':
+        addAlert(msg.payload as any);
+        break;
+      case 'phone-stream-started':
+        useDeckStore.getState().updateStreamConfig({
+          isLive: true,
+          streamId: (msg.payload as any)?.streamId || null,
+        });
+        setPhoneLink({
+          status: 'connected',
+          phoneReady: true,
+          streamId: (msg.payload as any)?.streamId || null,
+          lastSeen: Date.now(),
+        });
+        break;
+      case 'phone-stream-ended':
+        useDeckStore.getState().updateStreamConfig({
+          isLive: false,
+          streamId: null,
+        });
+        break;
+      case 'phone-disconnected':
+        setPhoneLink({
+          status: 'disconnected',
+          phoneReady: false,
+        });
+        break;
     }
+  }, [syncFromPhone, setPhoneLink, setStreamStats, addChatMessage, addAlert]);
 
-    // Storage-based fallback
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'tc_phone_sync' && e.newValue) {
-        try {
-          const data = JSON.parse(e.newValue);
-          syncFromPhone(data.config || data);
-          setPhoneLink({
-            status: 'connected',
-            phoneReady: true,
-            lastSeen: Date.now(),
-          });
-        } catch {
-          // ignore
-        }
-      }
-    };
+  const { send, isConnected: isPairConnected } = useDeckPair({
+    pairCode,
+    onMessage: handlePairMessage,
+  });
 
-    window.addEventListener('storage', handleStorage);
-
-    return () => {
-      channel?.close();
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, [setPhoneLink, syncFromPhone, setStreamStats, addChatMessage, addAlert]);
+  // Send deck-joined message when connected to the pair channel
+  useEffect(() => {
+    if (isPairConnected && user) {
+      send({
+        type: 'deck-joined',
+        userId: user.id,
+      });
+      setPhoneLink({
+        status: 'connected',
+        phoneReady: true,
+        lastSeen: Date.now(),
+      });
+    }
+  }, [isPairConnected, user, send, setPhoneLink]);
 
   // Periodic phone heartbeat check
   useEffect(() => {
     const interval = setInterval(() => {
       const link = useDeckStore.getState().phoneLink;
-      if (link.lastSeen && Date.now() - link.lastSeen > 15000) {
+      if (link.lastSeen && Date.now() - link.lastSeen > 30000) {
         setPhoneLink({ status: 'disconnected', phoneReady: false });
       }
     }, 5000);

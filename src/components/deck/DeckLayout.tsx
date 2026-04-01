@@ -10,9 +10,6 @@ interface DeckLayoutProps {
   children: React.ReactNode;
 }
 
-const DECK_SYNC_CHANNEL = 'trollcity-deck-sync';
-const _SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
-
 export default function DeckLayout({ children }: DeckLayoutProps) {
   const {
     session,
@@ -25,7 +22,6 @@ export default function DeckLayout({ children }: DeckLayoutProps) {
     validateSession,
     clearSession,
     setPhoneLink,
-    syncFromPhone,
   } = useDeckStore();
 
   const [sessionTimeLeft, setSessionTimeLeft] = useState<string>('');
@@ -49,75 +45,11 @@ export default function DeckLayout({ children }: DeckLayoutProps) {
     return () => clearInterval(interval);
   }, [validateSession]);
 
-  // Listen for phone broadcast page signals via BroadcastChannel
-  useEffect(() => {
-    let channel: BroadcastChannel | null = null;
-    try {
-      channel = new BroadcastChannel(DECK_SYNC_CHANNEL);
-      channel.onmessage = (event) => {
-        const { type, payload } = event.data || {};
-        if (type === 'phone-sync') {
-          syncFromPhone(payload);
-          setPhoneLink({
-            status: 'connected',
-            phoneReady: true,
-            lastSeen: Date.now(),
-            streamId: payload?.streamId || null,
-          });
-        } else if (type === 'phone-ready') {
-          setPhoneLink({
-            status: 'connected',
-            phoneReady: true,
-            lastSeen: Date.now(),
-            streamId: payload?.streamId || null,
-          });
-        } else if (type === 'phone-disconnected') {
-          setPhoneLink({
-            status: 'disconnected',
-            phoneReady: false,
-          });
-        } else if (type === 'phone-stream-stats') {
-          useDeckStore.getState().setStreamStats(payload);
-        } else if (type === 'phone-chat-message') {
-          useDeckStore.getState().addChatMessage(payload);
-        } else if (type === 'phone-alert') {
-          useDeckStore.getState().addAlert(payload);
-        }
-      };
-    } catch {
-      // BroadcastChannel not available
-    }
-
-    // Also listen for localStorage-based sync as fallback
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'tc_phone_sync' && e.newValue) {
-        try {
-          const data = JSON.parse(e.newValue);
-          syncFromPhone(data.config || data);
-          setPhoneLink({
-            status: 'connected',
-            phoneReady: true,
-            lastSeen: Date.now(),
-          });
-        } catch {
-          // ignore
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorage);
-
-    return () => {
-      channel?.close();
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, [setPhoneLink, syncFromPhone]);
-
   // Periodic heartbeat check for phone connection
   useEffect(() => {
     const interval = setInterval(() => {
       const { phoneLink: link } = useDeckStore.getState();
-      if (link.lastSeen && Date.now() - link.lastSeen > 15000) {
+      if (link.lastSeen && Date.now() - link.lastSeen > 30000) {
         setPhoneLink({ status: 'disconnected', phoneReady: false });
       }
     }, 5000);
@@ -126,6 +58,7 @@ export default function DeckLayout({ children }: DeckLayoutProps) {
 
   const handleSignOut = async () => {
     clearSession();
+    localStorage.removeItem('tc_deck_pair_code');
     await supabase.auth.signOut();
     window.location.href = '/deck';
   };

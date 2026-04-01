@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
 import { useDeckStore } from '../../stores/deckStore';
+import { useDeckPair, generatePairCode } from '../../hooks/useDeckPair';
+import type { DeckPairMessage } from '../../hooks/useDeckPair';
 import {
   X, Radio, CheckCircle
 } from 'lucide-react';
@@ -17,40 +19,77 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
     dismissInstallPrompt,
     shouldShowInstallPrompt,
     phoneLink,
+    setPhoneLink,
+    setPairCode: storePairCode,
   } = useDeckStore();
 
   const [_installStatus, setInstallStatus] = useState<string>('checking');
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [deckJoined, setDeckJoined] = useState(false);
 
   // Check if Deck is already installed
   useEffect(() => {
     const checkInstalled = () => {
-      // Check if we're in the Deck standalone app
       if (window.location.pathname.startsWith('/deck') && isStandalone()) {
         setDeckInstalled(true);
         setInstallStatus('installed');
         return;
       }
-
-      // Check localStorage for deck installed flag
       const deckFlag = localStorage.getItem('tc_deck_installed');
       if (deckFlag === 'true') {
         setDeckInstalled(true);
         setInstallStatus('installed');
         return;
       }
-
-      // Check if we can open the deck URL in standalone
       const status = getInstallStatus(false);
       setInstallStatus(status);
     };
-
     checkInstalled();
   }, [setDeckInstalled]);
 
+  const handlePairMessage = useCallback((msg: DeckPairMessage) => {
+    if (msg.type === 'deck-joined') {
+      setDeckJoined(true);
+      setDeckInstalled(true);
+      setPhoneLink({
+        status: 'connected',
+        phoneReady: true,
+        lastSeen: Date.now(),
+      });
+    }
+  }, [setDeckInstalled, setPhoneLink]);
+
+  const { send, isConnected: isPairConnected } = useDeckPair({
+    pairCode,
+    onMessage: handlePairMessage,
+  });
+
+  // Send heartbeats to deck when paired
+  useEffect(() => {
+    if (!isPairConnected) return;
+    const interval = setInterval(() => {
+      send({
+        type: 'phone-ready',
+        payload: { streamId: useDeckStore.getState().streamConfig.streamId },
+      });
+    }, 5000);
+    // Send immediately
+    send({
+      type: 'phone-ready',
+      payload: { streamId: useDeckStore.getState().streamConfig.streamId },
+    });
+    return () => clearInterval(interval);
+  }, [isPairConnected, send]);
+
   const handleConnectDeck = async () => {
-    const deckUrl = `${window.location.origin}/deck/auth`;
+    const code = generatePairCode();
+    setPairCode(code);
+    storePairCode(code);
+    setDeckJoined(false);
+
+    const deckUrl = `${window.location.origin}/deck/auth?pair=${code}`;
     try {
       const url = await QRCode.toDataURL(deckUrl, {
         width: 256,
@@ -64,6 +103,11 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
     setShowQrModal(true);
   };
 
+  const handleCloseModal = () => {
+    setShowQrModal(false);
+    // Keep pairCode active so channel stays subscribed
+  };
+
   const handleDismiss = () => {
     dismissInstallPrompt();
     onDismiss?.();
@@ -71,7 +115,6 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
 
   // Don't show if already installed or dismissed
   if (deckInstalled || !shouldShowInstallPrompt()) {
-    // Show connected status instead
     if (deckInstalled) {
       return (
         <>
@@ -113,11 +156,16 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
               }}
             >
               <Radio size={12} />
-              Connect Deck
+              {phoneLink.status === 'connected' ? 'Reconnect' : 'Connect Deck'}
             </button>
           </div>
           {showQrModal && (
-            <QrModal qrDataUrl={qrDataUrl} onClose={() => setShowQrModal(false)} />
+            <QrModal
+              qrDataUrl={qrDataUrl}
+              pairCode={pairCode}
+              deckJoined={deckJoined}
+              onClose={handleCloseModal}
+            />
           )}
         </>
       );
@@ -171,13 +219,28 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
         </div>
       </div>
       {showQrModal && (
-        <QrModal qrDataUrl={qrDataUrl} onClose={() => setShowQrModal(false)} />
+        <QrModal
+          qrDataUrl={qrDataUrl}
+          pairCode={pairCode}
+          deckJoined={deckJoined}
+          onClose={handleCloseModal}
+        />
       )}
     </>
   );
 }
 
-function QrModal({ qrDataUrl, onClose }: { qrDataUrl: string; onClose: () => void }) {
+function QrModal({
+  qrDataUrl,
+  pairCode,
+  deckJoined,
+  onClose,
+}: {
+  qrDataUrl: string;
+  pairCode: string | null;
+  deckJoined: boolean;
+  onClose: () => void;
+}) {
   return (
     <div
       onClick={onClose}
@@ -204,7 +267,9 @@ function QrModal({ qrDataUrl, onClose }: { qrDataUrl: string; onClose: () => voi
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, color: '#fff', fontSize: 16 }}>Scan to Connect Deck</h3>
+          <h3 style={{ margin: 0, color: '#fff', fontSize: 16 }}>
+            {deckJoined ? 'Deck Connected!' : 'Scan to Connect Deck'}
+          </h3>
           <button
             onClick={onClose}
             style={{
@@ -219,31 +284,48 @@ function QrModal({ qrDataUrl, onClose }: { qrDataUrl: string; onClose: () => voi
           </button>
         </div>
 
-        {qrDataUrl ? (
-          <div style={{
-            background: '#000',
-            borderRadius: 12,
-            padding: 16,
-            display: 'inline-block',
-            marginBottom: 12,
-          }}>
-            <img src={qrDataUrl} alt="Deck QR Code" style={{ width: 256, height: 256, display: 'block' }} />
+        {deckJoined ? (
+          <div style={{ padding: '32px 16px' }}>
+            <CheckCircle size={48} color="#22c55e" />
+            <p style={{ color: '#22c55e', fontSize: 14, marginTop: 12, fontWeight: 600 }}>
+              Your Deck device is now connected and ready to use.
+            </p>
           </div>
         ) : (
-          <div style={{
-            background: '#000',
-            borderRadius: 12,
-            padding: 32,
-            marginBottom: 12,
-            color: '#6b6585',
-          }}>
-            Failed to generate QR code
-          </div>
-        )}
+          <>
+            {qrDataUrl ? (
+              <div style={{
+                background: '#000',
+                borderRadius: 12,
+                padding: 16,
+                display: 'inline-block',
+                marginBottom: 12,
+              }}>
+                <img src={qrDataUrl} alt="Deck QR Code" style={{ width: 256, height: 256, display: 'block' }} />
+              </div>
+            ) : (
+              <div style={{
+                background: '#000',
+                borderRadius: 12,
+                padding: 32,
+                marginBottom: 12,
+                color: '#6b6585',
+              }}>
+                Failed to generate QR code
+              </div>
+            )}
 
-        <p style={{ margin: 0, color: '#6b6585', fontSize: 12 }}>
-          Open your camera or QR scanner on your Deck device to pair.
-        </p>
+            {pairCode && (
+              <p style={{ margin: '8px 0', color: '#a855f7', fontSize: 18, fontWeight: 700, letterSpacing: 4 }}>
+                {pairCode}
+              </p>
+            )}
+
+            <p style={{ margin: 0, color: '#6b6585', fontSize: 12 }}>
+              Scan with your camera or enter the code on your Deck device.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
