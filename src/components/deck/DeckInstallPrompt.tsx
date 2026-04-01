@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { useDeckStore } from '../../stores/deckStore';
 import {
   X, Radio, CheckCircle
@@ -19,6 +20,8 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
   } = useDeckStore();
 
   const [_installStatus, setInstallStatus] = useState<string>('checking');
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
   // Check if Deck is already installed
   useEffect(() => {
@@ -46,8 +49,19 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
     checkInstalled();
   }, [setDeckInstalled]);
 
-  const handleConnectDeck = () => {
-    setDeckInstalled(true);
+  const handleConnectDeck = async () => {
+    const deckUrl = `${window.location.origin}/deck/auth`;
+    try {
+      const url = await QRCode.toDataURL(deckUrl, {
+        width: 256,
+        margin: 2,
+        color: { dark: '#ffffff', light: '#00000000' },
+      });
+      setQrDataUrl(url);
+    } catch {
+      setQrDataUrl('');
+    }
+    setShowQrModal(true);
   };
 
   const handleDismiss = () => {
@@ -102,6 +116,9 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
               Connect Deck
             </button>
           </div>
+          {showQrModal && (
+            <QrModal qrDataUrl={qrDataUrl} onClose={() => setShowQrModal(false)} />
+          )}
         </>
       );
     }
@@ -134,6 +151,7 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
 
         <p style={{ margin: 0 }}>
           Connect Deck to manage your broadcast from a second screen.
+          Scan the QR code with your other device to pair.
         </p>
 
         <div className="deck-install-actions" style={{ marginTop: 14 }}>
@@ -152,6 +170,81 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
           </button>
         </div>
       </div>
+      {showQrModal && (
+        <QrModal qrDataUrl={qrDataUrl} onClose={() => setShowQrModal(false)} />
+      )}
     </>
+  );
+}
+
+function QrModal({ qrDataUrl, onClose }: { qrDataUrl: string; onClose: () => void }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.75)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: '#1a1a2e',
+          border: '1px solid rgba(106, 0, 255, 0.3)',
+          borderRadius: 16,
+          padding: 24,
+          maxWidth: 340,
+          width: '90%',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, color: '#fff', fontSize: 16 }}>Scan to Connect Deck</h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#6b6585',
+              cursor: 'pointer',
+              padding: 4,
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {qrDataUrl ? (
+          <div style={{
+            background: '#000',
+            borderRadius: 12,
+            padding: 16,
+            display: 'inline-block',
+            marginBottom: 12,
+          }}>
+            <img src={qrDataUrl} alt="Deck QR Code" style={{ width: 256, height: 256, display: 'block' }} />
+          </div>
+        ) : (
+          <div style={{
+            background: '#000',
+            borderRadius: 12,
+            padding: 32,
+            marginBottom: 12,
+            color: '#6b6585',
+          }}>
+            Failed to generate QR code
+          </div>
+        )}
+
+        <p style={{ margin: 0, color: '#6b6585', fontSize: 12 }}>
+          Open your camera or QR scanner on your Deck device to pair.
+        </p>
+      </div>
+    </div>
   );
 }
