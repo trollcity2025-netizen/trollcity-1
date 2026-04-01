@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDeckStore } from '../../stores/deckStore';
 import {
-  Download, ExternalLink, X, Radio, CheckCircle, Loader2
+  X, Radio, CheckCircle
 } from 'lucide-react';
 import { isStandalone, getInstallStatus } from '../../pwa/install';
 
@@ -18,9 +18,7 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
     phoneLink,
   } = useDeckStore();
 
-  const [installing, setInstalling] = useState(false);
   const [_installStatus, setInstallStatus] = useState<string>('checking');
-  const [showQrModal, setShowQrModal] = useState(false);
 
   // Check if Deck is already installed
   useEffect(() => {
@@ -49,7 +47,7 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
   }, [setDeckInstalled]);
 
   const handleConnectDeck = () => {
-    setShowQrModal(true);
+    setDeckInstalled(true);
   };
 
   const handleDismiss = () => {
@@ -136,7 +134,6 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
 
         <p style={{ margin: 0 }}>
           Connect Deck to manage your broadcast from a second screen.
-          Scan the QR code with your phone to link it.
         </p>
 
         <div className="deck-install-actions" style={{ marginTop: 14 }}>
