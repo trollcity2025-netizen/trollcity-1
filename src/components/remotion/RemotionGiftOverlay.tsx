@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime';
 import { OFFICIAL_GIFTS } from '../../lib/giftConstants';
-import { RemotionGiftPlayer } from '../remotion/RemotionGiftPlayer';
+import { RemotionGiftPlayer } from './RemotionGiftPlayer';
 import { getDuration, getDisplayMode, type DisplayMode } from '../../remotion/config';
 
-interface GiftAnimationOverlayProps {
+interface RemotionGiftOverlayProps {
   gifts?: BroadcastGift[];
   onAnimationComplete?: (giftId: string) => void;
   userPositions?: Record<string, { top: number; left: number; width: number; height: number }>;
@@ -39,9 +38,10 @@ const getGiftDetails = (gift: BroadcastGift): { id: string; name: string; icon: 
   };
 };
 
-function resolveDisplayMode(
-  receiverPosition: { top: number; left: number; width: number; height: number } | undefined,
-  participantCount: number
+function determineDisplayMode(
+  gift: BroadcastGift,
+  participantCount: number,
+  receiverPosition: { top: number; left: number; width: number; height: number } | undefined
 ): { mode: DisplayMode; style: React.CSSProperties } {
   const hasTargetBox = !!receiverPosition && participantCount > 1;
   if (hasTargetBox) {
@@ -65,14 +65,13 @@ function resolveDisplayMode(
   };
 }
 
-export default function GiftAnimationOverlay({
+export default function RemotionGiftOverlay({
   gifts = [],
   onAnimationComplete,
   userPositions,
   getUserPositions,
-  participantNames = {},
   participantCount = 1,
-}: GiftAnimationOverlayProps) {
+}: RemotionGiftOverlayProps) {
   const [visibleGifts, setVisibleGifts] = useState<BroadcastGift[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -81,7 +80,6 @@ export default function GiftAnimationOverlay({
       setVisibleGifts([]);
       return;
     }
-
     setVisibleGifts(prev => {
       const existingIds = new Set(prev.map(g => g.id));
       const newGifts = gifts.filter(g => !existingIds.has(g.id));
@@ -150,7 +148,7 @@ export default function GiftAnimationOverlay({
         const freshPositions = getUserPositions ? getUserPositions() : {};
         const mergedPositions = { ...userPositions, ...freshPositions };
         const receiverPosition = gift.receiver_id ? mergedPositions[gift.receiver_id] : undefined;
-        const { mode, style } = resolveDisplayMode(receiverPosition, participantCount);
+        const { mode, style } = determineDisplayMode(gift, participantCount, receiverPosition);
 
         return (
           <RemotionGiftPlayer
