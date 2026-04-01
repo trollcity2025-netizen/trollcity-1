@@ -1,0 +1,483 @@
+/* Gift Animation Preview - CSS Animations */
+
+/* Overlay */
+.ga-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+}
+.ga-enter { opacity: 0; animation: gaFadeIn 0.3s ease forwards; }
+.ga-active { opacity: 1; }
+.ga-exit { opacity: 1; animation: gaFadeOut 0.5s ease forwards; }
+
+@keyframes gaFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes gaFadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* Background effects */
+.ga-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Spotlight beam */
+.ga-spotlight-beam {
+  position: absolute;
+  top: -20%;
+  left: 50%;
+  width: 200px;
+  height: 140%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, transparent 100%);
+  clip-path: polygon(40% 0%, 60% 0%, 80% 100%, 20% 100%);
+  animation: gaSpotlightSweep var(--duration, 3s) ease-in-out;
+}
+@keyframes gaSpotlightSweep {
+  0% { transform: translateX(-50%) rotate(-15deg); opacity: 0; }
+  20% { opacity: 1; }
+  50% { transform: translateX(-50%) rotate(15deg); }
+  80% { opacity: 1; }
+  100% { transform: translateX(-50%) rotate(-10deg); opacity: 0; }
+}
+
+/* Rain drops */
+.ga-raindrop {
+  position: absolute;
+  top: -10px;
+  width: 2px;
+  height: 20px;
+  background: var(--color, #00e5ff);
+  opacity: 0.6;
+  animation: gaRainFall 0.8s linear infinite;
+}
+@keyframes gaRainFall {
+  to { transform: translateY(110vh); opacity: 0; }
+}
+
+/* Glitch lines */
+.ga-glitch-lines {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 0, 100, 0.03) 2px,
+    rgba(255, 0, 100, 0.03) 4px
+  );
+  animation: gaGlitchFlicker 0.1s steps(2) infinite;
+}
+@keyframes gaGlitchFlicker {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  50% { transform: translateX(2px); }
+  75% { transform: translateX(-1px); }
+  100% { transform: translateX(0); }
+}
+
+/* Shockwave */
+.ga-shockwave {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  border: 3px solid var(--color, #ff3b5c);
+  transform: translate(-50%, -50%);
+  animation: gaShockwave var(--duration, 3s) ease-out;
+}
+@keyframes gaShockwave {
+  0% { width: 0; height: 0; opacity: 1; }
+  30% { width: 300px; height: 300px; opacity: 0.8; }
+  100% { width: 200vmax; height: 200vmax; opacity: 0; }
+}
+
+/* Particles */
+.ga-particles {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+.ga-particle {
+  position: absolute;
+  width: var(--size, 6px);
+  height: var(--size, 6px);
+  background: var(--color, #00e5ff);
+  border-radius: 50%;
+  animation-fill-mode: both;
+}
+
+/* Burst particles */
+.ga-particle-burst {
+  animation: gaParticleBurst var(--duration, 3s) ease-out both;
+}
+@keyframes gaParticleBurst {
+  0% { transform: rotate(var(--angle)) translateX(0) scale(0); opacity: 1; }
+  30% { transform: rotate(var(--angle)) translateX(150px) scale(1); opacity: 1; }
+  100% { transform: rotate(var(--angle)) translateX(300px) scale(0); opacity: 0; }
+}
+
+/* Float particles */
+.ga-particle-float {
+  animation: gaParticleFloat var(--duration, 3s) ease-out both;
+}
+@keyframes gaParticleFloat {
+  0% { transform: translateY(0) translateX(0) scale(0); opacity: 0; }
+  20% { transform: translateY(-20px) scale(1); opacity: 1; }
+  80% { opacity: 0.6; }
+  100% { transform: translateY(-200px) translateX(calc(cos(var(--angle)) * 80px)) scale(0.3); opacity: 0; }
+}
+
+/* Spiral particles */
+.ga-particle-spiral {
+  animation: gaParticleSpiral var(--duration, 3s) ease-in-out both;
+}
+@keyframes gaParticleSpiral {
+  0% { transform: rotate(var(--angle)) translateX(0) rotate(0deg); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: rotate(calc(var(--angle) + 720deg)) translateX(200px) rotate(-720deg); opacity: 0; }
+}
+
+/* Explosion particles */
+.ga-particle-explosion {
+  animation: gaParticleExplosion var(--duration, 3s) cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+@keyframes gaParticleExplosion {
+  0% { transform: rotate(var(--angle)) translateX(0) scale(0); opacity: 1; }
+  15% { transform: rotate(var(--angle)) translateX(200px) scale(1.5); opacity: 1; }
+  50% { transform: rotate(var(--angle)) translateX(250px) scale(1); opacity: 0.6; }
+  100% { transform: rotate(var(--angle)) translateX(300px) scale(0); opacity: 0; }
+}
+
+/* Rain particles */
+.ga-particle-rain {
+  animation: gaParticleRain var(--duration, 3s) linear both;
+}
+@keyframes gaParticleRain {
+  0% { transform: translateY(-200px) translateX(0) scale(0.5); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.8; }
+  100% { transform: translateY(200px) translateX(calc(sin(var(--angle)) * 50px)) scale(0.5); opacity: 0; }
+}
+
+/* Spotlight particles */
+.ga-particle-spotlight {
+  animation: gaParticleSpotlight var(--duration, 3s) ease-out both;
+}
+@keyframes gaParticleSpotlight {
+  0% { transform: rotate(var(--angle)) translateX(0) scale(0); opacity: 0; }
+  30% { transform: rotate(var(--angle)) translateX(100px) scale(1); opacity: 0.8; }
+  70% { transform: rotate(var(--angle)) translateX(120px) scale(0.8); opacity: 0.5; }
+  100% { transform: rotate(var(--angle)) translateX(150px) scale(0); opacity: 0; }
+}
+
+/* Shatter particles */
+.ga-particle-shatter {
+  animation: gaParticleShatter var(--duration, 3s) cubic-bezier(0.68, -0.55, 0.27, 1.55) both;
+}
+@keyframes gaParticleShatter {
+  0% { transform: rotate(var(--angle)) translateX(0) rotate(0deg) scale(1); opacity: 1; }
+  20% { transform: rotate(var(--angle)) translateX(30px) rotate(180deg) scale(1.2); opacity: 1; }
+  100% { transform: rotate(var(--angle)) translateX(250px) rotate(1080deg) scale(0); opacity: 0; }
+}
+
+/* Morph particles */
+.ga-particle-morph {
+  animation: gaParticleMorph var(--duration, 3s) ease-in-out both;
+}
+@keyframes gaParticleMorph {
+  0% { transform: translateX(0) scale(0); border-radius: 50%; opacity: 0; }
+  25% { transform: translateX(100px) scale(1); border-radius: 0; opacity: 1; }
+  50% { transform: translateX(0) scale(1.5); border-radius: 50%; opacity: 0.8; }
+  75% { transform: translateX(-100px) scale(1); border-radius: 20%; opacity: 0.5; }
+  100% { transform: translateX(0) scale(0); border-radius: 50%; opacity: 0; }
+}
+
+/* Stomp particles */
+.ga-particle-stomp {
+  animation: gaParticleStomp var(--duration, 3s) ease-out both;
+}
+@keyframes gaParticleStomp {
+  0% { transform: rotate(var(--angle)) translateY(-100px) scale(0); opacity: 0; }
+  10% { transform: rotate(var(--angle)) translateY(0) scale(2); opacity: 1; }
+  30% { transform: rotate(var(--angle)) translateX(100px) scale(1); opacity: 0.8; }
+  100% { transform: rotate(var(--angle)) translateX(200px) translateY(50px) scale(0); opacity: 0; }
+}
+
+/* Glitch particles */
+.ga-particle-glitch {
+  animation: gaParticleGlitch var(--duration, 3s) steps(3) both;
+}
+@keyframes gaParticleGlitch {
+  0% { transform: translate(0, 0) scale(0); opacity: 0; }
+  10% { transform: translate(-50px, -30px) scale(1); opacity: 1; color: #ff006e; }
+  20% { transform: translate(60px, 20px) scale(0.8); opacity: 0.8; color: #00e5ff; }
+  30% { transform: translate(-20px, 50px) scale(1.2); opacity: 1; color: #a855f7; }
+  50% { transform: translate(30px, -40px) scale(1); opacity: 0.6; }
+  70% { transform: translate(-40px, 10px) scale(0.6); opacity: 0.4; }
+  100% { transform: translate(0, 0) scale(0); opacity: 0; }
+}
+
+/* Gift emojis */
+.ga-emojis {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.ga-emoji {
+  position: absolute;
+  left: var(--x, 50%);
+  top: var(--y, 50%);
+  animation-fill-mode: both;
+  filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
+}
+
+.ga-emoji-burst {
+  animation: gaEmojiBurst var(--duration, 3s) ease-out both;
+}
+@keyframes gaEmojiBurst {
+  0% { transform: translate(-50%, -50%) scale(0) rotate(0deg); opacity: 0; }
+  20% { transform: translate(-50%, -50%) scale(1.3) rotate(15deg); opacity: 1; }
+  50% { transform: translate(-50%, -50%) scale(1) rotate(-5deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(0.5) translateY(-100px) rotate(360deg); opacity: 0; }
+}
+
+.ga-emoji-float {
+  animation: gaEmojiFloat var(--duration, 3s) ease-out both;
+}
+@keyframes gaEmojiFloat {
+  0% { transform: translate(-50%, 100vh) scale(0.5); opacity: 0; }
+  30% { transform: translate(-50%, var(--y)) scale(1.2); opacity: 1; }
+  70% { transform: translate(-50%, calc(var(--y) - 50px)) scale(1); opacity: 0.8; }
+  100% { transform: translate(-50%, calc(var(--y) - 150px)) scale(0.3); opacity: 0; }
+}
+
+.ga-emoji-spiral {
+  animation: gaEmojiSpiral var(--duration, 3s) ease-in-out both;
+}
+@keyframes gaEmojiSpiral {
+  0% { transform: translate(-50%, -50%) scale(0) rotate(0deg); opacity: 0; }
+  25% { transform: translate(-50%, -50%) scale(1.2) rotate(180deg); opacity: 1; }
+  75% { transform: translate(-50%, -50%) scale(1) rotate(540deg); opacity: 0.7; }
+  100% { transform: translate(-50%, -50%) scale(0) rotate(720deg); opacity: 0; }
+}
+
+.ga-emoji-explosion {
+  animation: gaEmojiExplosion var(--duration, 3s) cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+@keyframes gaEmojiExplosion {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  10% { transform: translate(-50%, -50%) scale(2); opacity: 1; }
+  30% { transform: translate(-50%, -50%) scale(1.5) rotate(10deg); opacity: 1; }
+  60% { transform: translate(-50%, -50%) scale(1) rotate(-5deg); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(0) rotate(0deg); opacity: 0; }
+}
+
+.ga-emoji-rain {
+  animation: gaEmojiRain var(--duration, 3s) linear both;
+}
+@keyframes gaEmojiRain {
+  0% { transform: translate(-50%, -100px) scale(0.5); opacity: 0; }
+  10% { opacity: 1; }
+  80% { transform: translate(-50%, var(--y)) scale(1); opacity: 0.8; }
+  100% { transform: translate(-50%, 100vh) scale(0.5); opacity: 0; }
+}
+
+.ga-emoji-spotlight {
+  animation: gaEmojiSpotlight var(--duration, 3s) ease-out both;
+}
+@keyframes gaEmojiSpotlight {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 0; filter: brightness(3); }
+  20% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; filter: brightness(2); }
+  50% { transform: translate(-50%, -50%) scale(1); opacity: 1; filter: brightness(1); }
+  100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; filter: brightness(0.5); }
+}
+
+.ga-emoji-shatter {
+  animation: gaEmojiShatter var(--duration, 3s) ease-out both;
+}
+@keyframes gaEmojiShatter {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  30% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; filter: brightness(2); }
+  50% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+}
+
+.ga-emoji-morph {
+  animation: gaEmojiMorph var(--duration, 3s) ease-in-out both;
+}
+@keyframes gaEmojiMorph {
+  0% { transform: translate(-50%, -50%) scale(0) rotateY(0); opacity: 0; }
+  25% { transform: translate(-50%, -50%) scale(1.3) rotateY(180deg); opacity: 1; }
+  50% { transform: translate(-50%, -50%) scale(0.8) rotateY(360deg); opacity: 0.8; }
+  75% { transform: translate(-50%, -50%) scale(1.2) rotateY(540deg); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(0) rotateY(720deg); opacity: 0; }
+}
+
+.ga-emoji-stomp {
+  animation: gaEmojiStomp var(--duration, 3s) cubic-bezier(0.68, -0.55, 0.27, 1.55) both;
+}
+@keyframes gaEmojiStomp {
+  0% { transform: translate(-50%, -200%) scale(2); opacity: 0; }
+  15% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
+  25% { transform: translate(-50%, -45%) scale(0.9); opacity: 1; }
+  40% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+}
+
+.ga-emoji-glitch {
+  animation: gaEmojiGlitch var(--duration, 3s) steps(2) both;
+}
+@keyframes gaEmojiGlitch {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  10% { transform: translate(calc(-50% + 10px), -50%) scale(1.2); opacity: 1; }
+  20% { transform: translate(calc(-50% - 10px), calc(-50% + 5px)) scale(0.8); opacity: 0.8; }
+  30% { transform: translate(calc(-50% + 5px), calc(-50% - 5px)) scale(1.1); opacity: 1; }
+  50% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  80% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+  100% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+}
+
+/* Center gift display */
+.ga-center {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  animation-fill-mode: both;
+}
+
+.ga-center-burst { animation: gaCenterBurst var(--duration, 3s) ease-out both; }
+.ga-center-float { animation: gaCenterFloat var(--duration, 3s) ease-out both; }
+.ga-center-spiral { animation: gaCenterSpiral var(--duration, 3s) ease-in-out both; }
+.ga-center-explosion { animation: gaCenterExplosion var(--duration, 3s) cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+.ga-center-rain { animation: gaCenterFloat var(--duration, 3s) ease-out both; }
+.ga-center-spotlight { animation: gaCenterSpotlight var(--duration, 3s) ease-out both; }
+.ga-center-shatter { animation: gaCenterShatter var(--duration, 3s) ease-out both; }
+.ga-center-morph { animation: gaCenterMorph var(--duration, 3s) ease-in-out both; }
+.ga-center-stomp { animation: gaCenterStomp var(--duration, 3s) cubic-bezier(0.68, -0.55, 0.27, 1.55) both; }
+.ga-center-glitch { animation: gaCenterGlitch var(--duration, 3s) steps(3) both; }
+
+@keyframes gaCenterBurst {
+  0% { transform: scale(0); opacity: 0; }
+  15% { transform: scale(1.4); opacity: 1; }
+  30% { transform: scale(1); opacity: 1; }
+  80% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+@keyframes gaCenterFloat {
+  0% { transform: translateY(50px) scale(0.5); opacity: 0; }
+  20% { transform: translateY(0) scale(1.1); opacity: 1; }
+  70% { transform: translateY(-20px) scale(1); opacity: 0.8; }
+  100% { transform: translateY(-80px) scale(0.3); opacity: 0; }
+}
+@keyframes gaCenterSpiral {
+  0% { transform: scale(0) rotate(0deg); opacity: 0; }
+  20% { transform: scale(1.2) rotate(180deg); opacity: 1; }
+  50% { transform: scale(1) rotate(360deg); opacity: 1; }
+  100% { transform: scale(0) rotate(720deg); opacity: 0; }
+}
+@keyframes gaCenterExplosion {
+  0% { transform: scale(0); opacity: 0; }
+  8% { transform: scale(2); opacity: 1; }
+  20% { transform: scale(1.3); opacity: 1; }
+  60% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(0.8); opacity: 0; }
+}
+@keyframes gaCenterSpotlight {
+  0% { transform: scale(0); opacity: 0; filter: brightness(3) blur(10px); }
+  20% { transform: scale(1); opacity: 1; filter: brightness(2) blur(0); }
+  60% { transform: scale(1); opacity: 1; filter: brightness(1); }
+  100% { transform: scale(0.8); opacity: 0; filter: brightness(0.5); }
+}
+@keyframes gaCenterShatter {
+  0% { transform: scale(0); opacity: 0; }
+  20% { transform: scale(1.2); opacity: 1; }
+  40% { transform: scale(1); opacity: 1; }
+  60% { transform: scale(1.1) rotate(5deg); opacity: 0.8; }
+  80% { transform: scale(0.8) rotate(-3deg); opacity: 0.4; }
+  100% { transform: scale(0); opacity: 0; }
+}
+@keyframes gaCenterMorph {
+  0% { transform: scale(0) perspective(500px) rotateY(0); opacity: 0; }
+  25% { transform: scale(1.2) perspective(500px) rotateY(180deg); opacity: 1; }
+  50% { transform: scale(1) perspective(500px) rotateY(360deg); opacity: 1; }
+  75% { transform: scale(0.8) perspective(500px) rotateY(540deg); opacity: 0.5; }
+  100% { transform: scale(0) perspective(500px) rotateY(720deg); opacity: 0; }
+}
+@keyframes gaCenterStomp {
+  0% { transform: translateY(-200px) scale(3); opacity: 0; }
+  12% { transform: translateY(10px) scale(0.8); opacity: 1; }
+  20% { transform: translateY(-5px) scale(1.1); opacity: 1; }
+  30% { transform: translateY(0) scale(1); opacity: 1; }
+  80% { transform: translateY(0) scale(1); opacity: 0.7; }
+  100% { transform: translateY(0) scale(0.5); opacity: 0; }
+}
+@keyframes gaCenterGlitch {
+  0% { transform: scale(0); opacity: 0; }
+  10% { transform: scale(1.2) translateX(5px); opacity: 1; }
+  15% { transform: scale(1) translateX(-5px); opacity: 0.8; }
+  20% { transform: scale(1.1) translateX(3px); opacity: 1; }
+  30% { transform: scale(1); opacity: 1; }
+  70% { transform: scale(1); opacity: 0.6; }
+  80% { transform: scale(0.8) translateX(10px); opacity: 0.3; }
+  90% { transform: scale(0.5) translateX(-5px); opacity: 0.1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+/* Gift icon */
+.ga-gift-icon {
+  font-size: 96px;
+  line-height: 1;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 0 30px var(--color, #00e5ff));
+  animation: gaIconPulse 1.5s ease-in-out infinite;
+}
+@keyframes gaIconPulse {
+  0%, 100% { filter: drop-shadow(0 0 20px var(--color, #00e5ff)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 40px var(--color, #00e5ff)); transform: scale(1.05); }
+}
+
+.ga-gift-name {
+  font-size: 28px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 20px var(--color, #00e5ff);
+  margin-bottom: 8px;
+}
+
+.ga-gift-cost {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.ga-gift-duration {
+  font-size: 12px;
+  color: #6b6585;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Tier bar at bottom */
+.ga-tier-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  animation: gaTierBar var(--duration, 3s) linear;
+}
+@keyframes gaTierBar {
+  from { transform: scaleX(0); transform-origin: left; }
+  to { transform: scaleX(1); transform-origin: left; }
+}

@@ -73,6 +73,7 @@ const PastorDashboard = lazyWithRetry(() => import("./pages/church/PastorDashboa
 const BadgeDesignShowcase = lazyWithRetry(() => import("./pages/dev/BadgeDesignShowcase"));
 const HomepageBackgroundShowcase = lazyWithRetry(() => import("./pages/dev/HomepageBackgroundShowcase"));
 const GiftAnimationShowcase = lazyWithRetry(() => import("./pages/dev/GiftAnimationShowcase"));
+const GiftAnimationPreview = lazyWithRetry(() => import("./pages/dev/GiftAnimationPreview"));
 const XPSimulatorPage = lazyWithRetry(() => import("./pages/dev/XPSimulatorPage"));
 const StreamControlPreview = lazyWithRetry(() => import("./pages/dev/StreamControlPreview"));
 const BroadcastLayoutPreview = lazyWithRetry(() => import("./pages/dev/BroadcastLayoutPreview"));
@@ -1233,6 +1234,7 @@ function AppContent() {
                   <Route path="/dev/badge-showcase" element={<BadgeDesignShowcase />} />
                   <Route path="/dev/homepage-bg-showcase" element={<HomepageBackgroundShowcase />} />
                    <Route path="/dev/gift-animation-showcase" element={<GiftAnimationShowcase />} />
+                   <Route path="/dev/gift-animations" element={<GiftAnimationPreview />} />
 
 
                    {/* 📺 Live Streaming System */}
