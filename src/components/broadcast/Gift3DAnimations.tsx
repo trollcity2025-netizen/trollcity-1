@@ -166,7 +166,8 @@ function SceneHeart() {
       const scale = 1 + Math.sin(t * 3 + i * 0.5) * 0.2;
       ring.scale.set(scale, scale, scale);
       ring.rotation.z = t * 0.3 + i * 0.5;
-      (ring as THREE.Mesh).material && ((ring as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = 0.3 + Math.sin(t * 3 + i) * 0.2;
+      const mat = (ring as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (mat) mat.opacity = 0.3 + Math.sin(t * 3 + i) * 0.2;
     });
   });
 
