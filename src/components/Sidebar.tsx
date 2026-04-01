@@ -25,8 +25,6 @@ import {
   Building2,
   Vote,
   TrendingUp,
-  Mars,
-  Venus,
   Waves,
   Car,
   BookOpen,
