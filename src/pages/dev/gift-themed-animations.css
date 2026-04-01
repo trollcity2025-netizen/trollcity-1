@@ -1,0 +1,1258 @@
+/* Gift Themed Animations - Unique per gift type */
+
+/* Theme backgrounds */
+.ga-theme-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Fire rise */
+.ga-fire-floor {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  animation: gaFireFloor var(--duration, 3s) ease-in-out;
+}
+@keyframes gaFireFloor {
+  0% { opacity: 0; height: 0; }
+  30% { opacity: 1; height: 40%; }
+  70% { opacity: 0.8; height: 50%; }
+  100% { opacity: 0; height: 60%; }
+}
+.ga-fire-particle {
+  position: absolute;
+  bottom: 0;
+  width: 20px;
+  height: 40px;
+  background: radial-gradient(ellipse, #ff4500, #ff000080, transparent);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  animation: gaFireParticle 1.5s ease-out infinite;
+  filter: blur(3px);
+}
+@keyframes gaFireParticle {
+  0% { transform: translateY(0) scale(1); opacity: 0.8; }
+  100% { transform: translateY(-300px) scale(0.3); opacity: 0; }
+}
+
+/* Money rain */
+.ga-money-fall {
+  position: absolute;
+  top: -40px;
+  font-size: 32px;
+  animation: gaMoneyFall 2s linear infinite;
+  filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.5));
+}
+@keyframes gaMoneyFall {
+  0% { transform: translateY(-40px) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.8; }
+  100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+}
+
+/* Heart beat */
+.ga-heart-bg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, #ff149340, transparent);
+  border-radius: 50%;
+  animation: gaHeartPulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes gaHeartPulse {
+  0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
+  100% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+}
+
+/* Petal fall */
+.ga-petal-fall {
+  position: absolute;
+  top: -30px;
+  font-size: 24px;
+  animation: gaPetalFall 3s ease-in-out infinite;
+}
+@keyframes gaPetalFall {
+  0% { transform: translateY(-30px) translateX(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  50% { transform: translateY(50vh) translateX(30px) rotate(180deg); }
+  100% { transform: translateY(110vh) translateX(-20px) rotate(360deg); opacity: 0; }
+}
+
+/* Snow fall */
+.ga-snow-fall {
+  position: absolute;
+  top: -20px;
+  animation: gaSnowFall 3s linear infinite;
+}
+@keyframes gaSnowFall {
+  0% { transform: translateY(-20px) translateX(0); opacity: 0; }
+  10% { opacity: 0.8; }
+  50% { transform: translateY(50vh) translateX(20px); }
+  100% { transform: translateY(110vh) translateX(-10px); opacity: 0; }
+}
+
+/* Siren flash */
+.ga-siren-overlay {
+  position: absolute;
+  inset: 0;
+  animation: gaSirenCycle 0.4s steps(2) infinite;
+}
+.ga-siren-red {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: rgba(255, 0, 0, 0.15);
+}
+.ga-siren-blue {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  background: rgba(0, 0, 255, 0.15);
+}
+@keyframes gaSirenCycle {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Smoke */
+.ga-smoke-cloud {
+  position: absolute;
+  bottom: 30%;
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle, rgba(150, 150, 150, 0.4), transparent);
+  border-radius: 50%;
+  animation: gaSmokeRise 3s ease-out infinite;
+  filter: blur(8px);
+}
+@keyframes gaSmokeRise {
+  0% { transform: translateY(0) scale(0.5); opacity: 0.6; }
+  100% { transform: translateY(-300px) scale(2); opacity: 0; }
+}
+
+/* Rainbow arc */
+.ga-rainbow-arc {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 400px;
+  height: 200px;
+  transform: translate(-50%, -30%);
+  border-radius: 200px 200px 0 0;
+  background: conic-gradient(from 180deg at 50% 100%,
+    #ff000040, #ff880040, #ffff0040, #00ff0040, #0088ff40, #8800ff40, #ff000040);
+  animation: gaRainbowArc var(--duration, 3s) ease-out;
+}
+@keyframes gaRainbowArc {
+  0% { transform: translate(-50%, -30%) scale(0); opacity: 0; }
+  30% { transform: translate(-50%, -30%) scale(1); opacity: 1; }
+  70% { transform: translate(-50%, -30%) scale(1.1); opacity: 0.8; }
+  100% { transform: translate(-50%, -30%) scale(1.2); opacity: 0; }
+}
+
+/* Wave crash */
+.ga-wave {
+  position: absolute;
+  bottom: 0;
+  left: -10%;
+  width: 120%;
+  height: 100px;
+  background: linear-gradient(0deg, #00bcd440, transparent);
+  border-radius: 50% 50% 0 0;
+  animation: gaWaveCrash 2s ease-in-out infinite;
+}
+@keyframes gaWaveCrash {
+  0% { transform: translateY(100px) scaleY(0.5); opacity: 0; }
+  50% { transform: translateY(0) scaleY(1); opacity: 0.6; }
+  100% { transform: translateY(-50px) scaleY(0.3); opacity: 0; }
+}
+
+/* Camera flash */
+.ga-flash-overlay {
+  position: absolute;
+  inset: 0;
+  background: white;
+  animation: gaFlash 0.15s ease-out 3;
+}
+@keyframes gaFlash {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* Tornado */
+.ga-tornado-bg {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 100px;
+  height: 80%;
+  transform: translateX(-50%);
+  background: linear-gradient(0deg, rgba(120, 144, 156, 0.5), transparent);
+  clip-path: polygon(45% 100%, 55% 100%, 30% 0%, 70% 0%);
+  animation: gaTornadoSpin 1s linear infinite;
+}
+@keyframes gaTornadoSpin {
+  0% { transform: translateX(-50%) scaleX(1); }
+  25% { transform: translateX(-50%) scaleX(0.8); }
+  50% { transform: translateX(-50%) scaleX(1.2); }
+  75% { transform: translateX(-50%) scaleX(0.9); }
+  100% { transform: translateX(-50%) scaleX(1); }
+}
+
+/* Explosion rings */
+.ga-explosion-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border: 3px solid;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: gaExplosionRing 0.8s ease-out forwards;
+}
+@keyframes gaExplosionRing {
+  0% { width: 0; height: 0; opacity: 1; }
+  100% { width: 300px; height: 300px; opacity: 0; }
+}
+
+/* Road line for vehicles */
+.ga-road-line {
+  position: absolute;
+  bottom: 25%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-top: 2px dashed;
+  opacity: 0.3;
+}
+.ga-road-dash {
+  position: absolute;
+  top: 12px;
+  width: 30px;
+  height: 3px;
+  background: white;
+  opacity: 0.2;
+  animation: gaRoadDash 0.5s linear infinite;
+}
+@keyframes gaRoadDash {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50px); }
+}
+.ga-road-dash:nth-child(1) { left: 10%; }
+.ga-road-dash:nth-child(2) { left: 25%; }
+.ga-road-dash:nth-child(3) { left: 40%; }
+.ga-road-dash:nth-child(4) { left: 55%; }
+.ga-road-dash:nth-child(5) { left: 70%; }
+.ga-road-dash:nth-child(6) { left: 85%; }
+
+/* Wheel spin */
+.ga-wheel-bg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 200px;
+  opacity: 0.2;
+  animation: gaWheelSpin var(--duration, 3s) linear;
+}
+@keyframes gaWheelSpin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.3; }
+  90% { opacity: 0.2; }
+  100% { transform: translate(-50%, -50%) rotate(1080deg); opacity: 0; }
+}
+
+/* Slash lines */
+.ga-slash-line {
+  position: absolute;
+  top: 50%;
+  left: -100%;
+  width: 200%;
+  height: 3px;
+  border-top: 3px solid;
+  transform: rotate(-30deg);
+  animation: gaSlashAcross var(--duration, 3s) ease-out;
+}
+.ga-slash-2 {
+  transform: rotate(30deg);
+  animation-delay: 0.2s;
+}
+@keyframes gaSlashAcross {
+  0% { left: -100%; opacity: 0; }
+  20% { left: 0; opacity: 1; }
+  40% { left: 100%; opacity: 0.5; }
+  100% { left: 100%; opacity: 0; }
+}
+
+/* Default bg pulse */
+.ga-bg-pulse {
+  position: absolute;
+  inset: 0;
+  animation: gaBgPulse var(--duration, 3s) ease-in-out;
+}
+@keyframes gaBgPulse {
+  0% { opacity: 0; transform: scale(0.8); }
+  30% { opacity: 1; transform: scale(1); }
+  70% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+
+/* ========== THEME PARTICLES ========== */
+.ga-theme-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ga-theme-particle {
+  position: absolute;
+  bottom: -40px;
+  animation-fill-mode: both;
+  filter: drop-shadow(0 0 8px rgba(255,255,255,0.3));
+}
+
+/* Fire rise particles */
+.ga-tp-fire-rise,
+.ga-tp-erupt {
+  animation: gaTpFireRise 2s ease-out infinite;
+}
+@keyframes gaTpFireRise {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  20% { opacity: 1; transform: scale(1); }
+  100% { transform: translateY(-100vh) scale(0.3); opacity: 0; }
+}
+
+/* Money rain particles */
+.ga-tp-money-rain {
+  animation: gaTpMoneyRain 2s linear infinite;
+  bottom: auto;
+  top: -40px;
+}
+@keyframes gaTpMoneyRain {
+  0% { transform: translateY(-40px) rotate(0); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+}
+
+/* Heartbeat particles */
+.ga-tp-heartbeat {
+  animation: gaTpHeartbeat 0.5s ease-in-out infinite alternate;
+  bottom: 40%;
+  left: 50% !important;
+  transform-origin: center;
+}
+@keyframes gaTpHeartbeat {
+  0% { transform: translateX(-50%) scale(0.6); opacity: 0.5; }
+  100% { transform: translateX(-50%) scale(1.2); opacity: 1; }
+}
+
+/* Petal fall */
+.ga-tp-petal-fall {
+  animation: gaTpPetalFall 3s ease-in-out infinite;
+  bottom: auto;
+  top: -40px;
+}
+@keyframes gaTpPetalFall {
+  0% { transform: translateY(-40px) translateX(0) rotate(0); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateY(110vh) translateX(40px) rotate(360deg); opacity: 0; }
+}
+
+/* Crown float */
+.ga-tp-crown-float {
+  animation: gaTpCrownFloat 2s ease-in-out infinite;
+  bottom: 20%;
+}
+@keyframes gaTpCrownFloat {
+  0% { transform: translateY(50px) rotate(-10deg) scale(0.5); opacity: 0; }
+  30% { transform: translateY(0) rotate(5deg) scale(1); opacity: 1; }
+  50% { transform: translateY(-10px) rotate(0) scale(1.1); }
+  70% { transform: translateY(-5px) rotate(-3deg) scale(1); opacity: 0.8; }
+  100% { transform: translateY(-30px) rotate(0) scale(0.8); opacity: 0; }
+}
+
+/* Sparkle burst */
+.ga-tp-sparkle-burst,
+.ga-tp-trophy-reveal {
+  animation: gaTpSparkleBurst 1.5s ease-out infinite;
+  bottom: 30%;
+}
+@keyframes gaTpSparkleBurst {
+  0% { transform: scale(0) rotate(0deg); opacity: 0; }
+  20% { transform: scale(1.5) rotate(90deg); opacity: 1; }
+  60% { transform: scale(1) rotate(180deg); opacity: 0.6; }
+  100% { transform: scale(0.5) rotate(360deg); opacity: 0; }
+}
+
+/* Spray (champagne) */
+.ga-tp-spray {
+  animation: gaTpSpray 1s ease-out infinite;
+  bottom: 30%;
+}
+@keyframes gaTpSpray {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  20% { transform: translateY(-20px) scale(1); opacity: 1; }
+  100% { transform: translateY(-150px) translateX(40px) scale(0.3); opacity: 0; }
+}
+
+/* Pour (drinks) */
+.ga-tp-pour {
+  animation: gaTpPour 1.5s ease-in infinite;
+  bottom: auto;
+  top: -20px;
+}
+@keyframes gaTpPour {
+  0% { transform: translateY(-20px) scale(0.5); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateY(100vh) scale(1); opacity: 0.5; }
+}
+
+/* Spin in (pizza) */
+.ga-tp-spin-in {
+  animation: gaTpSpinIn 1.5s ease-out infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpSpinIn {
+  0% { transform: translateX(-50%) scale(0) rotate(-360deg); opacity: 0; }
+  30% { transform: translateX(-50%) scale(1.3) rotate(0deg); opacity: 1; }
+  60% { transform: translateX(-50%) scale(1) rotate(10deg); }
+  100% { transform: translateX(-50%) scale(0.8) rotate(0deg); opacity: 0; }
+}
+
+/* Drive across (cars) */
+.ga-tp-drive-across,
+.ga-tp-fly-across,
+.ga-tp-sail-across {
+  animation: gaTpDriveAcross 2s ease-in-out infinite;
+  bottom: 25%;
+  left: -10% !important;
+}
+@keyframes gaTpDriveAcross {
+  0% { transform: translateX(-100%) scaleX(1); opacity: 0; }
+  10% { opacity: 1; }
+  50% { transform: translateX(50vw) scaleX(1); }
+  90% { opacity: 1; }
+  100% { transform: translateX(110vw) scaleX(1); opacity: 0; }
+}
+
+/* Launch up (rocket) */
+.ga-tp-launch-up {
+  animation: gaTpLaunchUp 2s ease-in infinite;
+  bottom: 0;
+  left: 50% !important;
+}
+@keyframes gaTpLaunchUp {
+  0% { transform: translateX(-50%) translateY(0) scale(0.5); opacity: 0; }
+  20% { transform: translateX(-50%) translateY(-10vh) scale(1); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(-100vh) scale(0.3); opacity: 0; }
+}
+
+/* Dragon swoop */
+.ga-tp-dragon-swoop {
+  animation: gaTpDragonSwoop 2s ease-in-out infinite;
+  top: 10% !important;
+  bottom: auto;
+  left: -10% !important;
+}
+@keyframes gaTpDragonSwoop {
+  0% { transform: translate(-100%, 0) rotate(-10deg) scale(0.5); opacity: 0; }
+  20% { opacity: 1; }
+  50% { transform: translate(50vw, 30vh) rotate(5deg) scale(1.2); }
+  80% { opacity: 1; }
+  100% { transform: translate(110vw, 0) rotate(10deg) scale(0.5); opacity: 0; }
+}
+
+/* Skull rise */
+.ga-tp-skull-rise,
+.ga-tp-hell-rise {
+  animation: gaTpSkullRise 2s ease-out infinite;
+  bottom: 0;
+}
+@keyframes gaTpSkullRise {
+  0% { transform: translateY(50vh) scale(0.3) rotate(0); opacity: 0; }
+  30% { transform: translateY(0) scale(1) rotate(10deg); opacity: 1; }
+  60% { transform: translateY(-10vh) scale(1.1) rotate(-5deg); opacity: 0.8; }
+  100% { transform: translateY(-30vh) scale(0.5) rotate(0); opacity: 0; }
+}
+
+/* Ghost float */
+.ga-tp-ghost-float {
+  animation: gaTpGhostFloat 3s ease-in-out infinite;
+  bottom: 20%;
+}
+@keyframes gaTpGhostFloat {
+  0% { transform: translateY(20px) translateX(0) scale(0.5); opacity: 0; }
+  20% { transform: translateY(0) translateX(10px) scale(1); opacity: 0.8; }
+  40% { transform: translateY(-10px) translateX(-10px) scale(1.05); opacity: 0.6; }
+  60% { transform: translateY(-5px) translateX(15px) scale(1); opacity: 0.8; }
+  80% { transform: translateY(-15px) translateX(-5px) scale(0.9); opacity: 0.4; }
+  100% { transform: translateY(-30px) translateX(0) scale(0.5); opacity: 0; }
+}
+
+/* UFO abduct */
+.ga-tp-ufo-abduct {
+  animation: gaTpUfoAbduct 2s ease-in-out infinite;
+  bottom: auto;
+  top: 10% !important;
+}
+@keyframes gaTpUfoAbduct {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  20% { transform: translateY(10px) scale(1); opacity: 1; }
+  50% { transform: translateY(5px) scale(1.1); opacity: 0.8; }
+  100% { transform: translateY(-20px) scale(0.5); opacity: 0; }
+}
+
+/* Angel descend */
+.ga-tp-descend {
+  animation: gaTpDescend 2s ease-out infinite;
+  bottom: auto;
+  top: -40px;
+}
+@keyframes gaTpDescend {
+  0% { transform: translateY(-40px) scale(1.2); opacity: 0; filter: brightness(2); }
+  30% { transform: translateY(30vh) scale(1); opacity: 1; filter: brightness(1); }
+  70% { transform: translateY(50vh) scale(0.9); opacity: 0.6; }
+  100% { transform: translateY(70vh) scale(0.5); opacity: 0; }
+}
+
+/* Note float (music) */
+.ga-tp-note-float {
+  animation: gaTpNoteFloat 2s ease-out infinite;
+  bottom: 20%;
+}
+@keyframes gaTpNoteFloat {
+  0% { transform: translateY(0) translateX(0) rotate(0) scale(0.5); opacity: 0; }
+  20% { transform: translateY(-20px) translateX(10px) rotate(15deg) scale(1); opacity: 1; }
+  60% { transform: translateY(-60px) translateX(-15px) rotate(-10deg) scale(0.9); opacity: 0.6; }
+  100% { transform: translateY(-120px) translateX(5px) rotate(20deg) scale(0.3); opacity: 0; }
+}
+
+/* Flash burst (camera) */
+.ga-tp-flash-burst {
+  animation: gaTpFlashBurst 0.8s ease-out infinite;
+  bottom: 40%;
+  left: 50% !important;
+}
+@keyframes gaTpFlashBurst {
+  0% { transform: translateX(-50%) scale(0); opacity: 0; }
+  20% { transform: translateX(-50%) scale(2); opacity: 1; filter: brightness(3); }
+  100% { transform: translateX(-50%) scale(0.5); opacity: 0; filter: brightness(1); }
+}
+
+/* Game pop */
+.ga-tp-game-pop {
+  animation: gaTpGamePop 1s ease-out infinite;
+  bottom: 30%;
+}
+@keyframes gaTpGamePop {
+  0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+  30% { transform: scale(1.3) rotate(0); opacity: 1; }
+  60% { transform: scale(1) rotate(10deg); }
+  100% { transform: scale(0.5) rotate(-10deg); opacity: 0; }
+}
+
+/* Bullet burst */
+.ga-tp-bullet-burst {
+  animation: gaTpBulletBurst 0.5s ease-out infinite;
+  bottom: 40%;
+  left: 50% !important;
+}
+@keyframes gaTpBulletBurst {
+  0% { transform: translateX(-50%) scale(0); opacity: 1; }
+  50% { transform: translateX(-50%) scale(1.5); opacity: 0.5; }
+  100% { transform: translateX(-50%) scale(0); opacity: 0; }
+}
+
+/* Slash */
+.ga-tp-slash {
+  animation: gaTpSlash 0.8s ease-out infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpSlash {
+  0% { transform: translateX(-50%) rotate(-45deg) scaleX(0); opacity: 0; }
+  20% { transform: translateX(-50%) rotate(-45deg) scaleX(1.5); opacity: 1; }
+  50% { transform: translateX(-50%) rotate(0) scaleX(1); opacity: 0.6; }
+  100% { transform: translateX(-50%) rotate(45deg) scaleX(0); opacity: 0; }
+}
+
+/* Shield expand */
+.ga-tp-shield-expand {
+  animation: gaTpShieldExpand 1.5s ease-out infinite;
+  bottom: 25%;
+  left: 50% !important;
+}
+@keyframes gaTpShieldExpand {
+  0% { transform: translateX(-50%) scale(0); opacity: 0; }
+  30% { transform: translateX(-50%) scale(1.2); opacity: 1; }
+  60% { transform: translateX(-50%) scale(1); opacity: 0.8; }
+  100% { transform: translateX(-50%) scale(1.5); opacity: 0; }
+}
+
+/* Smash down */
+.ga-tp-smash-down {
+  animation: gaTpSmashDown 1s ease-in infinite;
+  bottom: auto;
+  top: -40px;
+  left: 50% !important;
+}
+@keyframes gaTpSmashDown {
+  0% { transform: translateX(-50%) translateY(-40px) rotate(-90deg) scale(1.5); opacity: 0; }
+  40% { transform: translateX(-50%) translateY(0) rotate(0) scale(1); opacity: 1; }
+  50% { transform: translateX(-50%) translateY(5px) rotate(0) scale(0.9); }
+  60% { transform: translateX(-50%) translateY(0) rotate(0) scale(1); opacity: 0.5; }
+  100% { transform: translateX(-50%) translateY(0) rotate(0) scale(0.5); opacity: 0; }
+}
+
+/* Explode */
+.ga-tp-explode {
+  animation: gaTpExplode 1s ease-out infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpExplode {
+  0% { transform: translateX(-50%) scale(0); opacity: 1; }
+  20% { transform: translateX(-50%) scale(2); opacity: 0.8; }
+  100% { transform: translateX(-50%) scale(0); opacity: 0; }
+}
+
+/* Emoji pop */
+.ga-tp-emoji-pop {
+  animation: gaTpEmojiPop 1s ease-out infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpEmojiPop {
+  0% { transform: translateX(-50%) scale(0) rotate(-20deg); opacity: 0; }
+  30% { transform: translateX(-50%) scale(1.4) rotate(5deg); opacity: 1; }
+  60% { transform: translateX(-50%) scale(1) rotate(-3deg); }
+  100% { transform: translateX(-50%) scale(0.6) rotate(0); opacity: 0; }
+}
+
+/* Tear fall */
+.ga-tp-tear-fall {
+  animation: gaTpTearFall 1.5s ease-in infinite;
+  bottom: auto;
+  top: 30%;
+}
+@keyframes gaTpTearFall {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateY(60vh) scale(0.8); opacity: 0; }
+}
+
+/* Shake burst (angry) */
+.ga-tp-shake-burst {
+  animation: gaTpShakeBurst 0.3s ease-in-out infinite alternate;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpShakeBurst {
+  0% { transform: translateX(calc(-50% - 5px)) scale(1); }
+  100% { transform: translateX(calc(-50% + 5px)) scale(1.1); }
+}
+
+/* Balloon rise */
+.ga-tp-balloon-rise {
+  animation: gaTpBalloonRise 2s ease-out infinite;
+  bottom: 0;
+}
+@keyframes gaTpBalloonRise {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  20% { transform: translateY(-10vh) scale(1); opacity: 1; }
+  80% { opacity: 0.6; }
+  100% { transform: translateY(-90vh) scale(0.8); opacity: 0; }
+}
+
+/* Unbox */
+.ga-tp-unbox {
+  animation: gaTpUnbox 1.5s ease-out infinite;
+  bottom: 25%;
+  left: 50% !important;
+}
+@keyframes gaTpUnbox {
+  0% { transform: translateX(-50%) scale(1) rotate(0); opacity: 1; }
+  30% { transform: translateX(-50%) scale(1.2) rotate(5deg); }
+  50% { transform: translateX(-50%) scale(0.8) rotate(-5deg); opacity: 0.8; }
+  100% { transform: translateX(-50%) scale(0) rotate(0); opacity: 0; }
+}
+
+/* Ring glow */
+.ga-tp-ring-glow {
+  animation: gaTpRingGlow 1s ease-in-out infinite alternate;
+  bottom: 35%;
+  left: 50% !important;
+}
+@keyframes gaTpRingGlow {
+  0% { transform: translateX(-50%) scale(0.8); opacity: 0.5; filter: brightness(1); }
+  100% { transform: translateX(-50%) scale(1.2); opacity: 1; filter: brightness(2); }
+}
+
+/* Clock spin */
+.ga-tp-clock-spin {
+  animation: gaTpClockSpin 2s linear infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpClockSpin {
+  0% { transform: translateX(-50%) rotate(0) scale(0.5); opacity: 0; }
+  10% { transform: translateX(-50%) rotate(0) scale(1); opacity: 1; }
+  100% { transform: translateX(-50%) rotate(720deg) scale(0.5); opacity: 0; }
+}
+
+/* Screen flash */
+.ga-tp-screen-flash {
+  animation: gaTpScreenFlash 0.5s ease-out infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpScreenFlash {
+  0% { transform: translateX(-50%) scale(0); opacity: 0; }
+  30% { transform: translateX(-50%) scale(1.5); opacity: 1; filter: brightness(2); }
+  100% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+}
+
+/* Flag wave */
+.ga-tp-flag-wave {
+  animation: gaTpFlagWave 1s ease-in-out infinite;
+  bottom: 20%;
+  left: 50% !important;
+}
+@keyframes gaTpFlagWave {
+  0% { transform: translateX(-50%) rotate(-10deg) scale(0.8); opacity: 0; }
+  20% { transform: translateX(-50%) rotate(5deg) scale(1); opacity: 1; }
+  40% { transform: translateX(-50%) rotate(-5deg) scale(1.05); }
+  60% { transform: translateX(-50%) rotate(8deg) scale(1); }
+  80% { transform: translateX(-50%) rotate(-3deg) scale(0.9); opacity: 0.6; }
+  100% { transform: translateX(-50%) rotate(0) scale(0.5); opacity: 0; }
+}
+
+/* Key turn */
+.ga-tp-key-turn {
+  animation: gaTpKeyTurn 1.5s ease-in-out infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpKeyTurn {
+  0% { transform: translateX(-50%) rotate(0) scale(0.5); opacity: 0; }
+  20% { transform: translateX(-50%) rotate(0) scale(1); opacity: 1; }
+  50% { transform: translateX(-50%) rotate(90deg) scale(1.1); }
+  80% { transform: translateX(-50%) rotate(0) scale(1); opacity: 0.6; }
+  100% { transform: translateX(-50%) rotate(-90deg) scale(0.5); opacity: 0; }
+}
+
+/* Lock shake */
+.ga-tp-lock-shake {
+  animation: gaTpLockShake 0.5s ease-in-out infinite alternate;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpLockShake {
+  0% { transform: translateX(calc(-50% - 3px)) rotate(-3deg); }
+  100% { transform: translateX(calc(-50% + 3px)) rotate(3deg); }
+}
+
+/* Candle flicker */
+.ga-tp-candle-flicker {
+  animation: gaTpCandleFlicker 0.3s ease-in-out infinite alternate;
+  bottom: 25%;
+  left: 50% !important;
+}
+@keyframes gaTpCandleFlicker {
+  0% { transform: translateX(-50%) scale(1) rotate(-2deg); opacity: 0.8; }
+  100% { transform: translateX(-50%) scale(1.1) rotate(2deg); opacity: 1; }
+}
+
+/* Spark zap */
+.ga-tp-spark-zap {
+  animation: gaTpSparkZap 0.3s ease-out infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpSparkZap {
+  0% { transform: translateX(-50%) scale(0); opacity: 1; }
+  50% { transform: translateX(-50%) scale(1.5); opacity: 0.5; }
+  100% { transform: translateX(-50%) scale(0); opacity: 0; }
+}
+
+/* Smoke puff */
+.ga-tp-smoke-puff,
+.ga-tp-smoke-rise {
+  animation: gaTpSmokePuff 2s ease-out infinite;
+  bottom: 20%;
+}
+@keyframes gaTpSmokePuff {
+  0% { transform: translateY(0) scale(0.5); opacity: 0.5; }
+  100% { transform: translateY(-150px) scale(2); opacity: 0; }
+}
+
+/* Build up (house/castle) */
+.ga-tp-build-up {
+  animation: gaTpBuildUp 2s ease-out infinite;
+  bottom: 0;
+  left: 50% !important;
+}
+@keyframes gaTpBuildUp {
+  0% { transform: translateX(-50%) translateY(50vh) scale(0.5); opacity: 0; }
+  30% { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+  60% { transform: translateX(-50%) translateY(-5px) scale(1.05); }
+  100% { transform: translateX(-50%) translateY(0) scale(1); opacity: 0; }
+}
+
+/* Wheel spin */
+.ga-tp-wheel-spin {
+  animation: gaTpWheelSpin 1s linear infinite;
+  bottom: 25%;
+  left: 50% !important;
+}
+@keyframes gaTpWheelSpin {
+  0% { transform: translateX(-50%) rotate(0) scale(0.5); opacity: 0; }
+  10% { transform: translateX(-50%) rotate(0) scale(1); opacity: 1; }
+  100% { transform: translateX(-50%) rotate(720deg) scale(0.5); opacity: 0; }
+}
+
+/* Wrench turn */
+.ga-tp-wrench-turn {
+  animation: gaTpWrenchTurn 1s ease-in-out infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpWrenchTurn {
+  0% { transform: translateX(-50%) rotate(0) scale(0.8); opacity: 0; }
+  20% { transform: translateX(-50%) rotate(0) scale(1); opacity: 1; }
+  50% { transform: translateX(-50%) rotate(180deg) scale(1.1); }
+  80% { transform: translateX(-50%) rotate(270deg) scale(0.9); opacity: 0.6; }
+  100% { transform: translateX(-50%) rotate(360deg) scale(0.5); opacity: 0; }
+}
+
+/* Snow fall particles */
+.ga-tp-snow-fall {
+  animation: gaTpSnowFall 2.5s linear infinite;
+  bottom: auto;
+  top: -30px;
+}
+@keyframes gaTpSnowFall {
+  0% { transform: translateY(-30px) translateX(0); opacity: 0; }
+  10% { opacity: 0.8; }
+  50% { transform: translateY(50vh) translateX(15px); }
+  100% { transform: translateY(110vh) translateX(-10px); opacity: 0; }
+}
+
+/* Rainbow arc particles */
+.ga-tp-rainbow-arc {
+  animation: gaTpRainbowArc 2s ease-out infinite;
+  bottom: 30%;
+}
+@keyframes gaTpRainbowArc {
+  0% { transform: scale(0) rotate(0); opacity: 0; }
+  30% { transform: scale(1.2) rotate(10deg); opacity: 1; }
+  60% { transform: scale(1) rotate(-5deg); opacity: 0.7; }
+  100% { transform: scale(0.5) rotate(0); opacity: 0; }
+}
+
+/* Wave crash particles */
+.ga-tp-wave-crash {
+  animation: gaTpWaveCrash 2s ease-out infinite;
+  bottom: 0;
+}
+@keyframes gaTpWaveCrash {
+  0% { transform: translateY(30px) scale(0.5); opacity: 0; }
+  30% { transform: translateY(0) scale(1); opacity: 0.8; }
+  100% { transform: translateY(-50px) scale(0.3); opacity: 0; }
+}
+
+/* Spiral up particles */
+.ga-tp-spiral-up {
+  animation: gaTpSpiralUp 2s ease-out infinite;
+  bottom: 0;
+}
+@keyframes gaTpSpiralUp {
+  0% { transform: translateY(0) rotate(0) scale(0.5); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(-80vh) rotate(720deg) scale(0.3); opacity: 0; }
+}
+
+/* Siren flash particles */
+.ga-tp-siren-flash {
+  animation: gaTpSirenFlash 0.3s steps(2) infinite;
+  bottom: 30%;
+  left: 50% !important;
+}
+@keyframes gaTpSirenFlash {
+  0% { transform: translateX(-50%) scale(1); opacity: 1; }
+  50% { transform: translateX(-50%) scale(0.8); opacity: 0.5; }
+}
+
+/* Erupt particles */
+.ga-tp-erupt {
+  animation: gaTpErupt 1.5s ease-out infinite;
+  bottom: 0;
+}
+@keyframes gaTpErupt {
+  0% { transform: translateY(0) scale(0.3); opacity: 0; }
+  20% { transform: translateY(-5vh) scale(1); opacity: 1; }
+  100% { transform: translateY(-80vh) scale(0.2); opacity: 0; }
+}
+
+/* Moon rise */
+.ga-tp-moon-rise {
+  animation: gaTpMoonRise 2s ease-out infinite;
+  bottom: 0;
+  left: 50% !important;
+}
+@keyframes gaTpMoonRise {
+  0% { transform: translateX(-50%) translateY(0) scale(0.5); opacity: 0; }
+  30% { transform: translateX(-50%) translateY(-20vh) scale(1); opacity: 1; }
+  60% { transform: translateX(-50%) translateY(-40vh) scale(1.1); opacity: 0.8; }
+  100% { transform: translateX(-50%) translateY(-60vh) scale(0.8); opacity: 0; }
+}
+
+/* Sun burst */
+.ga-tp-sun-burst {
+  animation: gaTpSunBurst 2s ease-out infinite;
+  bottom: 20%;
+  left: 50% !important;
+}
+@keyframes gaTpSunBurst {
+  0% { transform: translateX(-50%) scale(0); opacity: 0; }
+  30% { transform: translateX(-50%) scale(1.5); opacity: 1; filter: brightness(2); }
+  60% { transform: translateX(-50%) scale(1.2); opacity: 0.8; filter: brightness(1); }
+  100% { transform: translateX(-50%) scale(0.8); opacity: 0; }
+}
+
+/* Star rain */
+.ga-tp-star-rain {
+  animation: gaTpStarRain 2s ease-in infinite;
+  bottom: auto;
+  top: -30px;
+}
+@keyframes gaTpStarRain {
+  0% { transform: translateY(-30px) rotate(0) scale(0.5); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translateY(110vh) rotate(360deg) scale(0.8); opacity: 0; }
+}
+
+/* Earth spin */
+.ga-tp-earth-spin {
+  animation: gaTpEarthSpin 3s linear infinite;
+  bottom: 25%;
+  left: 50% !important;
+}
+@keyframes gaTpEarthSpin {
+  0% { transform: translateX(-50%) rotate(0) scale(0.5); opacity: 0; }
+  10% { transform: translateX(-50%) rotate(0) scale(1); opacity: 1; }
+  100% { transform: translateX(-50%) rotate(360deg) scale(0.5); opacity: 0; }
+}
+
+/* Sail across */
+.ga-tp-sail-across {
+  bottom: 30% !important;
+}
+
+/* Default burst */
+.ga-tp-default-burst {
+  animation: gaTpDefaultBurst 2s ease-out infinite;
+  bottom: 30%;
+}
+@keyframes gaTpDefaultBurst {
+  0% { transform: scale(0) rotate(0); opacity: 0; }
+  20% { transform: scale(1.2) rotate(15deg); opacity: 1; }
+  60% { transform: scale(1) rotate(-5deg); opacity: 0.7; }
+  100% { transform: scale(0.5) rotate(10deg); opacity: 0; }
+}
+
+/* ========== CENTER ICON ANIMATIONS ========== */
+.ga-theme-center {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  animation-fill-mode: both;
+}
+
+/* Each animation type gets its own center animation */
+.ga-tc-fire-rise { animation: gaTcFireRise var(--duration, 3s) ease-out both; }
+@keyframes gaTcFireRise {
+  0% { transform: scale(0) translateY(50px); opacity: 0; }
+  15% { transform: scale(1.3) translateY(-10px); opacity: 1; }
+  30% { transform: scale(1) translateY(0); }
+  80% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(0.5) translateY(-30px); opacity: 0; }
+}
+
+.ga-tc-money-rain { animation: gaTcMoneyRain var(--duration, 3s) ease-out both; }
+@keyframes gaTcMoneyRain {
+  0% { transform: scale(0); opacity: 0; }
+  20% { transform: scale(1.2); opacity: 1; }
+  50% { transform: scale(1) rotate(5deg); }
+  100% { transform: scale(0.8) translateY(50px); opacity: 0; }
+}
+
+.ga-tc-heartbeat { animation: gaTcHeartbeat var(--duration, 3s) ease-in-out both; }
+@keyframes gaTcHeartbeat {
+  0% { transform: scale(0); opacity: 0; }
+  15% { transform: scale(1.2); opacity: 1; }
+  25% { transform: scale(0.9); }
+  35% { transform: scale(1.15); }
+  45% { transform: scale(0.95); }
+  55% { transform: scale(1.1); }
+  80% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+.ga-tc-petal-fall { animation: gaTcFloatUp var(--duration, 3s) ease-out both; }
+.ga-tc-crown-float { animation: gaTcFloatUp var(--duration, 3s) ease-out both; }
+.ga-tc-balloon-rise { animation: gaTcFloatUp var(--duration, 3s) ease-out both; }
+.ga-tc-ghost-float { animation: gaTcFloatUp var(--duration, 3s) ease-out both; }
+.ga-tc-note-float { animation: gaTcFloatUp var(--duration, 3s) ease-out both; }
+@keyframes gaTcFloatUp {
+  0% { transform: translateY(30px) scale(0.5); opacity: 0; }
+  20% { transform: translateY(0) scale(1.1); opacity: 1; }
+  60% { transform: translateY(-20px) scale(1); opacity: 0.8; }
+  100% { transform: translateY(-60px) scale(0.3); opacity: 0; }
+}
+
+.ga-tc-sparkle-burst { animation: gaTcSparkle var(--duration, 3s) ease-out both; }
+.ga-tc-trophy-reveal { animation: gaTcSparkle var(--duration, 3s) ease-out both; }
+.ga-tc-ring-glow { animation: gaTcSparkle var(--duration, 3s) ease-out both; }
+.ga-tc-sun-burst { animation: gaTcSparkle var(--duration, 3s) ease-out both; }
+@keyframes gaTcSparkle {
+  0% { transform: scale(0) rotate(-30deg); opacity: 0; }
+  20% { transform: scale(1.5) rotate(10deg); opacity: 1; filter: brightness(2); }
+  40% { transform: scale(1.1) rotate(-5deg); filter: brightness(1); }
+  70% { transform: scale(1) rotate(0); opacity: 0.8; }
+  100% { transform: scale(0.5) rotate(15deg); opacity: 0; }
+}
+
+.ga-tc-spray { animation: gaTcSpray var(--duration, 3s) ease-out both; }
+.ga-tc-pour { animation: gaTcSpray var(--duration, 3s) ease-out both; }
+@keyframes gaTcSpray {
+  0% { transform: scale(0); opacity: 0; }
+  15% { transform: scale(1.3); opacity: 1; }
+  40% { transform: scale(1); }
+  100% { transform: scale(0.6) translateY(20px); opacity: 0; }
+}
+
+.ga-tc-spin-in { animation: gaTcSpinIn var(--duration, 3s) ease-out both; }
+.ga-tc-wheel-spin { animation: gaTcSpinIn var(--duration, 3s) ease-out both; }
+.ga-tc-earth-spin { animation: gaTcSpinIn var(--duration, 3s) ease-out both; }
+.ga-tc-clock-spin { animation: gaTcSpinIn var(--duration, 3s) ease-out both; }
+@keyframes gaTcSpinIn {
+  0% { transform: scale(0) rotate(-360deg); opacity: 0; }
+  20% { transform: scale(1.2) rotate(0); opacity: 1; }
+  50% { transform: scale(1) rotate(20deg); }
+  100% { transform: scale(0.5) rotate(0); opacity: 0; }
+}
+
+.ga-tc-drive-across { animation: gaTcDrive var(--duration, 3s) ease-in-out both; }
+.ga-tc-fly-across { animation: gaTcDrive var(--duration, 3s) ease-in-out both; }
+.ga-tc-sail-across { animation: gaTcDrive var(--duration, 3s) ease-in-out both; }
+.ga-tc-dragon-swoop { animation: gaTcDrive var(--duration, 3s) ease-in-out both; }
+@keyframes gaTcDrive {
+  0% { transform: translateX(-80vw) scale(0.5); opacity: 0; }
+  10% { transform: translateX(-30vw) scale(1); opacity: 1; }
+  50% { transform: translateX(0) scale(1.2); }
+  90% { transform: translateX(30vw) scale(1); opacity: 1; }
+  100% { transform: translateX(80vw) scale(0.5); opacity: 0; }
+}
+
+.ga-tc-launch-up { animation: gaTcLaunch var(--duration, 3s) ease-in both; }
+@keyframes gaTcLaunch {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  10% { transform: translateY(-10vh) scale(1); opacity: 1; }
+  100% { transform: translateY(-100vh) scale(0.2); opacity: 0; }
+}
+
+.ga-tc-skull-rise { animation: gaTcRise var(--duration, 3s) ease-out both; }
+.ga-tc-hell-rise { animation: gaTcRise var(--duration, 3s) ease-out both; }
+.ga-tc-moon-rise { animation: gaTcRise var(--duration, 3s) ease-out both; }
+.ga-tc-build-up { animation: gaTcRise var(--duration, 3s) ease-out both; }
+@keyframes gaTcRise {
+  0% { transform: translateY(100px) scale(0.3); opacity: 0; }
+  25% { transform: translateY(0) scale(1.2); opacity: 1; }
+  50% { transform: translateY(-10px) scale(1.1); }
+  100% { transform: translateY(-30px) scale(0.5); opacity: 0; }
+}
+
+.ga-tc-ufo-abduct { animation: gaTcUfo var(--duration, 3s) ease-in-out both; }
+@keyframes gaTcUfo {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  20% { transform: translateY(10px) scale(1); opacity: 1; }
+  50% { transform: translateY(5px) scale(1.1) rotate(5deg); }
+  100% { transform: translateY(-50px) scale(0.3); opacity: 0; }
+}
+
+.ga-tc-descend { animation: gaTcDescend var(--duration, 3s) ease-out both; }
+@keyframes gaTcDescend {
+  0% { transform: translateY(-100px) scale(1.3); opacity: 0; filter: brightness(2); }
+  30% { transform: translateY(0) scale(1); opacity: 1; filter: brightness(1); }
+  70% { transform: translateY(10px) scale(0.95); opacity: 0.8; }
+  100% { transform: translateY(30px) scale(0.5); opacity: 0; }
+}
+
+.ga-tc-flash-burst { animation: gaTcFlash var(--duration, 3s) ease-out both; }
+.ga-tc-screen-flash { animation: gaTcFlash var(--duration, 3s) ease-out both; }
+.ga-tc-spark-zap { animation: gaTcFlash var(--duration, 3s) ease-out both; }
+@keyframes gaTcFlash {
+  0% { transform: scale(0); opacity: 0; }
+  10% { transform: scale(2); opacity: 1; filter: brightness(3); }
+  20% { transform: scale(0.8); filter: brightness(1); }
+  30% { transform: scale(1.5); filter: brightness(2); }
+  40% { transform: scale(1); filter: brightness(1); }
+  80% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+.ga-tc-game-pop { animation: gaTcGamePop var(--duration, 3s) ease-out both; }
+.ga-tc-unbox { animation: gaTcGamePop var(--duration, 3s) ease-out both; }
+.ga-tc-emoji-pop { animation: gaTcGamePop var(--duration, 3s) ease-out both; }
+@keyframes gaTcGamePop {
+  0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+  20% { transform: scale(1.4) rotate(5deg); opacity: 1; }
+  40% { transform: scale(0.9) rotate(-3deg); }
+  60% { transform: scale(1.1) rotate(2deg); }
+  80% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+.ga-tc-bullet-burst { animation: gaTcBullet var(--duration, 3s) ease-out both; }
+.ga-tc-explode { animation: gaTcBullet var(--duration, 3s) ease-out both; }
+@keyframes gaTcBullet {
+  0% { transform: scale(0); opacity: 0; }
+  8% { transform: scale(2); opacity: 1; }
+  15% { transform: scale(0.8); }
+  30% { transform: scale(1.2); opacity: 0.8; }
+  60% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(0.3); opacity: 0; }
+}
+
+.ga-tc-slash { animation: gaTcSlash var(--duration, 3s) ease-out both; }
+.ga-tc-shield-expand { animation: gaTcSlash var(--duration, 3s) ease-out both; }
+.ga-tc-smash-down { animation: gaTcSlash var(--duration, 3s) ease-out both; }
+@keyframes gaTcSlash {
+  0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+  15% { transform: scale(1.3) rotate(5deg); opacity: 1; }
+  30% { transform: scale(1) rotate(-3deg); }
+  60% { transform: scale(0.9) rotate(0); opacity: 0.6; }
+  100% { transform: scale(0.5) rotate(10deg); opacity: 0; }
+}
+
+.ga-tc-tear-fall { animation: gaTcTear var(--duration, 3s) ease-in both; }
+@keyframes gaTcTear {
+  0% { transform: scale(0.8); opacity: 0; }
+  20% { transform: scale(1); opacity: 1; }
+  80% { transform: scale(1) translateY(30px); opacity: 0.5; }
+  100% { transform: scale(0.5) translateY(50px); opacity: 0; }
+}
+
+.ga-tc-shake-burst { animation: gaTcShake var(--duration, 3s) ease-out both; }
+.ga-tc-lock-shake { animation: gaTcShake var(--duration, 3s) ease-out both; }
+@keyframes gaTcShake {
+  0% { transform: scale(0); opacity: 0; }
+  10% { transform: scale(1.2); opacity: 1; }
+  20% { transform: translateX(-8px) rotate(-5deg); }
+  30% { transform: translateX(8px) rotate(5deg); }
+  40% { transform: translateX(-5px) rotate(-3deg); }
+  50% { transform: translateX(5px) rotate(3deg); }
+  60% { transform: translateX(-3px) rotate(-1deg); }
+  80% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+.ga-tc-flag-wave { animation: gaTcFlag var(--duration, 3s) ease-out both; }
+.ga-tc-candle-flicker { animation: gaTcFlag var(--duration, 3s) ease-out both; }
+.ga-tc-key-turn { animation: gaTcFlag var(--duration, 3s) ease-out both; }
+.ga-tc-wrench-turn { animation: gaTcFlag var(--duration, 3s) ease-out both; }
+@keyframes gaTcFlag {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+  15% { transform: scale(1.2) rotate(5deg); opacity: 1; }
+  30% { transform: scale(1) rotate(-3deg); }
+  50% { transform: scale(1.05) rotate(4deg); }
+  70% { transform: scale(0.95) rotate(-2deg); opacity: 0.7; }
+  100% { transform: scale(0.5) rotate(0); opacity: 0; }
+}
+
+.ga-tc-smoke-puff { animation: gaTcSmoke var(--duration, 3s) ease-out both; }
+.ga-tc-smoke-rise { animation: gaTcSmoke var(--duration, 3s) ease-out both; }
+@keyframes gaTcSmoke {
+  0% { transform: scale(0.5); opacity: 0; }
+  20% { transform: scale(1.1); opacity: 0.8; }
+  60% { transform: scale(1.3); opacity: 0.4; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.ga-tc-siren-flash { animation: gaTcSiren var(--duration, 3s) steps(2) both; }
+@keyframes gaTcSiren {
+  0% { transform: scale(0); opacity: 0; }
+  10% { transform: scale(1.2); opacity: 1; }
+  50% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+.ga-tc-star-rain { animation: gaTcStar var(--duration, 3s) ease-out both; }
+.ga-tc-snow-fall { animation: gaTcStar var(--duration, 3s) ease-out both; }
+.ga-tc-rainbow-arc { animation: gaTcStar var(--duration, 3s) ease-out both; }
+.ga-tc-wave-crash { animation: gaTcStar var(--duration, 3s) ease-out both; }
+.ga-tc-spiral-up { animation: gaTcStar var(--duration, 3s) ease-out both; }
+.ga-tc-erupt { animation: gaTcStar var(--duration, 3s) ease-out both; }
+@keyframes gaTcStar {
+  0% { transform: scale(0); opacity: 0; }
+  15% { transform: scale(1.3); opacity: 1; }
+  40% { transform: scale(1); }
+  80% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(0.3); opacity: 0; }
+}
+
+.ga-tc-default-burst { animation: gaTcDefault var(--duration, 3s) ease-out both; }
+@keyframes gaTcDefault {
+  0% { transform: scale(0); opacity: 0; }
+  15% { transform: scale(1.4); opacity: 1; }
+  30% { transform: scale(1); }
+  80% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+/* Theme icon styles */
+.ga-theme-icon {
+  font-size: 96px;
+  line-height: 1;
+  margin-bottom: 16px;
+  animation: gaThemeIconPulse 1.5s ease-in-out infinite;
+}
+@keyframes gaThemeIconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.ga-theme-name {
+  font-size: 28px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.ga-theme-cost {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.ga-theme-meta {
+  font-size: 12px;
+  color: #6b6585;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
