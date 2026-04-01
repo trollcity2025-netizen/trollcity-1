@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { useDeckStore } from '../../stores/deckStore';
 import { useDeckPWA } from '../../pwa/useDeckPWA';
-import { Radio, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 const PAIR_CHANNEL_PREFIX = 'tc-deck-pair-';
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -12,7 +12,7 @@ const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 export default function DeckPairPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, session, setAuth, setProfile } = useAuthStore();
+  const { setAuth, setProfile } = useAuthStore();
   const { setSession: setDeckSession } = useDeckStore();
   useDeckPWA();
 
@@ -32,57 +32,73 @@ export default function DeckPairPage() {
         return;
       }
 
-      // Check if user is signed in
-      if (!user || !session) {
-        // Save token to localStorage so we can pair after auth
-        localStorage.setItem('tc_deck_pair_token', token);
-        navigate('/deck/auth', { replace: true });
-        return;
-      }
-
       try {
-        // Validate token against the database
-        const { data: tokenRow, error: fetchError } = await supabase
-          .from('deck_pair_tokens')
-          .select('*')
-          .eq('token', token)
-          .eq('user_id', user.id)
-          .eq('used', false)
-          .maybeSingle();
+        // Get current Supabase session (works regardless of auth store hydration)
+        const { data: { session: sbSession } } = await supabase.auth.getSession();
+        let userId: string | null = null;
+        let userEmail: string | null = null;
 
-        if (fetchError) {
-          console.warn('[DeckPair] Token lookup error:', fetchError.message);
-          // Fallback: if table doesn't exist, proceed with local pairing
+        if (sbSession?.user) {
+          // User has an active Supabase session on this device
+          userId = sbSession.user.id;
+          userEmail = sbSession.user.email || null;
         }
 
-        if (tokenRow) {
-          // Check expiry
-          if (tokenRow.expires_at && new Date(tokenRow.expires_at) < new Date()) {
-            setErrorMsg('This pairing code has expired. Please generate a new one from Deck.');
-            setStatus('error');
-            return;
-          }
-
-          // Mark token as used
-          await supabase
+        // If no session, try to resolve user from the token itself
+        if (!userId) {
+          const { data: tokenRow } = await supabase
             .from('deck_pair_tokens')
-            .update({ used: true })
-            .eq('token', token);
+            .select('user_id, expires_at, used')
+            .eq('token', token)
+            .maybeSingle();
+
+          if (tokenRow) {
+            if (tokenRow.used) {
+              setErrorMsg('This pairing code has already been used.');
+              setStatus('error');
+              return;
+            }
+            if (tokenRow.expires_at && new Date(tokenRow.expires_at) < new Date()) {
+              setErrorMsg('This pairing code has expired. Please generate a new one from Deck.');
+              setStatus('error');
+              return;
+            }
+            userId = tokenRow.user_id;
+          }
         }
 
-        // Fetch profile
+        if (!userId) {
+          setErrorMsg('Could not identify your account. Please log in first.');
+          setStatus('error');
+          return;
+        }
+
+        // Mark token as used
+        await supabase
+          .from('deck_pair_tokens')
+          .update({ used: true })
+          .eq('token', token)
+          .catch(() => {});
+
+        // Fetch user profile
         const { data: profileData } = await supabase
           .from('user_profiles')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', userId)
           .single();
 
-        if (profileData) setProfile(profileData);
+        // If we got a supabase session, sync the auth store
+        if (sbSession?.user) {
+          setAuth(sbSession.user, sbSession);
+        }
+        if (profileData) {
+          setProfile(profileData);
+        }
 
         // Create Deck session with 24hr expiry
         const now = Date.now();
         setDeckSession({
-          userId: user.id,
+          userId,
           startedAt: now,
           expiresAt: now + SESSION_DURATION_MS,
           isValid: true,
@@ -95,15 +111,16 @@ export default function DeckPairPage() {
             deck_session_started: new Date(now).toISOString(),
             deck_session_expires: new Date(now + SESSION_DURATION_MS).toISOString(),
           })
-          .eq('id', user.id);
+          .eq('id', userId)
+          .catch(() => {});
 
         // Notify the desktop via BroadcastChannel that phone is paired
         const channel = new BroadcastChannel(PAIR_CHANNEL_PREFIX + token);
         channel.postMessage({
           type: 'phone-paired',
           payload: {
-            userId: user.id,
-            email: user.email,
+            userId,
+            email: userEmail || profileData?.email || '',
             timestamp: now,
           },
         });
@@ -127,7 +144,7 @@ export default function DeckPairPage() {
     };
 
     handlePair();
-  }, [token, user, session, navigate, setAuth, setProfile, setDeckSession]);
+  }, [token, navigate, setAuth, setProfile, setDeckSession]);
 
   if (status === 'loading') {
     return (
