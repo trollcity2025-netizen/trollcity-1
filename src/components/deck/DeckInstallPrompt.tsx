@@ -100,7 +100,7 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
                 gap: 4,
               }}
             >
-              <QrCode size={12} />
+              <Radio size={12} />
               Connect Deck
             </button>
           </div>
@@ -144,7 +144,7 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
             className="deck-btn deck-btn-primary"
             onClick={handleConnectDeck}
           >
-            <QrCode size={14} />
+            <Radio size={14} />
             Connect Deck
           </button>
           <button
