@@ -1,57 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useDeckStore } from '../../stores/deckStore';
 import {
-  Shield, VolumeX, Volume2, MessageSquare, MessageSquareOff,
-  Lock, Eye, Loader2, Users, Radio
+  Shield, VolumeX, Volume2, VideoOff, Video, MessageSquare, MessageSquareOff,
+  Lock, Eye, Loader2, Users, Radio, Unlock
 } from 'lucide-react';
 
 export default function DeckModeration() {
+  const { streamConfig, sendToDeck } = useDeckStore();
   const [micMuted, setMicMuted] = useState(false);
+  const [cameraOff, setCameraOff] = useState(false);
   const [chatDisabled, setChatDisabled] = useState(false);
   const [slowMode, setSlowMode] = useState(false);
   const [slowModeSeconds, setSlowModeSeconds] = useState(5);
   const [followersOnly, setFollowersOnly] = useState(false);
   const [emoteOnly, setEmoteOnly] = useState(false);
+  const [seatsLocked, setSeatsLocked] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
+
+  const sendCommand = useCallback(async (command: string, payload?: Record<string, unknown>) => {
+    await sendToDeck({
+      type: 'deck-command',
+      command,
+      payload,
+    });
+  }, [sendToDeck]);
 
   const handleToggle = async (action: string) => {
     setLoading(action);
-    // Simulate broadcast to phone
-    try {
-      const bc = new BroadcastChannel('trollcity-deck-sync');
-      bc.postMessage({
-        type: 'deck-mod-action',
-        payload: { action, timestamp: Date.now() },
-      });
-      bc.close();
-    } catch {
-      // ignore
-    }
 
     switch (action) {
       case 'mute-mic':
         setMicMuted(!micMuted);
+        await sendCommand(micMuted ? 'unmute-mic' : 'mute-mic');
+        break;
+      case 'mute-camera':
+        setCameraOff(!cameraOff);
+        await sendCommand(cameraOff ? 'unmute-camera' : 'mute-camera');
         break;
       case 'disable-chat':
         setChatDisabled(!chatDisabled);
+        await sendCommand('disable-chat', { disabled: !chatDisabled });
         break;
       case 'slow-mode':
         setSlowMode(!slowMode);
+        await sendCommand('slow-mode', { enabled: !slowMode, seconds: slowModeSeconds });
         break;
       case 'followers-only':
         setFollowersOnly(!followersOnly);
+        await sendCommand('followers-only', { enabled: !followersOnly });
         break;
       case 'emote-only':
         setEmoteOnly(!emoteOnly);
+        await sendCommand('emote-only', { enabled: !emoteOnly });
+        break;
+      case 'toggle-seats-lock':
+        setSeatsLocked(!seatsLocked);
+        await sendCommand('toggle-seats-lock');
+        break;
+      case 'end-stream':
+        await sendCommand('end-stream');
         break;
     }
 
-    // Small delay for feedback
-    await new Promise((r) => setTimeout(r, 300));
     setLoading(null);
   };
 
+  const isLive = streamConfig.isLive;
+
   return (
     <div className="deck-panel-body">
+      {/* Connection warning */}
+      {!isLive && (
+        <div className="deck-card" style={{ borderColor: 'var(--deck-warning)', textAlign: 'center' }}>
+          <p style={{ color: 'var(--deck-warning)', fontSize: 12, margin: 0 }}>
+            Start a broadcast first to use stream controls.
+          </p>
+        </div>
+      )}
+
       {/* Quick mod actions */}
       <div className="deck-card">
         <div className="deck-card-header">
@@ -59,12 +85,17 @@ export default function DeckModeration() {
             <Shield size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
             Stream Controls
           </span>
+          {isLive && (
+            <span style={{ fontSize: 10, color: 'var(--deck-success)' }}>
+              Stream ID: {streamConfig.streamId?.slice(0, 8)}...
+            </span>
+          )}
         </div>
         <div className="deck-mod-actions">
           <button
             className={`deck-mod-btn ${micMuted ? 'active' : ''}`}
             onClick={() => handleToggle('mute-mic')}
-            disabled={loading === 'mute-mic'}
+            disabled={loading === 'mute-mic' || !isLive}
           >
             {loading === 'mute-mic' ? <Loader2 size={14} className="animate-spin" /> :
               micMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -72,9 +103,19 @@ export default function DeckModeration() {
           </button>
 
           <button
+            className={`deck-mod-btn ${cameraOff ? 'active' : ''}`}
+            onClick={() => handleToggle('mute-camera')}
+            disabled={loading === 'mute-camera' || !isLive}
+          >
+            {loading === 'mute-camera' ? <Loader2 size={14} className="animate-spin" /> :
+              cameraOff ? <VideoOff size={14} /> : <Video size={14} />}
+            {cameraOff ? 'Camera Off' : 'Camera Off'}
+          </button>
+
+          <button
             className={`deck-mod-btn ${chatDisabled ? 'active' : ''}`}
             onClick={() => handleToggle('disable-chat')}
-            disabled={loading === 'disable-chat'}
+            disabled={loading === 'disable-chat' || !isLive}
           >
             {loading === 'disable-chat' ? <Loader2 size={14} className="animate-spin" /> :
               chatDisabled ? <MessageSquareOff size={14} /> : <MessageSquare size={14} />}
@@ -84,7 +125,7 @@ export default function DeckModeration() {
           <button
             className={`deck-mod-btn ${slowMode ? 'active' : ''}`}
             onClick={() => handleToggle('slow-mode')}
-            disabled={loading === 'slow-mode'}
+            disabled={loading === 'slow-mode' || !isLive}
           >
             {loading === 'slow-mode' ? <Loader2 size={14} className="animate-spin" /> :
               <Lock size={14} />}
@@ -92,29 +133,19 @@ export default function DeckModeration() {
           </button>
 
           <button
-            className={`deck-mod-btn ${followersOnly ? 'active' : ''}`}
-            onClick={() => handleToggle('followers-only')}
-            disabled={loading === 'followers-only'}
+            className={`deck-mod-btn ${seatsLocked ? 'active' : ''}`}
+            onClick={() => handleToggle('toggle-seats-lock')}
+            disabled={loading === 'toggle-seats-lock' || !isLive}
           >
-            {loading === 'followers-only' ? <Loader2 size={14} className="animate-spin" /> :
-              <Users size={14} />}
-            {followersOnly ? 'Followers Only' : 'Followers Only'}
+            {loading === 'toggle-seats-lock' ? <Loader2 size={14} className="animate-spin" /> :
+              seatsLocked ? <Lock size={14} /> : <Unlock size={14} />}
+            {seatsLocked ? 'Seats Locked' : 'Lock Seats'}
           </button>
 
           <button
-            className={`deck-mod-btn ${emoteOnly ? 'active' : ''}`}
-            onClick={() => handleToggle('emote-only')}
-            disabled={loading === 'emote-only'}
-          >
-            {loading === 'emote-only' ? <Loader2 size={14} className="animate-spin" /> :
-              <Eye size={14} />}
-            {emoteOnly ? 'Emote Only' : 'Emote Only'}
-          </button>
-
-          <button
-            className="deck-mod-btn"
+            className="deck-mod-btn deck-mod-btn-danger"
             onClick={() => handleToggle('end-stream')}
-            disabled={loading === 'end-stream'}
+            disabled={loading === 'end-stream' || !isLive}
           >
             {loading === 'end-stream' ? <Loader2 size={14} className="animate-spin" /> :
               <Radio size={14} />}
@@ -151,10 +182,10 @@ export default function DeckModeration() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <StatusRow label="Microphone" active={!micMuted} onLabel="Live" offLabel="Muted" />
+          <StatusRow label="Camera" active={!cameraOff} onLabel="Live" offLabel="Off" />
           <StatusRow label="Chat" active={!chatDisabled} onLabel="Enabled" offLabel="Disabled" />
           <StatusRow label="Slow Mode" active={slowMode} onLabel={`${slowModeSeconds}s delay`} offLabel="Off" />
-          <StatusRow label="Followers Only" active={followersOnly} onLabel="Active" offLabel="Off" />
-          <StatusRow label="Emote Only" active={emoteOnly} onLabel="Active" offLabel="Off" />
+          <StatusRow label="Seats Locked" active={seatsLocked} onLabel="Locked" offLabel="Open" />
         </div>
       </div>
     </div>

@@ -49,6 +49,7 @@ import BroadcastAbilityEffects from '../../components/broadcast/BroadcastAbility
 import BroadcastTicker from '../../components/broadcast/BroadcastTicker'
 import TickerControlPanel from '../../components/broadcast/TickerControlPanel'
 import { useBroadcastTicker } from '../../hooks/useBroadcastTicker'
+import { useBroadcastDeckSync } from '../../hooks/useBroadcastDeckSync'
 import { useTickerStore } from '../../stores/tickerStore'
 
 function BroadcastPage() {
@@ -2570,6 +2571,15 @@ function BroadcastPage() {
     setStream((prev: any) => prev ? { ...prev, status: 'ended', is_live: false } : null);
     navigate(`/broadcast/summary/${stream?.id}`);
   };
+
+  // Sync broadcast data to Deck device
+  useBroadcastDeckSync({
+    streamId: streamId || undefined,
+    isHost,
+    stream,
+    roomRef,
+    onStreamEnd: handleStreamEnd,
+  });
 
   const swipeNavigateLockRef = useRef(false);
 

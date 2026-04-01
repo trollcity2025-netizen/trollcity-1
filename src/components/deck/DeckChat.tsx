@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useDeckStore, DeckChatMessage } from '../../stores/deckStore';
 import { useAuthStore } from '../../lib/store';
-import { supabase } from '../../lib/supabase';
 import {
   MessageSquare, Send, Trash2, Loader2
 } from 'lucide-react';
@@ -15,6 +14,7 @@ export default function DeckChat() {
     addChatMessage,
     clearChat,
     setChatInput,
+    sendToDeck,
   } = useDeckStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -24,23 +24,6 @@ export default function DeckChat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
-
-  // Subscribe to real-time chat when live
-  useEffect(() => {
-    if (!streamConfig.streamId || !streamConfig.isLive) return;
-
-    const channel = supabase
-      .channel(`deck-chat-${streamConfig.streamId}`)
-      .on('broadcast', { event: 'chat-message' }, (payload) => {
-        const msg = payload.payload as DeckChatMessage;
-        addChatMessage(msg);
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [streamConfig.streamId, streamConfig.isLive, addChatMessage]);
 
   const handleSendMessage = async () => {
     const msg = chatInput.trim();
@@ -61,120 +44,114 @@ export default function DeckChat() {
 
     addChatMessage(chatMsg);
 
-    // Broadcast to phone and viewers
-    if (streamConfig.streamId) {
-      const channel = supabase.channel(`deck-chat-${streamConfig.streamId}`);
-      await channel.send({
-        type: 'broadcast',
-        event: 'chat-message',
-        payload: chatMsg,
-      });
-    }
-
-    // Also send via BroadcastChannel to phone
-    try {
-      const bc = new BroadcastChannel('trollcity-deck-sync');
-      bc.postMessage({ type: 'deck-chat-send', payload: chatMsg });
-      bc.close();
-    } catch {
-      // ignore
-    }
+    // Send message to phone to forward to broadcast chat
+    await sendToDeck({
+      type: 'deck-command',
+      command: 'send-chat',
+      payload: { message: msg, username: chatMsg.username },
+    });
 
     setSending(false);
   };
 
-  const formatTime = (ts: number) => {
-    const d = new Date(ts);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  const isLive = streamConfig.isLive;
 
   return (
-    <div className="deck-chat">
-      {/* Chat status bar */}
-      <div style={{
-        padding: '8px 14px',
-        background: 'var(--deck-bg-secondary)',
-        borderBottom: '1px solid var(--deck-border)',
-        fontSize: 11,
-        color: 'var(--deck-text-muted)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <span>
-          <MessageSquare size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-          {chatMessages.length} messages
-        </span>
-        {streamConfig.isLive && (
-          <span style={{ color: 'var(--deck-success)' }}>Live Chat Active</span>
-        )}
-        {!streamConfig.isLive && (
-          <span>Chat will activate when you go live</span>
+    <div className="deck-panel-body" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Header */}
+      <div className="deck-card" style={{ marginBottom: 8, flexShrink: 0 }}>
+        <div className="deck-card-header">
+          <span className="deck-card-title">
+            <MessageSquare size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            Stream Chat
+          </span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              className="deck-btn deck-btn-ghost deck-btn-sm"
+              onClick={clearChat}
+              title="Clear chat"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </div>
+        {!isLive && (
+          <div style={{ fontSize: 11, color: 'var(--deck-text-muted)', textAlign: 'center', padding: '8px 0' }}>
+            Chat will show messages when you go live.
+          </div>
         )}
       </div>
 
       {/* Messages */}
-      <div className="deck-chat-messages">
-        {chatMessages.length === 0 && (
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '0 4px',
+        minHeight: 0,
+      }}>
+        {chatMessages.length === 0 ? (
           <div style={{
             textAlign: 'center',
-            padding: 40,
+            padding: 24,
             color: 'var(--deck-text-muted)',
             fontSize: 12,
           }}>
-            <MessageSquare size={24} style={{ marginBottom: 8, opacity: 0.4 }} />
-            <div>No messages yet.</div>
-            {streamConfig.isLive
-              ? 'Chat messages from your viewers will appear here.'
-              : 'Go live to start receiving chat messages.'}
+            {isLive ? 'Waiting for messages...' : 'No messages yet.'}
           </div>
+        ) : (
+          chatMessages.map((msg) => (
+            <div
+              key={msg.id}
+              style={{
+                padding: '6px 8px',
+                marginBottom: 2,
+                borderRadius: 6,
+                background: msg.isSystem ? 'rgba(106, 0, 255, 0.08)' : 'transparent',
+              }}
+            >
+              <span style={{
+                color: msg.isSystem ? '#a855f7' : msg.isModerator ? '#22c55e' : 'var(--deck-accent)',
+                fontWeight: 600,
+                fontSize: 11,
+                marginRight: 6,
+              }}>
+                {msg.isSystem ? 'SYS' : msg.isModerator ? 'MOD' : msg.username}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--deck-text)' }}>
+                {msg.message}
+              </span>
+              <span style={{ fontSize: 9, color: 'var(--deck-text-muted)', marginLeft: 6 }}>
+                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+          ))
         )}
-        {chatMessages.map((msg) => (
-          <div key={msg.id} className="deck-chat-message">
-            {msg.isSystem ? (
-              <div className="deck-chat-system">{msg.message}</div>
-            ) : (
-              <>
-                <span className={`deck-chat-username ${msg.isModerator ? 'mod' : ''}`}>
-                  {msg.username}
-                  {msg.isModerator && ' '}
-                </span>
-                <span className="deck-chat-message-text">{msg.message}</span>
-                <span style={{ fontSize: 9, color: 'var(--deck-text-muted)', marginLeft: 6 }}>
-                  {formatTime(msg.timestamp)}
-                </span>
-              </>
-            )}
-          </div>
-        ))}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div className="deck-chat-input-area">
+      <div style={{
+        display: 'flex',
+        gap: 6,
+        padding: '8px 0 0',
+        flexShrink: 0,
+      }}>
         <input
           className="deck-input"
           type="text"
-          placeholder={streamConfig.isLive ? 'Send a message as host...' : 'Go live to chat'}
+          placeholder={isLive ? 'Type a message...' : 'Go live to chat'}
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-          disabled={!streamConfig.isLive}
-          maxLength={500}
+          onKeyDown={(e) => e.key === 'Enter' && !sending && handleSendMessage()}
+          disabled={!isLive}
+          style={{ flex: 1 }}
         />
         <button
           className="deck-btn deck-btn-primary deck-btn-sm"
           onClick={handleSendMessage}
-          disabled={!streamConfig.isLive || !chatInput.trim() || sending}
+          disabled={!chatInput.trim() || sending || !isLive}
         >
           {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-        </button>
-        <button
-          className="deck-btn deck-btn-ghost deck-btn-sm"
-          onClick={clearChat}
-          title="Clear chat"
-        >
-          <Trash2 size={14} />
         </button>
       </div>
     </div>
