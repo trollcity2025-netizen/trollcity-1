@@ -214,37 +214,6 @@ function EmptyBattleSlot({ teamColor, slotIndex }: { teamColor: 'red' | 'blue'; 
       </span>
     </motion.div>
   );
-} catch {}
-    }
-
-    try {
-      const videoElement = videoTrack.attach();
-      videoElement.style.width = '100%';
-      videoElement.style.height = '100%';
-      videoElement.style.objectFit = 'cover';
-      videoElement.autoplay = true;
-      videoElement.playsInline = true;
-      if (isLocal) videoElement.muted = true;
-
-      containerRef.current.appendChild(videoElement);
-      videoElementRef.current = videoElement;
-      attachedTrackIdRef.current = currentTrackId;
-    } catch (err) {
-      console.error('[FiveVFiveBattleOverlay] Error attaching video:', err);
-    }
-
-    return () => {
-      try {
-        if (videoElementRef.current) {
-          videoTrack.detach();
-          videoElementRef.current = null;
-          attachedTrackIdRef.current = null;
-        }
-      } catch {}
-    };
-  }, [videoTrack, isLocal]);
-
-  return <div ref={containerRef} className="absolute inset-0" style={isLocal ? { transform: 'scaleX(-1)' } : undefined} />;
 }
 
 function BattleParticipantCard({
