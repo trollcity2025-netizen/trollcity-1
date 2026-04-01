@@ -1,18 +1,17 @@
 /**
  * Gift Animation Preview - Dev Page
  * 
- * Each gift gets a unique themed animation based on its name/icon.
- * Fetches all gifts from gift_items database table.
+ * 3D realistic gift animations with per-gift sounds.
+ * Each gift gets a unique Three.js scene with proper materials and lighting.
  * 
  * Route: /dev/gift-animations
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { createPortal } from 'react-dom';
-import { detectGiftTheme, getThemeParticleEmojis, getThemeColor, getThemeAnimationType, GiftTheme } from '../../lib/giftThemeEngine';
-import './gift-animations.css';
-import './gift-themed-animations.css';
+import { Gift3DOverlay } from '../../components/broadcast/Gift3DAnimations';
+import { preloadGiftSounds } from '../../lib/giftSoundMap';
+import './gift-3d.css';
 
 interface GiftItem {
   id: string;
@@ -20,8 +19,6 @@ interface GiftItem {
   icon: string;
   value: number;
   category?: string;
-  gift_slug?: string;
-  is_active?: boolean;
 }
 
 function getDuration(cost: number): number {
@@ -60,217 +57,78 @@ function getTierBg(tier: string): string {
   }
 }
 
-function formatGiftName(gift: GiftItem): string {
+function formatName(gift: GiftItem): string {
   return gift.name?.replace(/^gift_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Gift';
 }
 
-// ========== THEMED ANIMATION OVERLAY ==========
-
-function ThemedGiftAnimation({
-  gift,
-  duration,
-  onComplete,
-}: {
-  gift: GiftItem;
-  duration: number;
-  onComplete: () => void;
-}) {
-  const [phase, setPhase] = useState<'enter' | 'active' | 'exit'>('enter');
-  const tier = getTier(gift.value);
-  const theme = detectGiftTheme(gift.name, gift.icon);
-  const themeColor = getThemeColor(theme);
-  const animType = getThemeAnimationType(theme);
-  const particleEmojis = getThemeParticleEmojis(theme);
-  const icon = gift.icon || '🎁';
-  const displayName = formatGiftName(gift);
-  const particleCount = gift.value >= 1500 ? 20 : gift.value >= 500 ? 14 : 8;
-
-  useEffect(() => {
-    const t1 = setTimeout(() => setPhase('active'), 100);
-    const t2 = setTimeout(() => setPhase('exit'), (duration - 0.6) * 1000);
-    const t3 = setTimeout(onComplete, duration * 1000);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, [duration, onComplete]);
-
-  return createPortal(
-    <div
-      className={`ga-overlay ga-${phase} ga-theme-${animType}`}
-      style={{ '--duration': `${duration}s`, '--theme-color': themeColor } as React.CSSProperties}
-    >
-      {/* Theme-specific background */}
-      <div className={`ga-theme-bg ga-theme-bg-${animType}`}>
-        {renderThemeBackground(animType, themeColor, duration)}
-      </div>
-
-      {/* Theme particles - floating emojis */}
-      <div className="ga-theme-particles">
-        {Array.from({ length: particleCount }).map((_, i) => {
-          const emoji = particleEmojis[i % particleEmojis.length];
-          const left = 10 + Math.random() * 80;
-          const delay = (i / particleCount) * 0.5;
-          const size = 24 + Math.random() * 24;
-          return (
-            <div
-              key={i}
-              className={`ga-theme-particle ga-tp-${animType}`}
-              style={{
-                left: `${left}%`,
-                animationDelay: `${delay}s`,
-                animationDuration: `${duration * 0.8}s`,
-                fontSize: `${size}px`,
-              } as React.CSSProperties}
-            >
-              {emoji}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Center icon - always visible */}
-      <div className={`ga-theme-center ga-tc-${animType}`}>
-        <div className="ga-theme-icon" style={{ filter: `drop-shadow(0 0 30px ${themeColor})` }}>
-          {icon}
-        </div>
-        <div className="ga-theme-name" style={{ textShadow: `0 0 20px ${themeColor}` }}>
-          {displayName}
-        </div>
-        <div className="ga-theme-cost" style={{ color: themeColor }}>
-          {gift.value.toLocaleString()} coins
-        </div>
-        <div className="ga-theme-meta">
-          {animType} • {duration}s • Tier {tier}
-        </div>
-      </div>
-
-      {/* Bottom bar */}
-      <div className="ga-tier-bar" style={{ background: themeColor }} />
-    </div>,
-    document.body
-  );
+function detectSceneType(name: string, icon: string): string {
+  const s = `${name} ${icon}`.toLowerCase().replace(/[_-]/g, ' ');
+  if (s.includes('rose') || s.includes('flower') || s.includes('bouquet') || s.includes('🌹')) return 'rose';
+  if (s.includes('heart') || s.includes('love') || s.includes('pulse') || s.includes('❤') || s.includes('💖')) return 'heart';
+  if (s.includes('crown') || s.includes('king') || s.includes('queen') || s.includes('👑')) return 'crown';
+  if (s.includes('diamond') || s.includes('gem') || s.includes('💎')) return 'diamond';
+  if (s.includes('fire') || s.includes('flame') || s.includes('blaze') || s.includes('🔥')) return 'fire';
+  if (s.includes('car') || s.includes('auto') || s.includes('drift') || s.includes('🏎')) return 'car';
+  if (s.includes('rocket') || s.includes('launch') || s.includes('🚀')) return 'rocket';
+  if (s.includes('money') || s.includes('cash') || s.includes('dollar') || s.includes('💵')) return 'money';
+  if (s.includes('coin') || s.includes('flip') || s.includes('🪙')) return 'coin';
+  if (s.includes('bomb') || s.includes('explode') || s.includes('💣') || s.includes('tnt')) return 'bomb';
+  if (s.includes('trophy') || s.includes('award') || s.includes('🏆')) return 'trophy';
+  if (s.includes('star') || s.includes('⭐')) return 'star';
+  if (s.includes('police') || s.includes('siren') || s.includes('🚨')) return 'police';
+  if (s.includes('snow') || s.includes('❄') || s.includes('ice')) return 'snow';
+  if (s.includes('dragon') || s.includes('🐉')) return 'dragon';
+  if (s.includes('champagne') || s.includes('🍾')) return 'champagne';
+  if (s.includes('music') || s.includes('🎵') || s.includes('mic') || s.includes('🎤')) return 'music';
+  if (s.includes('camera') || s.includes('📸') || s.includes('flash')) return 'camera';
+  if (s.includes('rainbow') || s.includes('🌈')) return 'rainbow';
+  if (s.includes('ghost') || s.includes('👻')) return 'ghost';
+  if (s.includes('skull') || s.includes('💀')) return 'skull';
+  if (s.includes('pizza') || s.includes('🍕')) return 'pizza';
+  if (s.includes('coffee') || s.includes('☕')) return 'coffee';
+  if (s.includes('beer') || s.includes('🍺')) return 'beer';
+  if (s.includes('wine') || s.includes('🍷')) return 'wine';
+  if (s.includes('balloon') || s.includes('🎈')) return 'balloon';
+  if (s.includes('gift') || s.includes('present') || s.includes('🎁')) return 'gift-box';
+  if (s.includes('ring') || s.includes('💍')) return 'ring';
+  if (s.includes('like') || s.includes('👍')) return 'like';
+  if (s.includes('clap') || s.includes('applause') || s.includes('👏')) return 'clap';
+  if (s.includes('hammer') || s.includes('🔨')) return 'hammer';
+  if (s.includes('sword') || s.includes('🗡')) return 'sword';
+  if (s.includes('house') || s.includes('🏠') || s.includes('castle') || s.includes('🏰')) return 'house';
+  if (s.includes('helicopter') || s.includes('🚁')) return 'helicopter';
+  if (s.includes('candle') || s.includes('🕯')) return 'candle';
+  if (s.includes('smoke') || s.includes('blunt') || s.includes('🚬')) return 'smoke';
+  if (s.includes('wave') || s.includes('🌊') || s.includes('ocean')) return 'wave';
+  if (s.includes('tornado') || s.includes('🌪')) return 'tornado';
+  if (s.includes('volcano') || s.includes('🌋')) return 'volcano';
+  if (s.includes('spark') || s.includes('⚡') || s.includes('zap')) return 'spark';
+  if (s.includes('sun') || s.includes('☀')) return 'sun';
+  if (s.includes('moon') || s.includes('🌙')) return 'moon';
+  if (s.includes('earth') || s.includes('🌍')) return 'earth';
+  if (s.includes('hug') || s.includes('🤗')) return 'hug';
+  if (s.includes('kiss') || s.includes('💋')) return 'kiss';
+  if (s.includes('laugh') || s.includes('😂')) return 'laugh';
+  if (s.includes('cry') || s.includes('😢')) return 'cry';
+  if (s.includes('angry') || s.includes('😤')) return 'angry';
+  if (s.includes('cool') || s.includes('😎')) return 'cool';
+  if (s.includes('game') || s.includes('🎮')) return 'game';
+  return 'default';
 }
-
-// Theme-specific background renders
-function renderThemeBackground(animType: string, color: string, duration: number) {
-  switch (animType) {
-    case 'fire-rise':
-    case 'erupt':
-      return (
-        <>
-          <div className="ga-fire-floor" style={{ background: `linear-gradient(0deg, ${color}40, transparent)` }} />
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="ga-fire-particle" style={{
-              left: `${10 + Math.random() * 80}%`,
-              animationDelay: `${Math.random() * 2}s`,
-              animationDuration: `${1 + Math.random()}s`,
-            }} />
-          ))}
-        </>
-      );
-    case 'money-rain':
-      return Array.from({ length: 20 }).map((_, i) => (
-        <div key={i} className="ga-money-fall" style={{
-          left: `${Math.random() * 100}%`,
-          animationDelay: `${Math.random() * 2}s`,
-          animationDuration: `${1.5 + Math.random()}s`,
-        }}>💵</div>
-      ));
-    case 'heartbeat':
-      return <div className="ga-heart-bg" />;
-    case 'petal-fall':
-      return Array.from({ length: 15 }).map((_, i) => (
-        <div key={i} className="ga-petal-fall" style={{
-          left: `${Math.random() * 100}%`,
-          animationDelay: `${Math.random() * 3}s`,
-          animationDuration: `${2 + Math.random() * 2}s`,
-        }}>{Math.random() > 0.5 ? '🌹' : '🌸'}</div>
-      ));
-    case 'snow-fall':
-      return Array.from({ length: 25 }).map((_, i) => (
-        <div key={i} className="ga-snow-fall" style={{
-          left: `${Math.random() * 100}%`,
-          animationDelay: `${Math.random() * 3}s`,
-          animationDuration: `${2 + Math.random() * 2}s`,
-          fontSize: `${12 + Math.random() * 16}px`,
-        }}>{Math.random() > 0.5 ? '❄️' : '⛄'}</div>
-      ));
-    case 'siren-flash':
-      return (
-        <div className="ga-siren-overlay" style={{ animationDuration: `${duration}s` }}>
-          <div className="ga-siren-red" />
-          <div className="ga-siren-blue" />
-        </div>
-      );
-    case 'smoke-puff':
-    case 'smoke-rise':
-      return Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="ga-smoke-cloud" style={{
-          left: `${20 + Math.random() * 60}%`,
-          animationDelay: `${i * 0.3}s`,
-          animationDuration: `${duration}s`,
-        }} />
-      ));
-    case 'rainbow-arc':
-      return <div className="ga-rainbow-arc" />;
-    case 'wave-crash':
-      return Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="ga-wave" style={{
-          animationDelay: `${i * 0.4}s`,
-          animationDuration: `${duration}s`,
-        }} />
-      ));
-    case 'flash-burst':
-      return <div className="ga-flash-overlay" />;
-    case 'spiral-up':
-      return <div className="ga-tornado-bg" />;
-    case 'bullet-burst':
-    case 'explode':
-      return (
-        <>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="ga-explosion-ring" style={{
-              animationDelay: `${i * 0.1}s`,
-              borderColor: color,
-            }} />
-          ))}
-        </>
-      );
-    case 'drive-across':
-    case 'fly-across':
-    case 'sail-across':
-      return (
-        <div className="ga-road-line" style={{ borderColor: `${color}30` }}>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="ga-road-dash" style={{ animationDelay: `${i * 0.2}s` }} />
-          ))}
-        </div>
-      );
-    case 'wheel-spin':
-      return <div className="ga-wheel-bg">🎡</div>;
-    case 'slash':
-      return (
-        <>
-          <div className="ga-slash-line" style={{ borderColor: color, animationDuration: `${duration}s` }} />
-          <div className="ga-slash-line ga-slash-2" style={{ borderColor: color, animationDuration: `${duration}s` }} />
-        </>
-      );
-    default:
-      return <div className="ga-bg-pulse" style={{ background: `radial-gradient(circle, ${color}15, transparent)` }} />;
-  }
-}
-
-// ========== MAIN PAGE ==========
 
 const TIERS = ['I', 'II', 'III', 'IV', 'V'] as const;
 
 export default function GiftAnimationPreview() {
   const [gifts, setGifts] = useState<GiftItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeAnim, setActiveAnim] = useState<{ gift: GiftItem } | null>(null);
+  const [activeGift, setActiveGift] = useState<GiftItem | null>(null);
   const autoPlayRef = useRef(false);
   const [autoPlaying, setAutoPlaying] = useState(false);
   const [filter, setFilter] = useState('');
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   useEffect(() => {
+    preloadGiftSounds();
     const fetchGifts = async () => {
       try {
         const { data, error } = await supabase
@@ -289,11 +147,8 @@ export default function GiftAnimationPreview() {
             .order('coin_price', { ascending: true });
           if (fb) {
             setGifts(fb.map((g: any) => ({
-              id: g.id,
-              name: g.display_name || g.item_key,
-              icon: g.metadata?.icon || '🎁',
-              value: g.coin_price || 0,
-              category: g.metadata?.subcategory,
+              id: g.id, name: g.display_name || g.item_key,
+              icon: g.metadata?.icon || '🎁', value: g.coin_price || 0,
             })));
           }
         }
@@ -307,12 +162,12 @@ export default function GiftAnimationPreview() {
   }, []);
 
   const playGift = useCallback((gift: GiftItem) => {
-    setActiveAnim({ gift });
+    setActiveGift(gift);
   }, []);
 
   const playAll = useCallback(() => {
     const list = filter
-      ? gifts.filter(g => g.name?.toLowerCase().includes(filter.toLowerCase()) || g.icon?.includes(filter))
+      ? gifts.filter(g => g.name?.toLowerCase().includes(filter.toLowerCase()))
       : gifts;
     let idx = 0;
     const next = () => {
@@ -321,9 +176,9 @@ export default function GiftAnimationPreview() {
         autoPlayRef.current = false;
         return;
       }
-      setActiveAnim({ gift: list[idx] });
+      setActiveGift(list[idx]);
       idx++;
-      setTimeout(next, (getDuration(list[idx - 1].value) + 0.4) * 1000);
+      setTimeout(next, (getDuration(list[idx - 1].value) + 0.5) * 1000);
     };
     autoPlayRef.current = true;
     setAutoPlaying(true);
@@ -333,7 +188,7 @@ export default function GiftAnimationPreview() {
   const stopAutoPlay = useCallback(() => {
     autoPlayRef.current = false;
     setAutoPlaying(false);
-    setActiveAnim(null);
+    setActiveGift(null);
   }, []);
 
   const playTier = useCallback((tier: string) => {
@@ -341,9 +196,9 @@ export default function GiftAnimationPreview() {
     let idx = 0;
     const next = () => {
       if (idx >= tierGifts.length) return;
-      setActiveAnim({ gift: tierGifts[idx] });
+      setActiveGift(tierGifts[idx]);
       idx++;
-      setTimeout(next, (getDuration(tierGifts[idx - 1].value) + 0.4) * 1000);
+      setTimeout(next, (getDuration(tierGifts[idx - 1].value) + 0.5) * 1000);
     };
     next();
   }, [gifts]);
@@ -362,7 +217,7 @@ export default function GiftAnimationPreview() {
       <div className="min-h-screen bg-[#080c14] text-white flex items-center justify-center">
         <div className="text-center">
           <div className="text-5xl mb-4 animate-pulse">🎁</div>
-          <div className="text-gray-400">Loading {gifts.length || 'all'} gifts...</div>
+          <div className="text-gray-400">Loading gifts...</div>
         </div>
       </div>
     );
@@ -370,41 +225,58 @@ export default function GiftAnimationPreview() {
 
   return (
     <div className="min-h-screen bg-[#080c14] text-white p-6 lg:p-8">
-      {activeAnim && (
-        <ThemedGiftAnimation
-          key={`${activeAnim.gift.id}-${Date.now()}`}
-          gift={activeAnim.gift}
-          duration={getDuration(activeAnim.gift.value)}
-          onComplete={() => setActiveAnim(null)}
+      {activeGift && (
+        <Gift3DOverlay
+          key={`${activeGift.id}-${Date.now()}`}
+          giftName={activeGift.name}
+          giftIcon={activeGift.icon}
+          giftValue={activeGift.value}
+          duration={getDuration(activeGift.value)}
+          onComplete={() => setActiveGift(null)}
         />
       )}
 
       <header className="mb-8">
-        <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 via-purple-400 to-green-400 bg-clip-text text-transparent">
-          Gift Animation Preview
-        </h1>
+        <div className="flex items-center gap-4 flex-wrap">
+          <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 via-purple-400 to-green-400 bg-clip-text text-transparent">
+            3D Gift Animations
+          </h1>
+          <span className="text-xs px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+            Three.js + Sound
+          </span>
+        </div>
         <p className="text-sm text-gray-400 mt-2">
-          {gifts.length} gifts • Each has a unique themed animation based on its name
+          {gifts.length} gifts • Realistic 3D scenes with per-gift sounds
         </p>
-        <div className="mt-4 max-w-md">
+
+        <div className="mt-4 flex flex-wrap gap-3 items-center">
           <input
             type="text"
             placeholder="Search gifts..."
             value={filter}
             onChange={e => setFilter(e.target.value)}
-            className="w-full px-4 py-2 rounded-lg bg-[#131c30] border border-[#1e2d4a] text-white text-sm placeholder-gray-500 focus:border-cyan-500 focus:outline-none"
+            className="px-4 py-2 rounded-lg bg-[#131c30] border border-[#1e2d4a] text-white text-sm placeholder-gray-500 focus:border-cyan-500 focus:outline-none w-64"
           />
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
+
           {autoPlaying ? (
-            <button onClick={stopAutoPlay} className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500">
+            <button onClick={stopAutoPlay} className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500 text-sm">
               Stop
             </button>
           ) : (
-            <button onClick={playAll} className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-semibold hover:brightness-110">
+            <button onClick={playAll} className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-semibold hover:brightness-110 text-sm">
               Play All ({filteredGifts.length})
             </button>
           )}
+
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className={`px-3 py-2 rounded-lg text-sm font-semibold ${soundEnabled ? 'bg-green-600/20 text-green-400 border border-green-500/30' : 'bg-gray-700/20 text-gray-400 border border-gray-600/30'}`}
+          >
+            {soundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
           {TIERS.map(t => {
             const count = giftsByTier[t]?.length || 0;
             if (!count) return null;
@@ -412,7 +284,7 @@ export default function GiftAnimationPreview() {
               <button
                 key={t}
                 onClick={() => playTier(t)}
-                className="px-3 py-2 rounded-lg text-sm font-semibold hover:brightness-110"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold hover:brightness-110"
                 style={{ background: getTierBg(t), border: `1px solid ${getTierColor(t)}40`, color: getTierColor(t) }}
               >
                 Tier {t} ({count})
@@ -422,14 +294,18 @@ export default function GiftAnimationPreview() {
         </div>
       </header>
 
-      <div className="mb-6 text-xs text-gray-500 flex flex-wrap gap-3">
-        <span>🔴 &lt;500 = 3s</span>
-        <span>🟠 500-1499 = 6s</span>
-        <span>🟡 1500+ = 8s</span>
-        <span className="text-gray-600">|</span>
-        <span>Each gift auto-detects its theme from name/icon</span>
+      {/* 3D scene type legend */}
+      <div className="mb-6 p-3 rounded-lg bg-[#0f1628] border border-[#1e2d4a]">
+        <div className="text-xs text-gray-400 mb-2">3D Scene Types Available:</div>
+        <div className="flex flex-wrap gap-1.5">
+          {['rose', 'heart', 'crown', 'diamond', 'fire', 'car', 'money', 'coin', 'rocket', 'bomb', 'trophy', 'police', 'snow', 'star'].map(s => (
+            <span key={s} className="px-2 py-0.5 rounded text-[10px] bg-[#131c30] text-cyan-400 border border-[#1e2d4a]">{s}</span>
+          ))}
+          <span className="px-2 py-0.5 rounded text-[10px] bg-[#131c30] text-gray-500 border border-[#1e2d4a]">+default for others</span>
+        </div>
       </div>
 
+      {/* Gift grid by tier */}
       {TIERS.map(tier => {
         const tGifts = giftsByTier[tier];
         if (!tGifts?.length) return null;
@@ -437,24 +313,20 @@ export default function GiftAnimationPreview() {
         return (
           <section key={tier} className="mb-8">
             <h2 className="text-lg font-bold mb-3" style={{ color }}>
-              Tier {tier} <span className="text-xs font-normal text-gray-500">
-                {tGifts.length} gifts
-              </span>
+              Tier {tier} <span className="text-xs font-normal text-gray-500">{tGifts.length} gifts</span>
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {tGifts.map(gift => {
-                const theme = detectGiftTheme(gift.name, gift.icon);
-                const animType = getThemeAnimationType(theme);
-                const themeColor = getThemeColor(theme);
+                const sceneType = detectSceneType(gift.name, gift.icon);
                 const duration = getDuration(gift.value);
-                const displayName = formatGiftName(gift);
+                const displayName = formatName(gift);
                 return (
                   <div
                     key={gift.id}
-                    className="rounded-xl border border-[#1e2d4a] bg-[#0f1628] p-4 hover:border-opacity-60 transition-all group"
-                    style={{ borderColor: activeAnim?.gift.id === gift.id ? themeColor : undefined }}
+                    className="rounded-xl border border-[#1e2d4a] bg-[#0f1628] p-4 hover:border-cyan-500/40 transition-all"
+                    style={{ borderColor: activeGift?.id === gift.id ? color : undefined }}
                   >
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-3 mb-3">
                       <span className="text-3xl">{gift.icon || '🎁'}</span>
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-sm truncate">{displayName}</div>
@@ -463,24 +335,18 @@ export default function GiftAnimationPreview() {
                         </div>
                       </div>
                     </div>
-                    {/* Theme tag */}
-                    <div className="mb-3 flex items-center gap-2">
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
-                        style={{ background: `${themeColor}20`, color: themeColor }}
-                      >
-                        {theme}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase" style={{ background: `${color}20`, color }}>
+                        {sceneType}
                       </span>
-                      <span className="text-[10px] text-gray-600">
-                        {animType}
-                      </span>
+                      <span className="text-[10px] text-gray-600">3D scene + sound</span>
                     </div>
                     <button
                       onClick={() => playGift(gift)}
                       className="w-full py-2 rounded-lg text-xs font-bold transition hover:brightness-110"
-                      style={{ background: `${themeColor}20`, border: `1px solid ${themeColor}40`, color: themeColor }}
+                      style={{ background: `${color}20`, border: `1px solid ${color}40`, color }}
                     >
-                      ▶ Preview
+                      ▶ Preview 3D
                     </button>
                   </div>
                 );
@@ -494,7 +360,7 @@ export default function GiftAnimationPreview() {
         <div className="text-center py-20">
           <div className="text-6xl mb-4">🎁</div>
           <h2 className="text-xl font-bold text-gray-400">No gifts found</h2>
-          <p className="text-sm text-gray-500 mt-2">Check your gift_items table in Supabase.</p>
+          <p className="text-sm text-gray-500 mt-2">Check your gift_items table.</p>
         </div>
       )}
     </div>
