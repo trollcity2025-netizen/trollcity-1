@@ -225,7 +225,10 @@ export default function DeckStreamSetup() {
 
       {/* QR Pair Modal */}
       {showPairModal && (
-        <DeckPhonePair onClose={() => setShowPairModal(false)} />
+        <DeckPhonePair
+          onClose={() => setShowPairModal(false)}
+          onPaired={handleStartBroadcast}
+        />
       )}
     </div>
   );

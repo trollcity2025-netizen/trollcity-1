@@ -77,8 +77,7 @@ export default function DeckPairPage() {
         await supabase
           .from('deck_pair_tokens')
           .update({ used: true })
-          .eq('token', token)
-          .catch(() => {});
+          .eq('token', token);
 
         // Fetch user profile
         const { data: profileData } = await supabase
@@ -111,8 +110,7 @@ export default function DeckPairPage() {
             deck_session_started: new Date(now).toISOString(),
             deck_session_expires: new Date(now + SESSION_DURATION_MS).toISOString(),
           })
-          .eq('id', userId)
-          .catch(() => {});
+          .eq('id', userId);
 
         // Notify the desktop via BroadcastChannel that phone is paired
         const channel = new BroadcastChannel(PAIR_CHANNEL_PREFIX + token);

@@ -7,11 +7,12 @@ import { QrCode, RefreshCw, CheckCircle, Loader2, Smartphone, X } from 'lucide-r
 
 interface DeckPhonePairProps {
   onClose: () => void;
+  onPaired?: () => void;
 }
 
 const PAIR_CHANNEL_PREFIX = 'tc-deck-pair-';
 
-export default function DeckPhonePair({ onClose }: DeckPhonePairProps) {
+export default function DeckPhonePair({ onClose, onPaired }: DeckPhonePairProps) {
   const { user } = useAuthStore();
   const { setPhoneLink, syncFromPhone } = useDeckStore();
 
@@ -82,6 +83,10 @@ export default function DeckPhonePair({ onClose }: DeckPhonePairProps) {
           setTimeout(() => {
             channel.close();
             onClose();
+            // Auto-start broadcast after pairing
+            if (onPaired) {
+              onPaired();
+            }
           }, 1500);
         } else if (type === 'phone-sync') {
           syncFromPhone(payload);
