@@ -15,6 +15,7 @@ export default function DeckStreamSetup() {
   const {
     streamConfig,
     session,
+    phoneLink,
     sessionStatus,
     updateStreamConfig,
     triggerBroadcastStart,
@@ -28,8 +29,7 @@ export default function DeckStreamSetup() {
   const [ending, setEnding] = useState(false);
   const [startError, setStartError] = useState('');
 
-  // If session is valid, phone is "connected"
-  const isConnected = sessionStatus === 'active' && session?.isValid;
+  const isConnected = phoneLink.status === 'connected' && phoneLink.phoneReady;
 
   // Sync title changes
   useEffect(() => {
@@ -85,12 +85,12 @@ export default function DeckStreamSetup() {
         </div>
         <div>
           <div className="deck-phone-status-text">
-            {isConnected ? 'Logged In' : 'Not Logged In'}
+            {isConnected ? 'Phone Connected' : 'Phone Not Connected'}
           </div>
           <div className="deck-phone-status-sub">
             {isConnected
-              ? `Signed in as ${session?.userId ? 'your account' : 'user'}. Ready to broadcast.`
-              : 'Log in with your Troll City account to start broadcasting.'}
+              ? 'Your phone is paired and ready. You can start broadcasting.'
+              : 'Waiting for phone connection. Make sure your phone has the broadcast page open.'}
           </div>
         </div>
       </div>
@@ -231,7 +231,7 @@ export default function DeckStreamSetup() {
 
         {!isConnected && !streamConfig.isLive && (
           <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 8 }}>
-            Log in first to start broadcasting.
+            Connect your phone first to start broadcasting.
           </div>
         )}
       </div>

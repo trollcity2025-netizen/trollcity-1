@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/store';
@@ -11,6 +11,9 @@ import { useScreenShare, StreamMode, canScreenShare } from '../../hooks/useScree
 import { GamingSetup } from '../../components/broadcast/GamingSetup';
 import { DraggableCameraOverlay } from '../../components/broadcast/DraggableCameraOverlay';
 import DeckInstallPrompt from '../../components/deck/DeckInstallPrompt';
+import { useDeckPair, DECK_PAIR_STORAGE_KEY } from '../../hooks/useDeckPair';
+import type { DeckPairMessage } from '../../hooks/useDeckPair';
+import { useDeckStore } from '../../stores/deckStore';
 import { toast } from 'sonner';
 import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown';
 import { generateUUID } from '../../lib/uuid';
@@ -58,6 +61,35 @@ export default function SetupPage() {
       setTitle(`${profile.username}'s Live`);
     }
   }, [profile?.username, title]);
+
+  // Listen for deck commands (start/end broadcast from Deck device)
+  const [deckPairCode] = useState(() => localStorage.getItem(DECK_PAIR_STORAGE_KEY));
+  const [deckStartPending, setDeckStartPending] = useState(false);
+  const deckConfigRef = useRef<Record<string, unknown> | null>(null);
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
+  const handleDeckMessage = useCallback((msg: DeckPairMessage) => {
+    if (msg.type === 'deck-start-broadcast') {
+      const config = msg.payload as any;
+      deckConfigRef.current = config;
+      if (config?.title) setTitle(config.title);
+      if (config?.category && config.category in BROADCAST_CATEGORIES) {
+        setCategory(config.category as BroadcastCategoryId);
+      }
+      useDeckStore.getState().updateStreamConfig(config || {});
+      toast.info('Deck is starting broadcast...');
+      setDeckStartPending(true);
+    } else if (msg.type === 'deck-end-broadcast') {
+      toast.info('Deck ended the broadcast.');
+      navigateRef.current('/broadcast/setup');
+    }
+  }, []);
+
+  useDeckPair({
+    pairCode: deckPairCode,
+    onMessage: handleDeckMessage,
+  });
   
   // Category-specific state
   const [selectedReligion, setSelectedReligion] = useState('');
@@ -1266,6 +1298,16 @@ export default function SetupPage() {
       // Navigate to broadcast page
       navigate(`/broadcast/${data.id}`);
 
+      // Notify deck that broadcast started
+      const pairCode = localStorage.getItem(DECK_PAIR_STORAGE_KEY);
+      if (pairCode) {
+        const { sendToDeckPair } = await import('../../hooks/useDeckPair');
+        sendToDeckPair(pairCode, {
+          type: 'phone-stream-started',
+          payload: { streamId: data.id },
+        }).catch(() => {});
+      }
+
       supabase.from('global_events').insert([
         { title: `${profile.username} just went live!`, icon: 'live', priority: 2 },
       ]).then();
@@ -1277,6 +1319,18 @@ export default function SetupPage() {
       isStartingStream.current = false;
     }
   };
+
+  // Trigger broadcast start when deck requests it
+  useEffect(() => {
+    if (deckStartPending) {
+      setDeckStartPending(false);
+      // Small delay to let state (title, category) update from deck config
+      const timer = setTimeout(() => {
+        handleStartStream();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [deckStartPending, handleStartStream]);
 
 
 

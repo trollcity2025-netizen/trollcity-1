@@ -440,28 +440,12 @@ export const useDeckStore = create<DeckState>()(
         }
       },
 
-      syncToPhone: () => {
+      syncToPhone: async () => {
         const { streamConfig } = get();
-        try {
-          const channel = new BroadcastChannel(DECK_SYNC_CHANNEL);
-          channel.postMessage({
-            type: 'deck-sync',
-            payload: streamConfig,
-            timestamp: Date.now(),
-          });
-          channel.close();
-        } catch {
-          // BroadcastChannel not supported
-        }
-
-        try {
-          localStorage.setItem('tc_deck_sync', JSON.stringify({
-            config: streamConfig,
-            timestamp: Date.now(),
-          }));
-        } catch {
-          // localStorage unavailable
-        }
+        await get().sendToDeck({
+          type: 'phone-sync',
+          payload: streamConfig as unknown as Record<string, unknown>,
+        });
       },
 
       syncFromPhone: (config) => {
@@ -480,13 +464,10 @@ export const useDeckStore = create<DeckState>()(
         }
 
         try {
-          const channel = new BroadcastChannel(DECK_SYNC_CHANNEL);
-          channel.postMessage({
+          await get().sendToDeck({
             type: 'deck-start-broadcast',
-            payload: streamConfig,
-            timestamp: Date.now(),
+            payload: streamConfig as unknown as Record<string, unknown>,
           });
-          channel.close();
           return { success: true };
         } catch {
           return { success: false, error: 'Failed to communicate with phone. Please try again.' };
@@ -495,18 +476,13 @@ export const useDeckStore = create<DeckState>()(
 
       triggerBroadcastEnd: async () => {
         try {
-          const channel = new BroadcastChannel(DECK_SYNC_CHANNEL);
-          channel.postMessage({
+          await get().sendToDeck({
             type: 'deck-end-broadcast',
-            timestamp: Date.now(),
           });
-          channel.close();
-
           set((state) => ({
             streamConfig: { ...state.streamConfig, isLive: false, streamId: null },
             phoneLink: { ...state.phoneLink, status: 'connected', streamId: null },
           }));
-
           return { success: true };
         } catch {
           return { success: false, error: 'Failed to end broadcast.' };
