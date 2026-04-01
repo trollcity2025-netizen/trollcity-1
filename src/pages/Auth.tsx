@@ -401,6 +401,30 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
             navigate('/', { replace: true })
           } else {
             toast.success('Login successful! Please complete your profile.')
+
+            // Send referral notification for referred users
+            try {
+              const { data: refProfile } = await supabase
+                .from('user_profiles')
+                .select('referred_by_user_id, username')
+                .eq('id', data.user.id)
+                .maybeSingle()
+              if (refProfile?.referred_by_user_id) {
+                // Import notification helper dynamically
+                const { notifyReferredUserBonus } = await import('../lib/notifications')
+                const { data: referrer } = await supabase
+                  .from('user_profiles')
+                  .select('username')
+                  .eq('id', refProfile.referred_by_user_id)
+                  .maybeSingle()
+                if (referrer?.username) {
+                  await notifyReferredUserBonus(data.user.id, referrer.username)
+                }
+              }
+            } catch (notifErr) {
+              console.warn('[Auth] Could not send referral notification:', notifErr)
+            }
+
             navigate('/profile/setup')
           }
         } else {

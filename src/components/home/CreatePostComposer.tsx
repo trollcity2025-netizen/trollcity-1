@@ -117,7 +117,7 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
   }
 
   return (
-    <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-3`}
+    <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-2`}
       onClick={() => handleRequireAuth('create a post')}
     >
       {imageFile && (
@@ -136,7 +136,7 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
         </div>
       )}
       <div className="flex items-end gap-2">
-        <div className="h-8 w-8 rounded-full bg-white/5 overflow-hidden flex-shrink-0">
+        <div className="h-7 w-7 rounded-full bg-white/5 overflow-hidden flex-shrink-0">
           {profile?.avatar_url ? (
             <img src={profile.avatar_url} alt={profile.username || 'Profile'} className="h-full w-full object-cover" />
           ) : (
@@ -150,7 +150,7 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
             value={content}
             onChange={setContent}
             placeholder="What's happening in the City? Use # to tag users"
-            className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white text-sm placeholder-white/40 focus:outline-none focus:border-purple-400/60 resize-none"
+            className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-1.5 text-white text-sm placeholder-white/40 focus:outline-none focus:border-purple-400/60 resize-none"
             maxLength={5000}
             onFocus={() => handleRequireAuth('create a post')}
           />
@@ -162,9 +162,9 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
               event.stopPropagation()
               handleImagePick()
             }}
-            className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
+            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
           >
-            <Image className="h-4 w-4" />
+            <Image className="h-3.5 w-3.5" />
           </button>
           <div className="relative">
             <button
@@ -174,9 +174,9 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
                 if (!handleRequireAuth('add an emoji')) return
                 setShowEmoji((prev) => !prev)
               }}
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
             >
-              <Smile className="h-4 w-4" />
+              <Smile className="h-3.5 w-3.5" />
             </button>
             {showEmoji && (
               <div className="absolute z-10 bottom-full mb-2 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl">
@@ -205,9 +205,9 @@ export default function CreatePostComposer({ onPostCreated, onRequireAuth }: Cre
               handleSubmit()
             }}
             disabled={submitting || !content.trim()}
-            className="p-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 disabled:opacity-40 text-white"
+            className="p-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 disabled:opacity-40 text-white"
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>

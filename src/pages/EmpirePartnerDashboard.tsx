@@ -1,116 +1,65 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
-import { Users, Coins, CheckCircle2, Copy, Clock } from 'lucide-react'
+import {
+  Users, Coins, CheckCircle2, Copy, Clock, Crown, Shield,
+  ArrowRight, Star, ChevronRight, TrendingUp, AlertCircle
+} from 'lucide-react'
 import { toast } from 'sonner'
 
-interface Referral {
-  id: string
-  referrer_id: string
-  referred_user_id: string
-  referred_at: string
-  reward_status: 'pending' | 'completed' | 'failed'
-  deadline: string
-  referred_user: {
-    username: string
-    avatar_url: string
-    troll_coins: number
-  }
-}
-
-interface ReferralReward {
-  id: string
-  referrer_id: string
-  referred_user_id: string
-  coins_awarded: number
-  rewarded_at: string
-}
-
 interface ReferralStats {
-  totalReferrals: number
-  completedReferrals: number
-  pendingReferrals: number
-  failedReferrals: number
-  totalCoinsEarned: number
+  total_referrals: number
+  qualified_referrals: number
+  pending_referrals: number
+  in_progress_referrals: number
+  is_founding_partner: boolean
+  founding_partner_rank: number | null
+  founding_spots_taken: number
+  founding_spots_total: number
+}
+
+interface ReferralEntry {
+  referred_user_id: string
+  username: string
+  avatar_url: string
+  troll_coins: number
+  total_earned_coins: number
+  onboarding_complete: boolean
+  is_qualified_referral: boolean
+  qualified_referral_at: string | null
+  referred_at: string
+  progress_percent: number
+}
+
+interface ReferrerInfo {
+  referrer_id: string
+  username: string
+  avatar_url: string
 }
 
 export default function EmpirePartnerDashboard() {
   const { profile, user } = useAuthStore()
-  const [referrals, setReferrals] = useState<Referral[]>([])
-  const [rewards, setRewards] = useState<ReferralReward[]>([])
+  const navigate = useNavigate()
   const [stats, setStats] = useState<ReferralStats | null>(null)
+  const [referrals, setReferrals] = useState<ReferralEntry[]>([])
+  const [referrer, setReferrer] = useState<ReferrerInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [referralLink, setReferralLink] = useState('')
 
-  // Real-time subscription channels
-  // Moved inside useEffect
-
-  // Defined here to be used in useEffect
   const loadData = useCallback(async () => {
     if (!user?.id) return
-
     setLoading(true)
     try {
-      // Load referrals with user data
-      const { data: referralsData, error: referralsError } = await supabase
-        .from('referrals')
-        .select(`
-          id,
-          referrer_id,
-          referred_user_id,
-          referred_at,
-          reward_status,
-          deadline,
-          referred_user:user_profiles!referrals_referred_user_id_fkey (
-            username,
-            avatar_url,
-            troll_coins
-          )
-        `)
-        .eq('referrer_id', user.id)
-        .order('referred_at', { ascending: false })
+      const [statsRes, listRes, referrerRes] = await Promise.all([
+        supabase.rpc('get_referral_stats', { p_user_id: user.id }),
+        supabase.rpc('get_referral_list', { p_user_id: user.id }),
+        supabase.rpc('get_my_referrer', { p_user_id: user.id }),
+      ])
 
-      if (referralsError) throw referralsError
-
-      // Transform referrals data
-      const transformedReferrals = (referralsData || []).map((r: any) => ({
-        id: r.id,
-        referrer_id: r.referrer_id,
-        referred_user_id: r.referred_user_id,
-        referred_at: r.referred_at,
-        reward_status: r.reward_status,
-        deadline: r.deadline,
-        referred_user: Array.isArray(r.referred_user) ? r.referred_user[0] : r.referred_user
-      }))
-
-      setReferrals(transformedReferrals)
-
-      // Load rewards
-      const { data: rewardsData, error: rewardsError } = await supabase
-        .from('empire_partner_rewards')
-        .select('*')
-        .eq('referrer_id', user.id)
-        .order('rewarded_at', { ascending: false })
-
-      if (rewardsError) throw rewardsError
-
-      setRewards(rewardsData || [])
-
-      // Calculate stats
-      const totalReferrals = transformedReferrals.length
-      const completedReferrals = transformedReferrals.filter(r => r.reward_status === 'completed').length
-      const pendingReferrals = transformedReferrals.filter(r => r.reward_status === 'pending').length
-      const failedReferrals = transformedReferrals.filter(r => r.reward_status === 'failed').length
-      const totalCoinsEarned = (rewardsData || []).reduce((sum, reward) => sum + reward.coins_awarded, 0)
-
-      setStats({
-        totalReferrals,
-        completedReferrals,
-        pendingReferrals,
-        failedReferrals,
-        totalCoinsEarned
-      })
-
+      if (statsRes.data) setStats(statsRes.data)
+      if (listRes.data) setReferrals(listRes.data)
+      if (referrerRes.data && referrerRes.data.referrer_id) setReferrer(referrerRes.data)
     } catch (error: any) {
       console.error('Error loading referral data:', error)
       toast.error('Failed to load referral data')
@@ -120,212 +69,31 @@ export default function EmpirePartnerDashboard() {
   }, [user?.id])
 
   useEffect(() => {
-    let referralsChannel: any = null
-    let rewardsChannel: any = null
-
-    if (user?.id && profile) {
-      // Check if user is an approved Empire Partner
-      if (profile.empire_role !== 'partner') {
-        // Don't redirect, just show apply button
-        return
-      }
-
+    if (user?.id) {
       loadData()
-      // Generate referral link
-      const baseUrl = window.location.origin
-      setReferralLink(`${baseUrl}/auth?ref=${user.id}`)
+      setReferralLink(`${window.location.origin}/auth?ref=${user.id}`)
 
-      // Subscribe to referrals table changes
-      referralsChannel = supabase
-        .channel('referrals_changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'referrals',
-            filter: `referrer_id=eq.${user.id}`
-          },
-          (payload) => {
-            console.log('Referrals change detected:', payload)
-            loadData() // Reload all data when referrals change
-          }
-        )
+      const channel = supabase
+        .channel('referral_dashboard_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, () => loadData())
         .subscribe()
 
-      // Subscribe to rewards table changes
-      rewardsChannel = supabase
-        .channel('rewards_changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'empire_partner_rewards',
-            filter: `referrer_id=eq.${user.id}`
-          },
-          (payload) => {
-            console.log('Rewards change detected:', payload)
-            loadData() // Reload all data when rewards change
-          }
-        )
-        .subscribe()
+      return () => { supabase.removeChannel(channel) }
     }
-
-    // Cleanup function
-    return () => {
-      if (referralsChannel) {
-        supabase.removeChannel(referralsChannel)
-      }
-      if (rewardsChannel) {
-        supabase.removeChannel(rewardsChannel)
-      }
-    }
-  }, [user?.id, profile, loadData])
-
-  useEffect(() => {
-    // Subscribe to wallets table changes for referred users
-    // Only subscribe if we have referrals
-    const referredUserIds = referrals.map(r => r.referred_user_id)
-    
-    if (referredUserIds.length === 0) return
-
-    const walletsChannel = supabase
-      .channel('wallets_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'wallets',
-          filter: `user_id=in.(${referredUserIds.join(',')})`
-        },
-        (payload) => {
-          console.log('Wallet change detected for referred user:', payload)
-          loadData() // Reload data when referred users' wallets change
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(walletsChannel)
-    }
-  }, [referrals, loadData])
-  
-  // Show apply button if not approved
-  if (profile?.empire_role !== 'partner') {
-    return (
-      <div className="min-h-screen bg-[#0A0814] text-white p-6">
-        <div className="max-w-4xl mx-auto text-center py-20">
-          <h1 className="text-4xl font-bold mb-4">Empire Partner Program</h1>
-          <p className="text-gray-400 mb-8">You must be an approved Empire Partner to access the referral dashboard.</p>
-          <a
-            href="/empire-partner/apply"
-            className="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-lg font-semibold"
-          >
-            Apply Now
-          </a>
-        </div>
-      </div>
-    )
-  }
-
-
+  }, [user?.id, loadData])
 
   const copyReferralLink = () => {
     navigator.clipboard.writeText(referralLink)
     toast.success('Referral link copied!')
   }
 
-  const updateReferralStatus = async (referralId: string, newStatus: 'completed' | 'failed') => {
-    if (!user?.id) return
-
-    try {
-      const { error } = await supabase
-        .from('referrals')
-        .update({
-          reward_status: newStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', referralId)
-        .eq('referrer_id', user.id) // Ensure user can only update their own referrals
-
-      if (error) throw error
-
-      // If completing a referral, also create the reward record
-      if (newStatus === 'completed') {
-        const referral = referrals.find(r => r.id === referralId)
-        if (referral) {
-          const { error: rewardError } = await supabase
-            .from('empire_partner_rewards')
-            .insert({
-              referrer_id: user.id,
-              referred_user_id: referral.referred_user_id,
-              coins_awarded: 10000
-            })
-
-          if (rewardError) {
-            console.error('Error creating reward record:', rewardError)
-            // Don't fail the whole operation if reward creation fails
-          } else {
-            // Award coins using Troll Bank RPC (Centralized Economy)
-            const { error: rpcError } = await supabase.rpc('troll_bank_credit_coins', {
-              p_user_id: user.id,
-              p_coins: 10000,
-              p_bucket: 'promo',
-              p_source: 'referral_reward',
-              p_ref_id: referralId,
-              p_metadata: { referral_id: referralId, referred_user: referral.referred_user_id }
-            })
-
-            if (rpcError) {
-              console.error('Error crediting coins via Troll Bank:', rpcError)
-              toast.error('Failed to credit coins to your balance')
-            } else {
-               // Update legacy wallets table for dashboard compatibility if needed
-               const { data: currentWallet } = await supabase
-                 .from('wallets')
-                 .select('troll_coins')
-                 .eq('user_id', user.id)
-                 .single()
-   
-               if (currentWallet) {
-                 await supabase
-                   .from('wallets')
-                   .update({
-                     troll_coins: currentWallet.troll_coins + 10000,
-                     updated_at: new Date().toISOString()
-                   })
-                   .eq('user_id', user.id)
-               } else {
-                 await supabase
-                   .from('wallets')
-                   .insert({
-                     user_id: user.id,
-                     troll_coins: 10000,
-                     updated_at: new Date().toISOString()
-                   })
-               }
-            }
-          }
-        }
-      }
-
-      toast.success(`Referral ${newStatus === 'completed' ? 'completed' : 'marked as failed'}`)
-      loadData() // Refresh data
-    } catch (error: any) {
-      console.error('Error updating referral status:', error)
-      toast.error('Failed to update referral status')
-    }
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0A0814] text-white p-6">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <div className="text-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
-            <p className="mt-4 text-gray-400">Loading referral data...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto" />
+            <p className="mt-4 text-gray-400">Loading Empire Partner data...</p>
           </div>
         </div>
       </div>
@@ -334,210 +102,221 @@ export default function EmpirePartnerDashboard() {
 
   return (
     <div className="min-h-screen bg-[#0A0814] text-white p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-            Troll Empire Partner Program
+        <div>
+          <button onClick={() => navigate('/my-earnings')} className="text-sm text-slate-400 hover:text-white mb-2 flex items-center gap-1">
+            <ArrowRight className="w-3 h-3 rotate-180" /> Back to Earnings
+          </button>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            Empire Partner Program
           </h1>
-          <p className="text-gray-400">Earn 10,000 coins when your referrals reach 40,000 troll_coins within 21 days</p>
+          <p className="text-slate-400 mt-1">Earn $10 for every qualified referral. First 15 get +25% lifetime bonus.</p>
         </div>
 
+        {/* Referred User Banner */}
+        {referrer && (
+          <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <Star className="w-5 h-5 text-purple-400" />
+              <div>
+                <p className="text-sm font-semibold text-purple-300">
+                  Referred by @{referrer.username}
+                </p>
+                <p className="text-xs text-zinc-400">
+                  You receive a +2% automatic cashout bonus. Complete onboarding and earn 5,000 coins to fully activate.
+                </p>
+              </div>
+            </div>
+            {profile && !profile.onboarding_complete && (
+              <div className="mt-3 flex items-center gap-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-yellow-400" />
+                <span className="text-xs text-yellow-300">Complete your profile to activate your referral bonus.</span>
+                <button onClick={() => navigate('/profile/setup')} className="ml-auto text-xs text-yellow-400 hover:text-yellow-300">
+                  Complete Profile <ChevronRight className="w-3 h-3 inline" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <Users className="w-6 h-6 text-purple-400" />
-              <h3 className="text-lg font-semibold">Total Referrals</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Users className="w-5 h-5 text-purple-400" />
+              <span className="text-xs text-zinc-400">Total Referrals</span>
             </div>
-            <p className="text-3xl font-bold">{stats?.totalReferrals || 0}</p>
-            <p className="text-sm text-gray-400 mt-2">Users you&apos;ve recruited</p>
+            <p className="text-2xl font-bold">{stats?.total_referrals || 0}</p>
           </div>
-
-          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <CheckCircle2 className="w-6 h-6 text-green-400" />
-              <h3 className="text-lg font-semibold">Completed</h3>
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 className="w-5 h-5 text-green-400" />
+              <span className="text-xs text-zinc-400">Qualified</span>
             </div>
-            <p className="text-3xl font-bold">{stats?.completedReferrals || 0}</p>
-            <p className="text-sm text-gray-400 mt-2">Qualified referrals</p>
+            <p className="text-2xl font-bold text-green-400">{stats?.qualified_referrals || 0}</p>
+            <p className="text-[10px] text-zinc-500">${((stats?.qualified_referrals || 0) * 10).toFixed(2)} earned</p>
           </div>
-
-          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <Clock className="w-6 h-6 text-yellow-400" />
-              <h3 className="text-lg font-semibold">Pending</h3>
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="w-5 h-5 text-yellow-400" />
+              <span className="text-xs text-zinc-400">Pending</span>
             </div>
-            <p className="text-3xl font-bold">{stats?.pendingReferrals || 0}</p>
-            <p className="text-sm text-gray-400 mt-2">Within 3-week window</p>
+            <p className="text-2xl font-bold text-yellow-400">{stats?.pending_referrals || 0}</p>
+            <p className="text-[10px] text-zinc-500">awaiting onboarding</p>
           </div>
-
-          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <Coins className="w-6 h-6 text-yellow-400" />
-              <h3 className="text-lg font-semibold">Total Earned</h3>
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-5 h-5 text-blue-400" />
+              <span className="text-xs text-zinc-400">In Progress</span>
             </div>
-            <p className="text-3xl font-bold">{stats?.totalCoinsEarned?.toLocaleString() || 0}</p>
-            <p className="text-sm text-gray-400 mt-2">Coins from referrals</p>
+            <p className="text-2xl font-bold text-blue-400">{stats?.in_progress_referrals || 0}</p>
+            <p className="text-[10px] text-zinc-500">earning coins</p>
+          </div>
+        </div>
+
+        {/* Founding Partner Status */}
+        {stats?.is_founding_partner ? (
+          <div className="bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-amber-500/10 border border-amber-500/20 rounded-xl p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-yellow-600 flex items-center justify-center">
+                <Shield className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-amber-300">Founding Empire Partner #{stats.founding_partner_rank}</p>
+                <p className="text-sm text-zinc-400">You earn +25% on all cashouts for life.</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center">
+                <Crown className="w-6 h-6 text-zinc-500" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-zinc-300">Founding Empire Partner</p>
+                <p className="text-xs text-zinc-500">
+                  {stats && stats.founding_spots_taken >= 15
+                    ? 'All 15 spots have been claimed.'
+                    : `${stats?.founding_spots_taken || 0} of 15 spots claimed. Get your first qualified referral to claim one.`
+                  }
+                </p>
+                <div className="w-full h-2 bg-zinc-800 rounded-full mt-2 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 to-yellow-500 rounded-full"
+                    style={{ width: `${((stats?.founding_spots_taken || 0) / 15) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* How It Works */}
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+          <h2 className="text-lg font-bold mb-4">How It Works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-zinc-800/30 rounded-lg">
+              <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center mx-auto mb-2">
+                <span className="text-purple-400 font-bold">1</span>
+              </div>
+              <p className="text-sm font-medium text-white">Share Your Link</p>
+              <p className="text-xs text-zinc-500 mt-1">Copy and share your unique referral link.</p>
+            </div>
+            <div className="text-center p-4 bg-zinc-800/30 rounded-lg">
+              <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center mx-auto mb-2">
+                <span className="text-purple-400 font-bold">2</span>
+              </div>
+              <p className="text-sm font-medium text-white">They Complete Onboarding</p>
+              <p className="text-xs text-zinc-500 mt-1">Referred user sets up their profile.</p>
+            </div>
+            <div className="text-center p-4 bg-zinc-800/30 rounded-lg">
+              <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center mx-auto mb-2">
+                <span className="text-purple-400 font-bold">3</span>
+              </div>
+              <p className="text-sm font-medium text-white">They Earn 5,000 Coins</p>
+              <p className="text-xs text-zinc-500 mt-1">You earn $10. They get +2% cashout bonus.</p>
+            </div>
           </div>
         </div>
 
         {/* Referral Link */}
-        <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Your Referral Link</h2>
-          <div className="flex gap-3">
+        <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5">
+          <h2 className="text-lg font-bold mb-3">Your Referral Link</h2>
+          <div className="flex gap-2">
             <input
               type="text"
               value={referralLink}
               readOnly
-              className="flex-1 bg-[#0A0814] border border-[#2C2C2C] rounded-lg px-4 py-2 text-sm"
+              className="flex-1 bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-4 py-2 text-sm text-zinc-300 font-mono"
             />
-            <button
-              onClick={copyReferralLink}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg flex items-center gap-2"
-            >
-              <Copy className="w-4 h-4" />
-              Copy
+            <button onClick={copyReferralLink} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors">
+              <Copy className="w-4 h-4" /> Copy
             </button>
           </div>
-          <p className="text-sm text-gray-400 mt-2">
-            Share this link to recruit new users. You&apos;ll earn 10,000 coins when they reach 40,000 troll_coins within 21 days.
-          </p>
         </div>
 
-        {/* Referrals Table */}
-        <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Your Referrals</h2>
+        {/* Referral List */}
+        <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5">
+          <h2 className="text-lg font-bold mb-4">Your Referrals ({referrals.length})</h2>
           {referrals.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No referrals yet. Share your referral link to start earning!</p>
+            <div className="text-center py-12 text-zinc-500">
+              <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No referrals yet. Share your link to start earning!</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {referrals.map((referral) => {
-                const daysRemaining = Math.max(0, Math.ceil((new Date(referral.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-                const progress = Math.min(100, (referral.referred_user?.troll_coins || 0) / 40000 * 100)
-                const isExpired = new Date(referral.deadline) < new Date()
-
-                return (
-                  <div key={referral.id} className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={referral.referred_user?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${referral.referred_user?.username}`}
-                          alt={referral.referred_user?.username}
-                          className="w-12 h-12 rounded-full"
-                        />
-                        <div>
-                          <div className="font-semibold text-white">{referral.referred_user?.username || 'Unknown'}</div>
-                          <div className="text-sm text-gray-400">
-                            Joined {new Date(referral.referred_at).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {referral.reward_status === 'completed' && (
-                          <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">
-                            Completed
-                          </span>
-                        )}
-                        {referral.reward_status === 'pending' && !isExpired && (
-                          <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-sm font-medium">
-                            Pending
-                          </span>
-                        )}
-                        {referral.reward_status === 'failed' && (
-                          <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm font-medium">
-                            Failed
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">troll_coins Progress</span>
-                        <span className="text-white font-medium">
-                          {(referral.referred_user?.troll_coins || 0).toLocaleString()} / 40,000
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-700 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progress}%` }}
-                        ></div>
-                      </div>
-                      <div className="flex justify-between items-center text-xs text-gray-400">
-                        <span>
-                          {referral.reward_status === 'pending' && !isExpired
-                            ? `${daysRemaining} days remaining`
-                            : referral.reward_status === 'completed'
-                            ? 'Qualified!'
-                            : 'Expired'
-                          }
-                        </span>
-                        <span>
-                          {progress >= 100 ? 'Target reached!' : `${Math.round(progress)}% complete`}
-                        </span>
-                      </div>
-
-                      {/* Admin override buttons for pending referrals */}
-                      {referral.reward_status === 'pending' && (
-                        <div className="flex gap-2 mt-3">
-                          <button
-                            onClick={() => updateReferralStatus(referral.id, 'completed')}
-                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
-                          >
-                            Complete
-                          </button>
-                          <button
-                            onClick={() => updateReferralStatus(referral.id, 'failed')}
-                            className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors"
-                          >
-                            Fail
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Rewards History */}
-        {rewards.length > 0 && (
-          <div className="bg-[#141414] border border-[#2C2C2C] rounded-xl p-6">
-            <h2 className="text-xl font-semibold mb-4">Rewards History</h2>
             <div className="space-y-3">
-              {rewards.map((reward) => (
-                <div
-                  key={reward.id}
-                  className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4 flex items-center justify-between"
-                >
-                  <div>
-                    <p className="font-medium">
-                      Referral reward for qualifying user
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      {new Date(reward.rewarded_at).toLocaleDateString()} • Automatic reward
-                    </p>
+              {referrals.map((ref) => (
+                <div key={ref.referred_user_id} className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={ref.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${ref.username}`}
+                        alt={ref.username}
+                        className="w-10 h-10 rounded-full"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">@{ref.username}</span>
+                          {ref.is_qualified_referral && (
+                            <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full text-[10px] font-bold">Qualified</span>
+                          )}
+                          {!ref.onboarding_complete && (
+                            <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full text-[10px] font-bold">Onboarding</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-500">
+                          Joined {new Date(ref.referred_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-white">{ref.troll_coins.toLocaleString()} <span className="text-zinc-500 font-normal">/ 5,000</span></p>
+                      <p className="text-xs text-zinc-500">{ref.progress_percent}% complete</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-yellow-400">
-                      +{reward.coins_awarded.toLocaleString()} coins
-                    </p>
-                    <p className="text-xs text-gray-400">Empire Partner reward</p>
+                  <div className="w-full h-2 bg-zinc-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        ref.is_qualified_referral ? 'bg-green-500' : 'bg-gradient-to-r from-purple-500 to-pink-500'
+                      }`}
+                      style={{ width: `${ref.progress_percent}%` }}
+                    />
                   </div>
+                  {!ref.is_qualified_referral && (
+                    <p className="text-[10px] text-zinc-500 mt-1.5">
+                      {ref.onboarding_complete
+                        ? `Needs ${(5000 - ref.troll_coins).toLocaleString()} more coins to qualify.`
+                        : 'Must complete onboarding first, then earn 5,000 coins.'}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
 }
-

@@ -23,6 +23,7 @@ import {
 } from '../../config/broadcastCategories'
 import { useBattleSubscriber } from '../../hooks/useBattleSubscriber'
 import FiveVFiveBattleOverlay from '../../components/broadcast/FiveVFiveBattleOverlay'
+import BattleGiftPanel from '../../components/broadcast/BattleGiftPanel'
 
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -55,6 +56,7 @@ function ViewerPage() {
 
   const [isChatOpen, setIsChatOpen] = useState(true)
   const [viewerCount, setViewerCount] = useState(0)
+  const [battleData, setBattleData] = useState<any>(null)
   
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   const giftChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
@@ -71,6 +73,35 @@ function ViewerPage() {
 
   // Battle subscriber - detects when stream enters battle mode and subscribes
   const { state: battleSubscriberState } = useBattleSubscriber(stream)
+
+  // Fetch battle data when stream enters battle mode
+  useEffect(() => {
+    if (!stream?.is_battle || !stream?.battle_id) {
+      setBattleData(null);
+      return;
+    }
+    if (battleData?.id === stream.battle_id) return;
+
+    const fetchBattle = async () => {
+      const { data } = await supabase
+        .from('battles')
+        .select('*')
+        .eq('id', stream.battle_id)
+        .maybeSingle();
+      if (data) {
+        const [cStream, oStream] = await Promise.all([
+          supabase.from('streams').select('user_id').eq('id', data.challenger_stream_id).maybeSingle(),
+          supabase.from('streams').select('user_id').eq('id', data.opponent_stream_id).maybeSingle(),
+        ]);
+        setBattleData({
+          ...data,
+          challenger_user_id: cStream?.data?.user_id,
+          opponent_user_id: oStream?.data?.user_id,
+        });
+      }
+    };
+    fetchBattle();
+  }, [stream?.is_battle, stream?.battle_id]);
 
   // Set broadcast mode to disable TrollEngine when watching a broadcast
   useEffect(() => {
@@ -374,13 +405,15 @@ function ViewerPage() {
         
         console.log('[ViewerPage] ✅ Viewer connected to LiveKit room successfully');
         
-        // Get existing participants
-        const existingParticipants = Array.from(room.participants.values());
-        setRemoteParticipants(existingParticipants);
-        
-        if (stream?.user_id && existingParticipants.length > 0) {
-          setUserIdToParticipant(prev => ({ ...prev, [stream.user_id]: existingParticipants[0] }));
-        }
+          // Get existing participants (LiveKit v2.x uses remoteParticipants)
+          const existingParticipants = room.remoteParticipants
+            ? Array.from(room.remoteParticipants.values()) as RemoteParticipant[]
+            : [];
+          setRemoteParticipants(existingParticipants);
+          
+          if (stream?.user_id && existingParticipants.length > 0) {
+            setUserIdToParticipant(prev => ({ ...prev, [stream.user_id]: existingParticipants[0] }));
+          }
         
       } catch (err) {
         console.error('[ViewerPage] LiveKit init error:', err);
@@ -399,6 +432,106 @@ function ViewerPage() {
       hasJoinedRef.current = false;
     };
   }, [streamId, stream?.user_id, user?.id]);
+
+  /** BATTLE ROOM SWITCHING - Join shared battle room so viewer can see both hosts' video */
+  const prevBattleIdRef = useRef<string | null>(null);
+  const originalRoomRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const isBattle = stream?.is_battle;
+    const battleId = stream?.battle_id;
+
+    if (isBattle && battleId && battleId !== prevBattleIdRef.current) {
+      prevBattleIdRef.current = battleId;
+      if (!originalRoomRef.current && streamId) {
+        originalRoomRef.current = streamId;
+      }
+
+      const battleRoomName = `battle-${battleId}`;
+      const currentRoom = roomRef.current;
+
+      const switchToBattleRoom = async () => {
+        try {
+          if (currentRoom) {
+            try { currentRoom.disconnect().catch(() => {}); } catch {}
+          }
+
+          const viewerIdentity = `viewer-${user?.id || 'anon'}-${Date.now()}`;
+          const { data, error } = await supabase.functions.invoke('livekit-token', {
+            body: {
+              room: battleRoomName,
+              identity: viewerIdentity,
+              name: profile?.username || 'Viewer',
+              role: 'audience',
+              isHost: false
+            }
+          });
+          if (error || !data?.token) {
+            console.warn('[ViewerPage] Could not get battle room token:', error);
+            return;
+          }
+
+          const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud';
+          const newRoom = new Room({ adaptiveStream: true, dynacast: true });
+
+          newRoom.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => {
+            console.log('[ViewerPage][BattleRoom] Participant connected:', p.identity);
+            setRemoteParticipants(prev => {
+              const exists = prev.find(pp => pp.identity === p.identity);
+              if (exists) return prev;
+              return [...prev, p];
+            });
+          });
+          newRoom.on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => {
+            console.log('[ViewerPage][BattleRoom] Participant disconnected:', p.identity);
+            setRemoteParticipants(prev => prev.filter(pp => pp.identity !== p.identity));
+          });
+          newRoom.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
+            console.log('[ViewerPage][BattleRoom] Track subscribed:', track.kind, 'from', participant.identity);
+            setRemoteParticipants(prev => {
+              const exists = prev.find(pp => pp.identity === participant.identity);
+              if (exists) return prev.map(pp => pp.identity === participant.identity ? participant : pp);
+              return [...prev, participant];
+            });
+          });
+          newRoom.on(RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
+            console.log('[ViewerPage][BattleRoom] Track unsubscribed:', track.kind, 'from', participant.identity);
+            setRemoteParticipants(prev => [...prev]);
+          });
+
+          await newRoom.connect(livekitUrl, data.token);
+          roomRef.current = newRoom;
+
+          // Use remoteParticipants (LiveKit v2.x API) to get existing participants
+          const existingParticipants = newRoom.remoteParticipants
+            ? Array.from(newRoom.remoteParticipants.values())
+            : [];
+          console.log('[ViewerPage][BattleRoom] Existing participants on connect:', existingParticipants.length);
+          setRemoteParticipants(existingParticipants);
+
+          console.log('[ViewerPage] ✅ Switched to battle room:', battleRoomName);
+        } catch (err) {
+          console.error('[ViewerPage] Battle room switch error:', err);
+        }
+      };
+
+      switchToBattleRoom();
+
+    } else if (!isBattle && prevBattleIdRef.current && originalRoomRef.current) {
+      prevBattleIdRef.current = null;
+      const originalRoom = originalRoomRef.current;
+      originalRoomRef.current = null;
+
+      const currentRoom = roomRef.current;
+      if (currentRoom) {
+        try { currentRoom.disconnect().catch(() => {}); } catch {}
+      }
+
+      hasJoinedRef.current = false;
+      setRemoteParticipants([]);
+      setStream((prev: any) => prev ? { ...prev } : prev);
+    }
+  }, [stream?.is_battle, stream?.battle_id]);
 
   /** REALTIME STREAM UPDATES */
   useEffect(() => {
@@ -469,7 +602,9 @@ function ViewerPage() {
                 total_likes: payload.new.total_likes,
                 seat_price: payload.new.seat_price,
                 status: payload.new.status,
-                is_live: payload.new.is_live
+                is_live: payload.new.is_live,
+                is_battle: payload.new.is_battle,
+                battle_id: payload.new.battle_id
               };
             });
             
@@ -938,6 +1073,21 @@ function ViewerPage() {
               }}
             />
           </>
+        }
+        
+        battleGiftPanel={
+          battleSubscriberState.phase !== 'idle' && battleData ? (
+            <BattleGiftPanel
+              streamId={streamId || ''}
+              battleId={battleData.id}
+              challengerStreamId={battleData.challenger_stream_id || ''}
+              opponentStreamId={battleData.opponent_stream_id || ''}
+              challengerHostId={battleData.challenger_user_id || ''}
+              opponentHostId={battleData.opponent_user_id || ''}
+              challengerTitle="Side A"
+              opponentTitle="Side B"
+            />
+          ) : undefined
         }
         
         modals={

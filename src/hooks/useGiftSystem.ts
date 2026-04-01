@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { generateUUID } from '../lib/uuid';
 import { OFFICIAL_GIFTS } from '../lib/giftConstants';
 import { notifyGiftReceived } from '../lib/notifications';
+import { useMissionProgress } from './useMissionProgress';
 
 // Calculate discount based on trollmonds balance
 // 10% discount per 100 trollmonds (e.g., 200 trollmonds = 20% off)
@@ -49,6 +50,7 @@ export function useGiftSystem(
   const [giftsDisabled, setGiftsDisabled] = useState(false);
   const [giftsDisabledReason, setGiftsDisabledReason] = useState<string | null>(null);
   const { user } = useAuthStore();
+  const { trackGiftSent } = useMissionProgress(streamId);
 
   // Simple client-side circuit breaker
   const circuitRef = useRef<{ openUntil: number }>({ openUntil: 0 });
@@ -369,10 +371,15 @@ export function useGiftSystem(
         
         // XP is now granted server-side within send_premium_gift to prevent farming exploits
         // Client-side XP calls removed.
-        
-        // NO manual insert into stream_gifts. 
+
+        // NO manual insert into stream_gifts.
         // The ledger processor will handle history and stats.
-        
+
+        // Track mission progress
+        if (streamId) {
+          trackGiftSent(gift.coinCost * quantity);
+        }
+
         return true;
       } else {
         toast.error(data?.message || "Failed to send gift");

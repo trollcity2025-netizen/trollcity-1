@@ -8,6 +8,7 @@ import { useXPStore } from '../stores/useXPStore'
 import { useCreditScore } from '../lib/hooks/useCreditScore'
 import CreditScoreBadge from '../components/CreditScoreBadge'
 import { CreatorSeasonalGoals } from '../components/CreatorSeasonalGoals'
+import EmpirePartnerSection from '../components/empire/EmpirePartnerSection'
 import { Crown, Sword, Trophy, Coins, Star, Shield, Zap, ShoppingBag, Store, Package, DollarSign, TrendingUp } from 'lucide-react'
 import { STORE_USD_PER_COIN } from '../lib/coinMath'
 
@@ -373,6 +374,11 @@ export default function Stats() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* EMPIRE PARTNER PROGRAM */}
+            <div className="lg:col-span-2">
+              <EmpirePartnerSection />
             </div>
 
             {/* BADGES */}

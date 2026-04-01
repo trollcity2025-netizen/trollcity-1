@@ -4,6 +4,9 @@ import { supabase } from '../../lib/supabase';
 import { EffectConfig } from '../../lib/entranceEffects';
 import GiftAnimationOverlay from './GiftAnimationOverlay';
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime';
+import EnhancedJoinExperience from '../live/EnhancedJoinExperience';
+import AudioQueueManager from '../live/AudioQueueManager';
+import { BroadcastAudioSettings } from '../../types/liveStreaming';
 
 interface BroadcastEffectsLayerProps {
   streamId: string;
@@ -17,8 +20,23 @@ interface ActiveEffect {
   effect: EffectConfig;
 }
 
+const DEFAULT_AUDIO_SETTINGS: BroadcastAudioSettings = {
+  stream_id: '',
+  voice_enabled: true,
+  custom_audio_enabled: true,
+  min_level_for_voice: 200,
+  min_level_for_custom: 500,
+  cooldown_seconds: 10,
+  max_queue_size: 20,
+  stream_mode: 'normal',
+  muted_users: [],
+};
+
 export default function BroadcastEffectsLayer({ streamId, recentGifts = [], onGiftAnimationComplete }: BroadcastEffectsLayerProps) {
   const [activeEffects, setActiveEffects] = useState<ActiveEffect[]>([]);
+  const [showEnhancedJoin, setShowEnhancedJoin] = useState(false);
+  const [_userLevels, setUserLevels] = useState<Map<string, number>>(new Map());
+  const [_joinTypes, setJoinTypes] = useState<Map<string, 'standard' | 'enhanced'>>(new Map());
   const effectBufferRef = useRef<ActiveEffect[]>([]);
   const shownUsersRef = useRef<Set<string>>(new Set());
   const previousUserIdsRef = useRef<Set<string>>(new Set());
@@ -71,18 +89,34 @@ export default function BroadcastEffectsLayer({ streamId, recentGifts = [], onGi
             // Find the presence data for this user
             Object.values(state).forEach((presences: any) => {
               presences.forEach((p: any) => {
-                if (p.user_id === userId && p.entrance_effect) {
-                  const effect = p.entrance_effect as EffectConfig;
-                  const id = Math.random().toString(36).substring(7);
-                  
-                  // Mark this user as shown
-                  shownUsersRef.current.add(userId);
-                  
-                  effectBufferRef.current.push({
-                    id,
-                    username: p.username,
-                    effect
-                  });
+                if (p.user_id === userId) {
+                  const level = p.level || 1;
+
+                  // Track user level
+                  setUserLevels(prev => new Map(prev).set(userId, level));
+
+                  // If level >= 200, trigger EnhancedJoinExperience with voice-over
+                  if (level >= 200) {
+                    setJoinTypes(prev => new Map(prev).set(userId, 'enhanced'));
+                    setShowEnhancedJoin(true);
+                  } else {
+                    setJoinTypes(prev => new Map(prev).set(userId, 'standard'));
+                  }
+
+                  // Always show the entrance effect via EffectRenderer
+                  if (p.entrance_effect) {
+                    const effect = p.entrance_effect as EffectConfig;
+                    const id = Math.random().toString(36).substring(7);
+
+                    // Mark this user as shown
+                    shownUsersRef.current.add(userId);
+
+                    effectBufferRef.current.push({
+                      id,
+                      username: p.username,
+                      effect
+                    });
+                  }
                 }
               });
             });
@@ -106,6 +140,10 @@ export default function BroadcastEffectsLayer({ streamId, recentGifts = [], onGi
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden z-[40]">
+      <EnhancedJoinExperience
+        streamId={streamId}
+        isVisible={showEnhancedJoin}
+      />
       <GiftAnimationOverlay 
         gifts={recentGifts}
         onAnimationComplete={onGiftAnimationComplete}
@@ -115,6 +153,10 @@ export default function BroadcastEffectsLayer({ streamId, recentGifts = [], onGi
           <EffectRenderer key={id} username={username} effect={effect} />
         ))}
       </AnimatePresence>
+      <AudioQueueManager
+        streamId={streamId}
+        settings={{ ...DEFAULT_AUDIO_SETTINGS, stream_id: streamId }}
+      />
     </div>
   );
 }

@@ -1,19 +1,20 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../lib/store'
-import { 
-  ClipboardList, 
-  CreditCard, 
-  Gift, 
-  AlertTriangle, 
-  FileText, 
+import {
+  ClipboardList,
+  CreditCard,
+  Gift,
+  AlertTriangle,
+  FileText,
   LogOut,
   Shield,
   Users,
   Crown,
   BookOpen,
   DollarSign,
-  MapPin
+  MapPin,
+  Network
 } from 'lucide-react'
 import ExecutiveIntakeList from '../admin/components/shared/ExecutiveIntakeList'
 import CashoutRequestsList from '../admin/components/shared/CashoutRequestsList'
@@ -30,8 +31,9 @@ import ProposalManagementPanel from '../admin/components/shared/ProposalManageme
 import CashoutForecastPanel from './components/CashoutForecastPanel'
 import NeighborApprovals from './components/NeighborApprovals'
 import CityAdsManager from './components/CityAdsManager'
+import EmpirePartnerAdminPanel from './components/EmpirePartnerAdminPanel'
 
-type Tab = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors' | 'promo_ads'
+type Tab = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors' | 'promo_ads' | 'empire_partners'
 
 interface TabInfo {
   id: Tab
@@ -57,6 +59,7 @@ const tabs: TabInfo[] = [
   { id: 'alerts', label: 'Alerts', icon: <AlertTriangle className="w-4 h-4" />, color: 'red' },
   { id: 'staff', label: 'Staff', icon: <Users className="w-4 h-4" />, color: 'purple' },
   { id: 'promo_ads', label: 'Promo Ads', icon: <FileText className="w-4 h-4" />, color: 'orange' },
+  { id: 'empire_partners', label: 'Empire Partners', icon: <Network className="w-4 h-4" />, color: 'pink' },
 ]
 
 const getColorClasses = (color: string, active: boolean) => {
@@ -219,6 +222,12 @@ export default function SecretaryConsole() {
               <p className="text-slate-400">Create and manage Troll City promotional ads.</p>
             </div>
             <CityAdsManager />
+          </div>
+        )
+      case 'empire_partners':
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <EmpirePartnerAdminPanel />
           </div>
         )
       default:

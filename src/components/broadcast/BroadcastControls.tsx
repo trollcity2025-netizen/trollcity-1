@@ -680,13 +680,13 @@ function OrbBtn({ active, onClick, icon: Icon, label, glow, size, disabled }: an
                 ? "bg-yellow-500/20 border-yellow-500/40 text-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.3)] animate-pulse"
                 : active
                   ? "bg-white/15 border-white/25 text-white shadow-lg"
-                  : "bg-black/40 border-white/10 text-white/50 hover:text-white hover:bg-white/10",
+                  : "bg-black/40 border-white/10 text-white/80 hover:text-white hover:bg-white/10",
           disabled && "opacity-40 cursor-not-allowed"
         )}
       >
         <Icon size={isLg ? 20 : 16} />
       </button>
-      <span className="text-[8px] text-slate-500 font-medium">{label}</span>
+      <span className="text-[8px] text-slate-400 font-medium">{label}</span>
     </div>
   );
 }

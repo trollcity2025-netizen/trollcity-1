@@ -430,3 +430,108 @@ export async function notifyAppealDecision(
     }
   );
 }
+
+/**
+ * Notify referrer when a referred user signs up
+ */
+export async function notifyReferralSignup(
+  referrerId: string,
+  newUserId: string,
+  newUsername: string
+) {
+  return createNotification(
+    referrerId,
+    'system_announcement',
+    '🎯 New Referral!',
+    `@${newUsername} joined using your referral link. They need to complete onboarding and earn 5,000 coins to qualify.`,
+    {
+      sender_id: newUserId,
+      sender_username: newUsername,
+      action_url: '/empire-partner'
+    }
+  );
+}
+
+/**
+ * Notify referrer when referred user completes onboarding
+ */
+export async function notifyReferralOnboardingComplete(
+  referrerId: string,
+  userId: string,
+  username: string
+) {
+  return createNotification(
+    referrerId,
+    'system_announcement',
+    '✅ Referral Onboarding Complete',
+    `@${username} has completed their profile setup. They now need 5,000 coins to qualify.`,
+    {
+      sender_id: userId,
+      sender_username: username,
+      action_url: '/empire-partner'
+    }
+  );
+}
+
+/**
+ * Notify referrer when referral becomes qualified
+ */
+export async function notifyReferralQualified(
+  referrerId: string,
+  userId: string,
+  username: string
+) {
+  return createNotification(
+    referrerId,
+    'system_announcement',
+    '🏆 Referral Qualified!',
+    `@${username} has earned 5,000 coins and completed onboarding. Your referral is now qualified! You earned $10.`,
+    {
+      sender_id: userId,
+      sender_username: username,
+      action_url: '/empire-partner'
+    }
+  );
+}
+
+/**
+ * Notify user they were referred and get a bonus
+ */
+export async function notifyReferredUserBonus(
+  userId: string,
+  referrerUsername: string
+) {
+  return createNotification(
+    userId,
+    'system_announcement',
+    '⭐ Referred by @' + referrerUsername,
+    `You joined via referral and receive a +2% cashout bonus. Complete your profile and earn 5,000 coins to fully activate.`,
+    {
+      action_url: '/my-earnings'
+    }
+  );
+}
+
+/**
+ * Notify admins when a new account is created
+ */
+export async function notifyAdminNewAccount(
+  userId: string,
+  username: string,
+  referredBy?: string
+) {
+  const message = referredBy
+    ? `New referred account: @${username} (referred by @${referredBy})`
+    : `New account created: @${username}`;
+
+  return notifyAdmins(
+    '👤 New Account',
+    message,
+    'system',
+    {
+      sender_id: userId,
+      sender_username: username,
+      action_url: `/admin/user-search?user=${userId}`
+    }
+  );
+}

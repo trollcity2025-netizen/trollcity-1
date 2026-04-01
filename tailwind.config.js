@@ -91,6 +91,8 @@ export default {
         'fadeIn': 'fadeIn 0.3s ease-out',
         'tilt': 'tilt 10s infinite linear',
         'marquee-continuous': 'marquee-continuous 10s linear infinite',
+        'ticker-scroll': 'ticker-scroll 25s linear infinite',
+        'ticker-glitch': 'ticker-glitch 4s ease-in-out infinite',
       },
       keyframes: {
         glow: {

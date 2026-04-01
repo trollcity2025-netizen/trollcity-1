@@ -79,7 +79,10 @@ const BroadcastLayoutPreview = lazyWithRetry(() => import("./pages/dev/Broadcast
 const SetupPreview = lazyWithRetry(() => import("./pages/dev/SetupPreview"));
 const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 
-
+// Live Streaming System
+const LiveCommandCenter = lazyWithRetry(() => import("./pages/live/LiveCommandCenter"));
+const LiveStreamOverlay = lazyWithRetry(() => import("./pages/live/LiveStreamOverlay"));
+const AudioSettings = lazyWithRetry(() => import("./pages/live/AudioSettings"));
 
 // Sidebar pages (instant load)
 const TCPS = lazyWithRetry(() => import("./pages/TCPS"));
@@ -200,6 +203,7 @@ const Profile = lazyWithRetry(() => import("./pages/Profile"));
 const ProfileSetup = lazyWithRetry(() => import("./pages/ProfileSetup"));
 const BadgesPage = lazyWithRetry(() => import("./pages/BadgesPage"));
 const Stats = lazyWithRetry(() => import("./pages/Stats"));
+const EmpirePartnerDashboard = lazyWithRetry(() => import("./pages/EmpirePartnerDashboard"));
 
 const EarningsDashboard = lazyWithRetry(() => import("./pages/EarningsDashboard"));
 const CreatorOnboarding = lazyWithRetry(() => import("./pages/CreatorOnboarding"));
@@ -241,6 +245,10 @@ const TCNNInternalDashboard = lazyWithRetry(() => import("./pages/tcnn/TCNNInter
 const ArticleReader = lazyWithRetry(() => import("./pages/tcnn/ArticleReader"));
 const TCNNBroadcasterPage = lazyWithRetry(() => import("./pages/tcnn/TCNNBroadcasterPage"));
 const TCNNViewerPage = lazyWithRetry(() => import("./pages/tcnn/TCNNViewerPage"));
+
+// Troll City Deck - Broadcast Control Companion
+const DeckAuth = lazyWithRetry(() => import("./pages/deck/DeckAuth"));
+const DeckDashboard = lazyWithRetry(() => import("./pages/deck/DeckDashboard"));
 
 const ShopView = lazyWithRetry(() => import("./pages/ShopView"));
 const CourtRoom = lazyWithRetry(() => import("./pages/CourtRoom"));
@@ -1015,7 +1023,7 @@ function AppContent() {
       <SessionMonitor />
       
       {updateAvailable && (
-        <div className="fixed bottom-0 inset-x-0 z-[60] flex items-center justify-between bg-purple-900 text-white px-4 py-3">
+        <div className="fixed top-0 inset-x-0 z-[60] flex items-center justify-between bg-purple-900 text-white px-4 py-2">
           <span className="text-sm">A new version of Troll City is available.</span>
           <button
             type="button"
@@ -1128,6 +1136,11 @@ function AppContent() {
                 <Route path="/dev/broadcast-layout" element={<BroadcastLayoutPreview />} />
                 <Route path="/dev/setup-preview" element={<SetupPreview />} />
 
+                {/* 📡 Troll Deck - Broadcast Control Companion (separate auth) */}
+                <Route path="/deck" element={<DeckDashboard />} />
+                <Route path="/deck/auth" element={<DeckAuth />} />
+                <Route path="/deck/*" element={<DeckDashboard />} />
+
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
                   <Route path="/" element={<LandingHome />} />
@@ -1222,6 +1235,11 @@ function AppContent() {
                    <Route path="/dev/gift-animation-showcase" element={<GiftAnimationShowcase />} />
 
 
+                   {/* 📺 Live Streaming System */}
+                  <Route path="/live/command-center/:streamId" element={<LiveCommandCenter />} />
+                  <Route path="/live/overlay/:streamId" element={<LiveStreamOverlay />} />
+                  <Route path="/settings/audio" element={<AudioSettings />} />
+
                    {/* 🎥 Streaming */}
 
                   <Route path="/join" element={<JoinPage />} />
@@ -1263,6 +1281,7 @@ function AppContent() {
                   <Route path="/payment/callback" element={<PaymentCallback />} />
                   <Route path="/earnings" element={<EarningsPage />} />
                   <Route path="/my-earnings" element={<MyEarnings />} />
+                  <Route path="/empire-partner" element={<EmpirePartnerDashboard />} />
                   <Route path="/cashout" element={<CashoutPage />} />
                   <Route path="/withdraw" element={<Withdraw />} />
                   <Route path="/transactions" element={<TransactionHistory />} />

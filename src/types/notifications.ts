@@ -37,6 +37,10 @@ export type NotificationType =
   | 'property_purchased'
   | 'jail_sentence'
   | 'court_summon'
+  // Empire Partner / Referral notifications
+  | 'referral_signup'
+  | 'referral_qualified'
+  | 'referred_bonus'
 
 export interface Notification {
   id: string

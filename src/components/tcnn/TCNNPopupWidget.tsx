@@ -98,8 +98,8 @@ export default function TCNNPopupWidget({ onRequireAuth }: TCNNPopupWidgetProps)
 
     fetchTCNNStream()
     
-    // Poll every 15 seconds for updates
-    const interval = setInterval(fetchTCNNStream, 15000)
+    // Poll every 30 seconds (reduced from 15s to lower server load)
+    const interval = setInterval(fetchTCNNStream, 30000)
 
     return () => {
       mounted = false

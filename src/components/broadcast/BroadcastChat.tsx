@@ -6,6 +6,7 @@ import { useAuthStore } from '../../lib/store';
 import { PreflightStore } from '../../lib/preflightStore';
 import { generateUUID } from '../../lib/uuid';
 import { toast } from 'sonner';
+import { useMissionProgress } from '../../hooks/useMissionProgress';
 import GiftBoxModal from './GiftBoxModal';
 
 interface Message {
@@ -105,6 +106,7 @@ export default function BroadcastChat({
   const [input, setInput] = useState('');
   const [streamMods, setStreamMods] = useState<string[]>([]);
   const { user, profile } = useAuthStore();
+  const { trackChatMessage } = useMissionProgress(streamId);
 
   const buildUserProfile = (source: any) => ({
     username:
@@ -218,9 +220,6 @@ export default function BroadcastChat({
   
   // Track processed message IDs to prevent duplicates from broadcast
   const processedMessageIds = useRef<Set<string>>(new Set());
-  
-  // Track which users have join messages shown (Set-based dedup prevents re-showing on re-subscribe)
-  const joinedUsersRef = useRef<Set<string>>(new Set());
   
   // Unread message tracking
   const [unreadCount, setUnreadCount] = useState(0);
@@ -797,78 +796,15 @@ export default function BroadcastChat({
       )
       .subscribe();
 
-    // Subscribe to room presence to show join/leave messages in chat
+    // Subscribe to room presence (join/leave messages are now handled by BroadcastTicker)
     // Use the same channel name as BroadcastPage for shared presence
     const presenceChannel = supabase
         .channel(`stream:${streamId}`)
         .on('presence', { event: 'join' }, ({ newPresences }) => {
-            const now = Date.now();
-            newPresences.forEach((p: any) => {
-                // Skip showing join message for ourselves
-                if (p.user_id === user?.id) {
-                    return;
-                }
-                
-                // Skip if we already showed a join for this user
-                if (joinedUsersRef.current.has(p.user_id)) {
-                    return;
-                }
-                joinedUsersRef.current.add(p.user_id);
-                
-                console.log('[BroadcastChat] User joined, showing message:', p.username || p.user_id);
-                const systemMsg: Message = {
-                    id: `sys-join-${p.user_id}-${now}`,
-                    user_id: p.user_id,
-                    content: 'joined the broadcast',
-                    created_at: new Date().toISOString(),
-                    type: 'system',
-                    user_profiles: {
-                        username: p.username || 'Guest',
-                        avatar_url: p.avatar_url || '',
-                        created_at: p.joined_at,
-                        role: p.role,
-                        troll_role: p.troll_role
-                    }
-                };
-                setMessages(prev => {
-                    const updated = [...prev, systemMsg];
-                    if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
-                    return updated;
-                });
-            });
+            // Join messages now shown in BroadcastTicker instead of chat
         })
         .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-            const now = Date.now();
-            leftPresences.forEach((p: any) => {
-                // Skip showing leave for our own user
-                if (p.user_id === user?.id) {
-                    return;
-                }
-                
-                // Only show leave if we showed a join for this user
-                if (!joinedUsersRef.current.has(p.user_id)) {
-                    return;
-                }
-                joinedUsersRef.current.delete(p.user_id);
-                
-                console.log('[BroadcastChat] User left, showing message:', p.username || p.user_id);
-                const systemMsg: Message = {
-                    id: `sys-leave-${p.user_id}-${now}`,
-                    user_id: p.user_id,
-                    content: 'left the broadcast',
-                    created_at: new Date().toISOString(),
-                    type: 'system',
-                    user_profiles: {
-                        username: p.username || 'Guest',
-                        avatar_url: p.avatar_url || ''
-                    }
-                };
-                setMessages(prev => {
-                    const updated = [...prev, systemMsg];
-                    if (updated.length > MAX_MESSAGES) return updated.slice(updated.length - MAX_MESSAGES);
-                    return updated;
-                });
-            });
+            // Leave messages now shown in BroadcastTicker instead of chat
         })
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED' && user?.id && profile) {
@@ -1008,6 +944,9 @@ export default function BroadcastChat({
                 txn_id: txnId,
                 data: { content }
             })
+        }).then(() => {
+            // Track mission progress
+            trackChatMessage();
         }).catch(err => {
             // Silently handle DB write failures - message already shown in UI
             console.warn('💬 [BroadcastChat] Background DB write failed:', err);

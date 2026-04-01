@@ -179,27 +179,19 @@ const ProfileSetup = () => {
 
       toast.success('Profile saved')
 
-      if (nextProfile && user) {
-        const g = (nextProfile as any).gender as string | null
-        const isFemale = g === 'female'
-        const baseAvatar: AvatarConfig = {
-          skinTone: isFemale ? 'light' : 'medium',
-          hairStyle: isFemale ? 'long' : 'short',
-          hairColor: isFemale ? 'blonde' : 'brown',
-          outfit: isFemale ? 'casual' : 'street',
-          accessory: 'none',
-          useAsProfilePicture: avatarConfig.useAsProfilePicture
-        }
-
-        setAvatarConfig(baseAvatar)
-
-        await updateUserAvatarConfig(user.id, {
-          avatar_config: baseAvatar
-        })
+      // Mark onboarding complete for referred users
+      try {
+        await supabase.rpc('mark_onboarding_complete', { p_user_id: user.id })
+      } catch (onboardingErr) {
+        console.warn('[ProfileSetup] Could not mark onboarding complete:', onboardingErr)
       }
 
-      // Navigate to profile page to see changes
-      navigate(`/profile/${nextProfile?.username || uname}`)
+      // Navigate: referred users go to earnings, others to profile
+      if (profile?.referred_by_user_id) {
+        navigate('/my-earnings')
+      } else {
+        navigate(`/profile/${nextProfile?.username || uname}`)
+      }
     } catch (err: any) {
       console.error('Profile save error:', err)
       toast.error(err?.message || 'Failed to save profile')

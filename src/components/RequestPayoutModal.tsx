@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase, getSystemSettings } from '../lib/supabase'
 import { isPayoutWindowOpen, PAYOUT_WINDOW_LABEL } from '../lib/payoutWindow'
 import { toast } from 'sonner'
-import { X, DollarSign, AlertCircle } from 'lucide-react'
+import { X, DollarSign, AlertCircle, Star, Shield } from 'lucide-react'
 import { RequestPayoutResponse } from '../types/earnings'
 
 interface RequestPayoutModalProps {
@@ -20,8 +20,26 @@ export default function RequestPayoutModal({
 }: RequestPayoutModalProps) {
   const [coinsToRedeem, setCoinsToRedeem] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const [referralBonus, setReferralBonus] = useState<{ isReferred: boolean; isFounding: boolean }>({ isReferred: false, isFounding: false })
   const payoutWindowOpen = isPayoutWindowOpen()
   const payoutsDisabled = true
+
+  useEffect(() => {
+    if (!userId) return
+    supabase
+      .from('user_profiles')
+      .select('referred_user_bonus_active, founding_partner')
+      .eq('id', userId)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setReferralBonus({
+            isReferred: !!data.referred_user_bonus_active,
+            isFounding: !!data.founding_partner
+          })
+        }
+      })
+  }, [userId])
 
   const MINIMUM_COINS = 7000 // $21 minimum
   // Conversion rate varies by tier: $21/7k = $0.003, $49.50/14k = $0.0035357, $90/27k = $0.00333, $150/47k = $0.00319
@@ -147,6 +165,24 @@ export default function RequestPayoutModal({
             </span>
           </div>
         </div>
+
+        {/* Referral Bonuses */}
+        {(referralBonus.isReferred || referralBonus.isFounding) && (
+          <div className="mb-4 space-y-2">
+            {referralBonus.isFounding && (
+              <div className="flex items-center gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <Shield className="w-4 h-4 text-amber-400" />
+                <span className="text-xs text-amber-300 font-medium">Founding Partner: +25% cashout bonus applied automatically</span>
+              </div>
+            )}
+            {referralBonus.isReferred && (
+              <div className="flex items-center gap-2 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                <Star className="w-4 h-4 text-purple-400" />
+                <span className="text-xs text-purple-300 font-medium">Referred User: +2% cashout bonus applied automatically</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">

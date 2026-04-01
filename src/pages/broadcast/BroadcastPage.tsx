@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { Room, LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteTrack, RemoteVideoTrack, RemoteAudioTrack, RemoteTrackPublication, LocalParticipant, VideoPresets, AudioPresets } from 'livekit-client'
+import { Room, RoomEvent, LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteTrack, RemoteVideoTrack, RemoteAudioTrack, RemoteTrackPublication, LocalParticipant, VideoPresets, AudioPresets } from 'livekit-client'
 
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
@@ -37,13 +37,19 @@ import { useFiveVFiveBattle } from '../../hooks/useFiveVFiveBattle'
 import { useBattleSubscriber } from '../../hooks/useBattleSubscriber'
 import FiveVFiveBattleOverlay from '../../components/broadcast/FiveVFiveBattleOverlay'
 import BattleStartModal from '../../components/broadcast/BattleStartModal'
+import BattleGiftPanel from '../../components/broadcast/BattleGiftPanel'
 
-import { Loader2, Shield } from 'lucide-react'
+import { Loader2, Shield, Zap } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { useStreamSeats } from '../../hooks/useStreamSeats'
 import { useBroadcastAbilities } from '../../hooks/useBroadcastAbilities'
 import AbilityBox from '../../components/broadcast/AbilityBox'
 import BroadcastAbilityEffects from '../../components/broadcast/BroadcastAbilityEffects'
+import BroadcastTicker from '../../components/broadcast/BroadcastTicker'
+import TickerControlPanel from '../../components/broadcast/TickerControlPanel'
+import { useBroadcastTicker } from '../../hooks/useBroadcastTicker'
+import { useTickerStore } from '../../stores/tickerStore'
 
 function BroadcastPage() {
   const params = useParams()
@@ -430,6 +436,23 @@ function BroadcastPage() {
 
   const isHost = stream?.user_id === user?.id
 
+  // Broadcast Global Ticker
+  const {
+    sendMessage: tickerSendMessage,
+    sendPriority: tickerSendPriority,
+    clearPriority: tickerClearPriority,
+    deleteMessage: tickerDeleteMessage,
+    broadcastSettings: tickerBroadcastSettings,
+    generateSystemMessage: tickerGenerateSystemMessage,
+  } = useBroadcastTicker({
+    streamId: streamId || '',
+    userId: user?.id || '',
+    isHost,
+    enabled: !!streamId && !!user,
+  })
+  const [isTickerPanelOpen, setIsTickerPanelOpen] = useState(false)
+  const tickerSettings = useTickerStore((s) => s.settings)
+
   // Set broadcast mode to disable TrollEngine when broadcasting
   useEffect(() => {
     if (isHost) {
@@ -727,33 +750,49 @@ function BroadcastPage() {
             ? new Room({ adaptiveStream: true, dynacast: true })
             : new Room({ adaptiveStream: true, dynacast: true });
 
-          // Set up event listeners
-          newRoom.on('participantConnected', (p: RemoteParticipant) => {
+          // Set up event listeners for battle room (do NOT call handleParticipantDisconnected - that's for seat management)
+          newRoom.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => {
+            console.log('[BattleRoom] Participant connected:', p.identity);
             setRemoteParticipants(prev => new Map(prev).set(p.identity, p));
           });
-          newRoom.on('participantDisconnected', (p: RemoteParticipant) => {
+          newRoom.on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => {
+            console.log('[BattleRoom] Participant disconnected:', p.identity);
             setRemoteParticipants(prev => {
               const next = new Map(prev);
               next.delete(p.identity);
               return next;
             });
-            handleParticipantDisconnected(p.identity);
           });
-          newRoom.on('trackSubscribed', (track, pub, participant) => {
+          newRoom.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
+            console.log('[BattleRoom] Track subscribed:', track.kind, 'from', participant.identity);
+            setRemoteParticipants(prev => new Map(prev).set(participant.identity, participant));
+          });
+          newRoom.on(RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
+            console.log('[BattleRoom] Track unsubscribed:', track.kind, 'from', participant.identity);
             setRemoteParticipants(prev => new Map(prev).set(participant.identity, participant));
           });
 
           await newRoom.connect(livekitUrl, data.token);
           roomRef.current = newRoom;
 
-          // If publisher, publish local tracks
+          // If publisher, publish local tracks to battle room
           if (shouldPublish && localTracksRef.current) {
             const [audioTrack, videoTrack] = localTracksRef.current;
-            if (audioTrack) {
-              try { await newRoom.localParticipant.publishTrack(audioTrack); } catch {}
+            if (audioTrack && typeof audioTrack.getMediaStreamTrack === 'function') {
+              const mediaTrack = audioTrack.getMediaStreamTrack();
+              if (mediaTrack && mediaTrack.readyState === 'live') {
+                try { await newRoom.localParticipant.publishTrack(audioTrack); } catch (e) { console.warn('[BattleRoom] Failed to publish audio:', e); }
+              } else {
+                console.warn('[BattleRoom] Audio track not live, skipping publish');
+              }
             }
-            if (videoTrack) {
-              try { await newRoom.localParticipant.publishTrack(videoTrack); } catch {}
+            if (videoTrack && typeof videoTrack.getMediaStreamTrack === 'function') {
+              const mediaTrack = videoTrack.getMediaStreamTrack();
+              if (mediaTrack && mediaTrack.readyState === 'live') {
+                try { await newRoom.localParticipant.publishTrack(videoTrack); } catch (e) { console.warn('[BattleRoom] Failed to publish video:', e); }
+              } else {
+                console.warn('[BattleRoom] Video track not live, skipping publish');
+              }
             }
           }
 
@@ -1523,9 +1562,11 @@ function BroadcastPage() {
             data.token
           )
 
-          // Get existing participants who were already in the room
-          if (room.participants) {
-            const existingParticipants = Array.from(room.participants.values()) as RemoteParticipant[]
+          // Get existing participants who were already in the room (LiveKit v2.x uses remoteParticipants)
+          const existingParticipants = room.remoteParticipants
+            ? Array.from(room.remoteParticipants.values()) as RemoteParticipant[]
+            : []
+          if (existingParticipants.length > 0) {
             console.log('[BroadcastPage] Viewer: Found existing participants:', existingParticipants.length, existingParticipants.map((p: RemoteParticipant) => p.identity))
             // Build a new Map with all existing participants
             const newParticipantsMap = new Map<string, RemoteParticipant>()
@@ -1536,7 +1577,7 @@ function BroadcastPage() {
             // Set the Map in one go to avoid batching issues
             setRemoteParticipants(newParticipantsMap)
           } else {
-            console.log('[BroadcastPage] Viewer: No existing participants (room.participants is undefined)')
+            console.log('[BroadcastPage] Viewer: No existing participants in room')
           }
 
           hasJoinedRef.current = true
@@ -2873,6 +2914,12 @@ function BroadcastPage() {
             {!isHost && pinnedProducts.length > 0 && (
               <PinnedProductOverlay pinnedProducts={pinnedProducts} />
             )}
+
+            {/* Broadcast Global Ticker */}
+            {tickerSettings.is_enabled && (
+              <BroadcastTicker />
+            )}
+
             <GiftAnimationOverlay 
               gifts={recentGifts}
               participantNames={Object.fromEntries(
@@ -2904,7 +2951,67 @@ function BroadcastPage() {
                 </button>
               </div>
             )}
+
+            {/* Ticker Control Button + Panel (host only) */}
+            {isHost && (
+              <>
+                <div className="absolute bottom-20 left-3 z-[50] pointer-events-auto">
+                  <button
+                    onClick={() => setIsTickerPanelOpen(!isTickerPanelOpen)}
+                    className="relative bg-cyan-600/90 hover:bg-cyan-500 text-white p-3 rounded-full shadow-lg shadow-cyan-500/30 transition-all hover:scale-110"
+                    title="Ticker Control"
+                  >
+                    <Zap className="w-5 h-5" />
+                    {tickerSettings.is_enabled && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse" />
+                    )}
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {isTickerPanelOpen && (
+                      <DraggableWrapper
+                      initialPos={{ x: 12, y: Math.min(window.innerHeight - 420, window.innerHeight * 0.3) }}
+                    >
+                      <TickerControlPanel
+                        onSendMessage={(content, category, isPriority, tags) => {
+                          if (isPriority) {
+                            tickerSendPriority(content, category, tags);
+                          } else {
+                            tickerSendMessage(content, category, false, tags);
+                          }
+                        }}
+                        onBroadcastSettings={tickerBroadcastSettings}
+                        onDeleteMessage={tickerDeleteMessage}
+                        onClose={() => setIsTickerPanelOpen(false)}
+                      />
+                    </DraggableWrapper>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
           </>
+        }
+        
+        battleGiftPanel={
+          effectiveBattleState.phase !== 'idle' && battleData ? (
+            <BattleGiftPanel
+              streamId={streamId || ''}
+              battleId={battleData.id}
+              challengerStreamId={battleData.challenger_stream_id || ''}
+              opponentStreamId={battleData.opponent_stream_id || ''}
+              challengerHostId={battleData.challenger_user_id || ''}
+              opponentHostId={battleData.opponent_user_id || ''}
+              challengerTitle="Side A"
+              opponentTitle="Side B"
+              onGiftSent={(gift, side) => {
+                const giftAmount = gift.coinCost;
+                if (effectiveBattleState.active && effectiveBattleState.phase === 'active') {
+                  fiveVFiveProcessGift(user?.id || '', side === 'A' ? (battleData.challenger_user_id || '') : (battleData.opponent_user_id || ''), giftAmount, gift.name);
+                }
+              }}
+            />
+          ) : undefined
         }
         
         modals={
@@ -3076,6 +3183,72 @@ function BroadcastPage() {
       />
     </ErrorBoundary>
   )
+}
+
+// ─── DRAGGABLE WRAPPER ───
+
+function DraggableWrapper({
+  children,
+  initialPos,
+}: {
+  children: React.ReactNode;
+  initialPos: { x: number; y: number };
+}) {
+  const [pos, setPos] = useState(initialPos);
+  const [dragging, setDragging] = useState(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Only drag from the header bar area
+    const target = e.target as HTMLElement;
+    if (target.closest('input, button, textarea, select')) return;
+
+    setDragging(true);
+    dragOffset.current = {
+      x: e.clientX - pos.x,
+      y: e.clientY - pos.y,
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragging) return;
+    const newX = Math.max(0, Math.min(window.innerWidth - 320, e.clientX - dragOffset.current.x));
+    const newY = Math.max(0, Math.min(window.innerHeight - 200, e.clientY - dragOffset.current.y));
+    setPos({ x: newX, y: newY });
+  };
+
+  const handlePointerUp = () => {
+    setDragging(false);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.2 }}
+      className="fixed z-[55] pointer-events-auto"
+      style={{
+        left: pos.x,
+        top: pos.y,
+        cursor: dragging ? 'grabbing' : 'default',
+        touchAction: 'none',
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+    >
+      {/* Drag handle bar */}
+      <div
+        className="flex items-center justify-center py-1 mb-0.5 rounded-t-xl bg-white/5 cursor-grab active:cursor-grabbing"
+        onPointerDown={handlePointerDown}
+      >
+        <div className="w-8 h-1 rounded-full bg-white/20" />
+      </div>
+      {children}
+    </motion.div>
+  );
 }
 
 export default BroadcastPage

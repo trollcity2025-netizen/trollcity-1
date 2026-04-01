@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState } from "react";
 import { Send, Smile } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { ChatMessage } from "../../types/broadcast";
+import ProfileFrame from "../live/ProfileFrame";
+import { getDiamondForLevel } from "../../types/liveStreaming";
 
 interface ChatBottomSheetProps {
   messages: ChatMessage[];
@@ -15,7 +17,7 @@ export default function ChatBottomSheet({
   messages,
   onSendMessage,
   className,
-  compact = false,
+  _compact = false,
   overlay = false,
 }: ChatBottomSheetProps) {
   const [inputValue, setInputValue] = useState("");
@@ -143,12 +145,90 @@ function SystemMessage({ msg }: { msg: ChatMessage }) {
   );
 }
 
+function ChatDiamondAvatar({
+  avatarUrl,
+  username,
+  level,
+}: {
+  avatarUrl: string;
+  username: string;
+  level: number;
+}) {
+  const tier = getDiamondForLevel(level);
+  const showFrame = level >= 1;
+
+  const glowStyle =
+    tier.glow_color && tier.glow_intensity > 0
+      ? { boxShadow: `0 0 ${tier.glow_intensity * 10}px ${tier.glow_color}` }
+      : {};
+
+  const diamondContent = (
+    <div
+      style={{
+        width: 32,
+        height: 32,
+        clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+        border: `2px solid ${tier.border_color}`,
+        overflow: "hidden",
+        position: "relative" as const,
+        zIndex: 2,
+        ...glowStyle,
+      }}
+    >
+      <img
+        src={avatarUrl}
+        alt={username}
+        className="w-full h-full object-cover"
+        style={{
+          transform: "rotate(45deg) scale(1.42)",
+          width: "100%",
+          height: "100%",
+        }}
+        draggable={false}
+      />
+    </div>
+  );
+
+  if (showFrame) {
+    return (
+      <div className="relative" style={{ width: 32, height: 32 }}>
+        <div className="absolute inset-0 scale-[0.67]" style={{ zIndex: 1 }}>
+          <ProfileFrame
+            level={level}
+            avatarUrl={avatarUrl}
+            size="sm"
+            username={username}
+            showLevel={false}
+          />
+        </div>
+        {diamondContent}
+      </div>
+    );
+  }
+
+  return diamondContent;
+}
+
 function UserMessage({ msg }: { msg: ChatMessage }) {
+  const level = (msg.user as any)?.level ?? 0;
+  const avatarUrl = msg.user?.avatar_url || msg.user_profiles?.avatar_url || "";
+  const username = msg.user?.username || "User";
+
   return (
-    <div className="flex flex-col items-start animate-fade-in-up">
+    <div className="flex items-start gap-2 animate-fade-in-up">
+      {avatarUrl && (
+        <div className="flex-shrink-0 mt-0.5">
+          <ChatDiamondAvatar
+            avatarUrl={avatarUrl}
+            username={username}
+            level={level}
+          />
+        </div>
+      )}
+
       <div className="bg-black/30 backdrop-blur-sm rounded-2xl rounded-tl-sm px-3 py-1.5 max-w-[85%] border border-white/5">
         <span className="text-[11px] font-bold text-pink-400 block mb-0.5">
-          {msg.user?.username || "User"}
+          {username}
         </span>
 
         <p className="text-sm text-white leading-snug break-words">

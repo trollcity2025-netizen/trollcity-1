@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 import { generateUUID } from '../lib/uuid';
 import { toast } from 'sonner';
+import { useMissionProgress } from './useMissionProgress';
 
 export interface Message {
   id: string;
@@ -46,6 +47,7 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
   const [hostChatDisabledByOfficer, setHostChatDisabledByOfficer] = useState(false);
   const { user, profile } = useAuthStore();
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const { trackChatMessage } = useMissionProgress(streamId);
   
   // Track processed message IDs to prevent duplicates from broadcast + postgres_changes
   const processedMessageIds = useRef<Set<string>>(new Set());
@@ -386,6 +388,9 @@ export const useStreamChat = ({ streamId, hostId, isHost }: UseStreamChatProps) 
             const msg = (parsedBody as any)?.error || (parsedBody as any)?.message || rawText || response.statusText;
             throw new Error(`Failed to send message (${response.status}): ${msg}`);
         }
+
+        // Track mission progress
+        trackChatMessage();
 
     } catch (err: any) {
         console.error('Error sending message:', err);

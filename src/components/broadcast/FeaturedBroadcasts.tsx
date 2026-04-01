@@ -51,8 +51,8 @@ export default function FeaturedBroadcasts() {
   useEffect(() => {
     fetchFeaturedStreams();
     
-    // Poll every 10 seconds for updates
-    const interval = setInterval(fetchFeaturedStreams, 10000);
+    // Poll every 30 seconds (reduced from 10s, realtime handles instant updates)
+    const interval = setInterval(fetchFeaturedStreams, 30000);
     
     // Subscribe to stream updates
     const channel = supabase

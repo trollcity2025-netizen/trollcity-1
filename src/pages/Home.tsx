@@ -1,20 +1,21 @@
 
-import { useCallback, useEffect, useState } from 'react'
+import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/lib/store'
 import { trollCityTheme } from '@/styles/trollCityTheme'
-import PWAInstallPrompt from '../components/PWAInstallPrompt'
 import EventCountdown from '@/components/EventCountdown'
 import TrollWallFeed from '@/components/home/TrollWallFeed'
-import TCNNPopupWidget from '@/components/tcnn/TCNNPopupWidget'
-import FeaturedBroadcasts from '@/components/broadcast/FeaturedBroadcasts'
 import { supabase } from '@/lib/supabase'
-import PromoSlot from '@/components/promo/PromoSlot'
 import { Radio, Mic, Users, Play, Eye, X, ChevronRight } from 'lucide-react'
 
-// Animated gradient background
-const AnimatedGradient = () => {
+const PWAInstallPrompt = lazy(() => import('../components/PWAInstallPrompt'))
+const TCNNPopupWidget = lazy(() => import('@/components/tcnn/TCNNPopupWidget'))
+const FeaturedBroadcasts = lazy(() => import('@/components/broadcast/FeaturedBroadcasts'))
+const PromoSlot = lazy(() => import('@/components/promo/PromoSlot'))
+
+// Animated gradient background - memoized to prevent unnecessary re-renders
+const AnimatedGradient = React.memo(() => {
   return (
     <div className="absolute inset-0 overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 animate-gradient-shift" />
@@ -36,7 +37,7 @@ const AnimatedGradient = () => {
       </style>
     </div>
   );
-};
+});
 
 
 
@@ -139,8 +140,8 @@ export default function Home() {
 
     fetchLiveContent()
     
-    // Poll every 30 seconds
-    const interval = setInterval(fetchLiveContent, 30000)
+    // Poll every 60 seconds (reduced from 30s to lower server load)
+    const interval = setInterval(fetchLiveContent, 60000)
 
     return () => {
       mounted = false
@@ -168,9 +169,11 @@ export default function Home() {
   }
 
   return (
-    <div className={`relative h-dvh flex flex-col ${trollCityTheme.backgrounds.primary}`}>
+    <div className={`relative h-dvh flex flex-col overflow-hidden ${trollCityTheme.backgrounds.primary}`}>
       {/* TCNN Popup - Only shows when TCNN is live */}
-      <TCNNPopupWidget onRequireAuth={requireAuth} />
+      <Suspense fallback={null}>
+        <TCNNPopupWidget onRequireAuth={requireAuth} />
+      </Suspense>
 
       {/* Event Countdown Banner */}
       <EventCountdown />
@@ -179,18 +182,20 @@ export default function Home() {
       <AnimatedGradient />
 
       {/* PWA Install Prompt - Only on Landing Page */}
-      <PWAInstallPrompt />
+      <Suspense fallback={null}>
+        <PWAInstallPrompt />
+      </Suspense>
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col flex-1 min-h-0 px-4 md:px-6 pt-4 pb-2 safe-top">
+        <div className="relative z-10 flex flex-col flex-1 min-h-0 px-3 md:px-5 pt-2 pb-1 safe-top">
         <div className="max-w-7xl mx-auto flex flex-col flex-1 min-h-0 w-full">
           {/* Header with Tabs */}
-          <section className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-3 flex-shrink-0`}>
+          <section className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-2 flex-shrink-0`}>
             {/* Tabs */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveTab('wall')}
-                className={`px-4 py-1.5 rounded-lg font-semibold text-sm transition-all ${
+                className={`px-3 py-1 rounded-lg font-semibold text-xs transition-all ${
                   activeTab === 'wall'
                     ? 'bg-purple-600 text-white'
                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
@@ -200,32 +205,32 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setActiveTab('live')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg font-semibold text-sm transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold text-xs transition-all ${
                   activeTab === 'live'
                     ? 'bg-red-600 text-white'
                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
                 }`}
               >
-                <Radio className="w-4 h-4" />
+                <Radio className="w-3.5 h-3.5" />
                 Live Now
                 {liveItems.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-white text-xs rounded-full">
+                  <span className="ml-0.5 px-1.5 py-0.5 bg-red-500 text-white text-[10px] rounded-full">
                     {liveItems.length}
                   </span>
                 )}
               </button>
               <button
                 onClick={() => setActiveTab('pods')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg font-semibold text-sm transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold text-xs transition-all ${
                   activeTab === 'pods'
                     ? 'bg-cyan-600 text-white'
                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
                 }`}
               >
-                <Mic className="w-4 h-4" />
+                <Mic className="w-3.5 h-3.5" />
                 Troll Pods
                 {podItems.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 bg-cyan-500 text-white text-xs rounded-full">
+                  <span className="ml-0.5 px-1.5 py-0.5 bg-cyan-500 text-white text-[10px] rounded-full">
                     {podItems.length}
                   </span>
                 )}
@@ -234,42 +239,44 @@ export default function Home() {
 
             {/* Tab Content - Live */}
             {activeTab === 'live' && (
-              <div className="mt-3">
-                <div className="flex items-center gap-4 mb-3">
+              <div className="mt-2 max-h-[40vh] overflow-y-auto custom-scrollbar">
+                <div className="flex items-center gap-4 mb-2">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-sm font-medium text-white">{liveItems.length} Broadcasting</span>
+                    <span className="text-xs font-medium text-white">{liveItems.length} Broadcasting</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                    <Eye className="w-3.5 h-3.5" />
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                    <Eye className="w-3 h-3" />
                     <span>{totalViewers.toLocaleString()} watching now</span>
                   </div>
                 </div>
 
                 {liveItems.filter(item => item.isFeatured).length > 0 && (
-                  <div className="mb-3">
-                    <FeaturedBroadcasts />
+                  <div className="mb-2">
+                    <Suspense fallback={<div className="aspect-video bg-white/5 rounded-xl animate-pulse" />}>
+                      <FeaturedBroadcasts />
+                    </Suspense>
                   </div>
                 )}
 
                 <button
                   onClick={() => setShowLiveGrid(!showLiveGrid)}
-                  className={`w-full py-2.5 ${trollCityTheme.gradients.primary} rounded-xl font-semibold text-white flex items-center justify-center gap-2 hover:opacity-90 transition-opacity`}
+                  className={`w-full py-2 ${trollCityTheme.gradients.primary} rounded-xl font-semibold text-white text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity`}
                 >
                   {showLiveGrid ? 'Hide All Broadcasts' : 'Explore All Broadcasts'}
-                  <ChevronRight className={`w-5 h-5 transition-transform ${showLiveGrid ? 'rotate-90' : ''}`} />
+                  <ChevronRight className={`w-4 h-4 transition-transform ${showLiveGrid ? 'rotate-90' : ''}`} />
                 </button>
 
                 {showLiveGrid && (
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto custom-scrollbar">
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {loadingLive ? (
                       Array.from({ length: 6 }).map((_, i) => (
                         <div key={i} className="aspect-video bg-white/5 rounded-xl animate-pulse" />
                       ))
                     ) : liveItems.length === 0 ? (
-                      <div className="col-span-full text-center py-6">
-                        <Radio className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                        <p className="text-slate-400 text-sm">No one is live right now</p>
+                      <div className="col-span-full text-center py-4">
+                        <Radio className="w-8 h-8 text-slate-600 mx-auto mb-1" />
+                        <p className="text-slate-400 text-xs">No one is live right now</p>
                       </div>
                     ) : (
                       liveItems.map((item) => (
@@ -282,31 +289,31 @@ export default function Home() {
                             {item.streamerAvatar ? (
                               <img src={item.streamerAvatar} alt={item.streamerName} className="w-full h-full object-cover" />
                             ) : (
-                              <Play className="w-12 h-12 text-white/30" />
+                              <Play className="w-10 h-10 text-white/30" />
                             )}
                           </div>
                           {item.isFeatured && (
-                            <div className="absolute top-2 left-2 px-2 py-1 bg-yellow-500 text-black text-xs font-bold rounded flex items-center gap-1">
+                            <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-yellow-500 text-black text-[10px] font-bold rounded flex items-center gap-1">
                               FEATURED
                             </div>
                           )}
-                          <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-red-600 rounded">
+                          <div className="absolute top-1.5 right-1.5 flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded">
                             <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                            <span className="text-xs font-bold text-white">LIVE</span>
+                            <span className="text-[10px] font-bold text-white">LIVE</span>
                           </div>
-                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                            <p className="text-white font-medium text-sm truncate">{item.title}</p>
-                            <div className="flex items-center justify-between mt-1">
-                              <p className="text-slate-300 text-xs truncate">{item.streamerName}</p>
-                              <div className="flex items-center gap-1 text-slate-300 text-xs">
-                                <Users className="w-3 h-3" />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                            <p className="text-white font-medium text-xs truncate">{item.title}</p>
+                            <div className="flex items-center justify-between mt-0.5">
+                              <p className="text-slate-300 text-[10px] truncate">{item.streamerName}</p>
+                              <div className="flex items-center gap-1 text-slate-300 text-[10px]">
+                                <Users className="w-2.5 h-2.5" />
                                 {item.viewerCount}
                               </div>
                             </div>
                           </div>
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <div className="w-12 h-12 bg-cyan-500 rounded-full flex items-center justify-center">
-                              <Play className="w-6 h-6 text-white ml-1" fill="white" />
+                            <div className="w-10 h-10 bg-cyan-500 rounded-full flex items-center justify-center">
+                              <Play className="w-5 h-5 text-white ml-0.5" fill="white" />
                             </div>
                           </div>
                         </div>
@@ -319,39 +326,39 @@ export default function Home() {
 
             {/* Tab Content - Pods */}
             {activeTab === 'pods' && (
-              <div className="mt-3">
-                <div className="flex items-center gap-4 mb-3">
+              <div className="mt-2 max-h-[40vh] overflow-y-auto custom-scrollbar">
+                <div className="flex items-center gap-4 mb-2">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
-                    <span className="text-sm font-medium text-white">{podItems.length} Podcast Rooms</span>
+                    <span className="text-xs font-medium text-white">{podItems.length} Podcast Rooms</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto custom-scrollbar">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {podItems.length === 0 ? (
-                    <div className="col-span-full text-center py-6">
-                      <Mic className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-                      <p className="text-slate-400 text-sm">No podcast rooms active</p>
+                    <div className="col-span-full text-center py-4">
+                      <Mic className="w-8 h-8 text-slate-600 mx-auto mb-1" />
+                      <p className="text-slate-400 text-xs">No podcast rooms active</p>
                     </div>
                   ) : (
                     podItems.map((item) => (
                       <div
                         key={item.id}
                         onClick={() => handleLiveItemClick(item)}
-                        className="relative bg-slate-800 rounded-xl p-3 cursor-pointer group hover:bg-slate-700 transition-all"
+                        className="relative bg-slate-800 rounded-xl p-2.5 cursor-pointer group hover:bg-slate-700 transition-all"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-600 to-purple-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-600 to-purple-600 flex items-center justify-center overflow-hidden flex-shrink-0">
                             {item.streamerAvatar ? (
                               <img src={item.streamerAvatar} alt={item.streamerName} className="w-full h-full object-cover" />
                             ) : (
-                              <Mic className="w-5 h-5 text-white" />
+                              <Mic className="w-4 h-4 text-white" />
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-white font-medium text-sm truncate">{item.title}</p>
-                            <p className="text-slate-400 text-xs truncate">{item.streamerName}</p>
-                            <div className="flex items-center gap-1 text-slate-400 text-xs">
-                              <Users className="w-3 h-3" />
+                            <p className="text-white font-medium text-xs truncate">{item.title}</p>
+                            <p className="text-slate-400 text-[10px] truncate">{item.streamerName}</p>
+                            <div className="flex items-center gap-1 text-slate-400 text-[10px]">
+                              <Users className="w-2.5 h-2.5" />
                               {item.viewerCount}
                             </div>
                           </div>
@@ -364,44 +371,48 @@ export default function Home() {
             )}
           </section>
 
-          {/* Ad Banner - compact */}
-          <div className="flex-shrink-0 mt-2">
-            <PromoSlot placement="home_horizontal_banner" variant="horizontal" />
+          {/* Ad Banner - compact, hidden on mobile to save space */}
+          <div className="hidden lg:block flex-shrink-0 mt-1">
+            <Suspense fallback={null}>
+              <PromoSlot placement="home_horizontal_banner" variant="horizontal" />
+            </Suspense>
           </div>
 
           {/* Main Content Area */}
-          <div className={`flex-1 min-h-0 mt-2 ${activeTab === 'wall' ? '' : 'hidden'}`}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
-              <div className="lg:col-span-8 min-h-0">
+          <div className={`flex-1 min-h-0 mt-1 ${activeTab === 'wall' ? '' : 'hidden'}`}>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 h-full">
+              <div className="col-span-1 lg:col-span-8 min-h-0">
                 <TrollWallFeed onRequireAuth={requireAuth} />
               </div>
-              <div className="lg:col-span-4 space-y-3">
-                <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-3`}>
-                  <h3 className="text-base font-semibold text-white mb-2">Quick Access</h3>
-                  <div className="space-y-1.5">
+              <div className="hidden lg:block lg:col-span-4 space-y-2">
+                <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-2.5`}>
+                  <h3 className="text-sm font-semibold text-white mb-1.5">Quick Access</h3>
+                  <div className="space-y-1">
                     <button
                       onClick={() => setActiveTab('live')}
-                      className="w-full flex items-center justify-between p-2.5 bg-red-500/10 hover:bg-red-500/20 rounded-xl transition-colors"
+                      className="w-full flex items-center justify-between p-2 bg-red-500/10 hover:bg-red-500/20 rounded-xl transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <Radio className="w-5 h-5 text-red-500" />
-                        <span className="text-white font-medium text-sm">Live Streams</span>
+                      <div className="flex items-center gap-2.5">
+                        <Radio className="w-4 h-4 text-red-500" />
+                        <span className="text-white font-medium text-xs">Live Streams</span>
                       </div>
-                      <span className="text-red-400 text-sm">{liveItems.length}</span>
+                      <span className="text-red-400 text-xs">{liveItems.length}</span>
                     </button>
                     <button
                       onClick={() => setActiveTab('pods')}
-                      className="w-full flex items-center justify-between p-2.5 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl transition-colors"
+                      className="w-full flex items-center justify-between p-2 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <Mic className="w-5 h-5 text-cyan-500" />
-                        <span className="text-white font-medium text-sm">Podcast Rooms</span>
+                      <div className="flex items-center gap-2.5">
+                        <Mic className="w-4 h-4 text-cyan-500" />
+                        <span className="text-white font-medium text-xs">Podcast Rooms</span>
                       </div>
-                      <span className="text-cyan-400 text-sm">{podItems.length}</span>
+                      <span className="text-cyan-400 text-xs">{podItems.length}</span>
                     </button>
                   </div>
                 </div>
-                <PromoSlot placement="right_panel_featured" variant="featured" />
+                <Suspense fallback={null}>
+                  <PromoSlot placement="right_panel_featured" variant="featured" />
+                </Suspense>
               </div>
             </div>
           </div>

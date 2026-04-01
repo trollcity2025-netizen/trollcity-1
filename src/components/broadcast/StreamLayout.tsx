@@ -14,6 +14,7 @@ interface Props {
   overlays?: React.ReactNode
   modals?: React.ReactNode
   hideHeader?: boolean
+  battleGiftPanel?: React.ReactNode
 }
 
 export default function StreamLayout({
@@ -25,7 +26,8 @@ export default function StreamLayout({
   onToggleChat,
   overlays,
   modals,
-  hideHeader = false
+  hideHeader = false,
+  battleGiftPanel
 }: Props) {
 
   const [chatWidth, setChatWidth] = useState(320)
@@ -204,23 +206,31 @@ export default function StreamLayout({
             )}
           </div>
 
-          {/* Stats panel */}
-          <div className="flex-1 bg-zinc-950 rounded-xl border border-white/10 p-3 flex flex-col justify-between min-h-0">
-            <div>
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">Stream Stats</p>
-              <div className="space-y-1.5">
-                <StatRow icon={Eye} label="Viewers" value="—" color="blue" />
-                <StatRow icon={Heart} label="Likes" value="—" color="pink" />
-                <StatRow icon={Coins} label="Earned" value="—" color="amber" />
-                <StatRow icon={Users} label="On Stage" value="—" color="emerald" />
-              </div>
-            </div>
-            <button
-              onClick={onToggleChat}
-              className="w-full mt-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[9px] font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-all border border-white/5"
-            >
-              {isChatOpen ? 'Hide Chat' : 'Show Chat'}
-            </button>
+          {/* Stats / Battle Gift panel */}
+          <div className="flex-1 bg-zinc-950 rounded-xl border border-white/10 flex flex-col min-h-0 overflow-hidden">
+            {battleGiftPanel ? (
+              battleGiftPanel
+            ) : (
+              <>
+                <div className="p-3 flex-1 flex flex-col justify-between">
+                  <div>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">Stream Stats</p>
+                    <div className="space-y-1.5">
+                      <StatRow icon={Eye} label="Viewers" value="—" color="blue" />
+                      <StatRow icon={Heart} label="Likes" value="—" color="pink" />
+                      <StatRow icon={Coins} label="Earned" value="—" color="amber" />
+                      <StatRow icon={Users} label="On Stage" value="—" color="emerald" />
+                    </div>
+                  </div>
+                  <button
+                    onClick={onToggleChat}
+                    className="w-full mt-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[9px] font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-all border border-white/5"
+                  >
+                    {isChatOpen ? 'Hide Chat' : 'Show Chat'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

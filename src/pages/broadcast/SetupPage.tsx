@@ -10,6 +10,7 @@ import { cn } from '../../lib/utils';
 import { useScreenShare, StreamMode, canScreenShare } from '../../hooks/useScreenShare';
 import { GamingSetup } from '../../components/broadcast/GamingSetup';
 import { DraggableCameraOverlay } from '../../components/broadcast/DraggableCameraOverlay';
+import DeckInstallPrompt from '../../components/deck/DeckInstallPrompt';
 import { toast } from 'sonner';
 import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown';
 import { generateUUID } from '../../lib/uuid';
@@ -1814,6 +1815,9 @@ export default function SetupPage() {
         {shouldForceRearCamera && !hasRearCamera && (
           <p className="text-red-400 text-xs text-center">A rear camera is required for this category but none was detected.</p>
         )}
+
+        {/* Troll Deck Install / Open Prompt */}
+        <DeckInstallPrompt />
       </div>
     </div>
   );

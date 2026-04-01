@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'react'
+import React, { lazy, Suspense, useCallback, useEffect, useState, useRef, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Heart, MessageSquare, Pin, Reply, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -10,15 +10,16 @@ import UserNameWithAge from '@/components/UserNameWithAge'
 import NeonGlowUsername from '@/components/NeonGlowUsername'
 import CreatePostComposer from './CreatePostComposer'
 import { Virtuoso } from 'react-virtuoso'
-import UserProfilePopup from '@/components/UserProfilePopup'
 import { parseTextWithLinks } from '@/lib/utils'
-import MentionTextarea from '@/components/MentionTextarea'
+
+const UserProfilePopup = lazy(() => import('@/components/UserProfilePopup'))
+const MentionTextarea = lazy(() => import('@/components/MentionTextarea'))
 
 interface TrollWallFeedProps {
   onRequireAuth: (intent?: string) => boolean
 }
 
-const PAGE_SIZE = 15
+const PAGE_SIZE = 10
 
 export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
   const { user, isAdmin } = useAuthStore()
@@ -296,8 +297,8 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
     }
   }
 
-  const renderPost = (index: number, post: WallPost) => (
-    <div className="pb-4">
+  const renderPost = useCallback((index: number, post: WallPost) => (
+    <div className="pb-3">
         <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               {post.username ? (
@@ -325,56 +326,56 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
                   }}
                 />
               ) : (
-                <span className="font-semibold text-white/60">Deleted User</span>
+                <span className="font-semibold text-white/60 text-sm">Deleted User</span>
               )}
-              <span className="text-xs text-white/40">
+              <span className="text-[10px] text-white/40">
                 {new Date(post.created_at).toLocaleString()}
               </span>
               {post.is_pinned && (
-                <span className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
-                  <Pin className="w-3 h-3 fill-current" />
+                <span className="flex items-center gap-1 text-yellow-400 text-[10px] font-bold">
+                  <Pin className="w-2.5 h-2.5 fill-current" />
                   PINNED
                 </span>
               )}
             </div>
             {post.reply_to_post_id && (
-              <p className="mt-1 text-xs text-purple-300">Replying to a post</p>
+              <p className="mt-0.5 text-[10px] text-purple-300">Replying to a post</p>
             )}
-            <p className="mt-3 text-white/90 whitespace-pre-wrap break-words">
+            <p className="mt-2 text-white/90 text-sm whitespace-pre-wrap break-words">
               {parseTextWithLinks(post.content)}
             </p>
             {post.metadata?.image_url && (
-              <div className="mt-3 overflow-hidden rounded-xl border border-white/10">
-                <img src={post.metadata.image_url} alt="Post media" className="w-full object-cover" />
+              <div className="mt-2 overflow-hidden rounded-xl border border-white/10">
+                <img src={post.metadata.image_url} alt="Post media" loading="lazy" className="w-full max-h-48 object-cover" />
               </div>
             )}
             {post.metadata?.video_url && (
-              <div className="mt-3 overflow-hidden rounded-xl border border-white/10">
-                <video controls className="w-full">
+              <div className="mt-2 overflow-hidden rounded-xl border border-white/10">
+                <video controls className="w-full max-h-48">
                   <source src={post.metadata.video_url} />
                 </video>
               </div>
             )}
-            <div className="mt-4 flex items-center gap-3 text-sm text-white/60">
+            <div className="mt-2 flex items-center gap-2 text-xs text-white/60">
               <button
                 type="button"
                 onClick={() => handleLike(post.id)}
                 disabled={likingPosts.has(post.id)}
-                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 transition-colors ${
+                className={`flex items-center gap-1 rounded-lg px-2 py-1 transition-colors ${
                   post.user_liked
                     ? 'bg-pink-600/20 text-pink-300'
                     : 'hover:bg-white/5'
                 }`}
               >
-                <Heart className={`h-4 w-4 ${post.user_liked ? 'fill-current' : ''}`} />
+                <Heart className={`h-3.5 w-3.5 ${post.user_liked ? 'fill-current' : ''}`} />
                 {post.likes || 0}
               </button>
               <button
                 type="button"
                 onClick={() => setReplyingTo((prev) => (prev === post.id ? null : post.id))}
-                className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-white/5"
+                className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-white/5"
               >
-                <Reply className="h-4 w-4" />
+                <Reply className="h-3.5 w-3.5" />
                 Reply
               </button>
               {user && (post.user_id === user.id || isAdmin) && (
@@ -382,51 +383,53 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
                   <button
                     type="button"
                     onClick={() => handlePinToggle(post.id, !!post.is_pinned)}
-                    className={`flex items-center gap-1 rounded-lg px-3 py-1.5 transition-colors ${
+                    className={`flex items-center gap-1 rounded-lg px-2 py-1 transition-colors ${
                       post.is_pinned
                         ? 'bg-yellow-500/20 text-yellow-400'
                         : 'hover:bg-white/5 text-white/60'
                     }`}
                     title={post.is_pinned ? 'Unpin post' : 'Pin post'}
                   >
-                    <Pin className={`h-4 w-4 ${post.is_pinned ? 'fill-current' : ''}`} />
+                    <Pin className={`h-3.5 w-3.5 ${post.is_pinned ? 'fill-current' : ''}`} />
                     {post.is_pinned ? 'Unpin' : 'Pin'}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(post.id)}
-                    className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-red-500/20 text-red-400 transition-colors"
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-red-500/20 text-red-400 transition-colors"
                     title={isAdmin && post.user_id !== user.id ? 'Admin delete post' : 'Delete post'}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-3.5 w-3.5" />
                     Delete
                   </button>
                 </>
               )}
             </div>
             {replyingTo === post.id && (
-              <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
-                <MentionTextarea
-                  value={replyText}
-                  onChange={setReplyText}
-                  placeholder="Write a reply... Use # to tag users"
-                  className="w-full min-h-[80px] bg-transparent text-white placeholder-white/40 focus:outline-none"
-                />
-                <div className="mt-2 flex items-center justify-end gap-2">
+              <div className="mt-2 rounded-xl border border-white/10 bg-black/30 p-2.5">
+                <Suspense fallback={<div className="w-full min-h-[60px] bg-transparent" />}>
+                  <MentionTextarea
+                    value={replyText}
+                    onChange={setReplyText}
+                    placeholder="Write a reply... Use # to tag users"
+                    className="w-full min-h-[60px] bg-transparent text-white text-sm placeholder-white/40 focus:outline-none"
+                  />
+                </Suspense>
+                <div className="mt-1.5 flex items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setReplyingTo(null)
                       setReplyText('')
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 text-sm"
+                    className="px-2.5 py-1 rounded-lg bg-white/5 text-white/70 hover:bg-white/10 text-xs"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     onClick={() => handleReplySubmit(post.id)}
-                    className="px-3 py-1.5 rounded-lg bg-purple-600 text-white text-sm hover:bg-purple-500"
+                    className="px-2.5 py-1 rounded-lg bg-purple-600 text-white text-xs hover:bg-purple-500"
                   >
                     Post Reply
                   </button>
@@ -436,15 +439,15 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
             
             {/* Nested Replies */}
             {post.replies && post.replies.length > 0 && (
-              <div className="mt-4 ml-4 border-l-2 border-purple-500/30 pl-4 space-y-3">
+              <div className="mt-2 ml-3 border-l-2 border-purple-500/30 pl-3 space-y-2">
                 {post.replies.map((reply) => (
-                  <div key={reply.id} className="bg-black/20 rounded-lg p-3">
+                  <div key={reply.id} className="bg-black/20 rounded-lg p-2">
                     <div className="flex items-start gap-2">
-                      <div className="h-7 w-7 rounded-full overflow-hidden bg-white/5 flex-shrink-0">
+                      <div className="h-6 w-6 rounded-full overflow-hidden bg-white/5 flex-shrink-0">
                         {reply.avatar_url ? (
-                          <img src={reply.avatar_url} alt={reply.username || 'User'} className="h-full w-full object-cover" />
+                          <img src={reply.avatar_url} alt={reply.username || 'User'} loading="lazy" className="h-full w-full object-cover" />
                         ) : (
-                          <div className="h-full w-full flex items-center justify-center text-xs text-white/60">
+                          <div className="h-full w-full flex items-center justify-center text-[10px] text-white/60">
                             {reply.username?.[0]?.toUpperCase() || 'T'}
                           </div>
                         )}
@@ -468,23 +471,23 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
                                   is_og_user: reply.is_og_user,
                                   created_at: reply.user_created_at
                                 }}
-                                className="font-semibold text-sm text-white"
+                                className="font-semibold text-xs text-white"
                               />
                             </div>
                           ) : (
-                            <span className="font-semibold text-sm text-white/60">Deleted User</span>
+                            <span className="font-semibold text-xs text-white/60">Deleted User</span>
                           )}
-                          <span className="text-xs text-white/40">
+                          <span className="text-[10px] text-white/40">
                             {new Date(reply.created_at).toLocaleString()}
                           </span>
                         </div>
-                        <p className="mt-1 text-sm text-white/80 whitespace-pre-wrap break-words">{reply.content}</p>
-                        <div className="mt-2 flex items-center gap-2 text-xs text-white/50">
+                        <p className="mt-0.5 text-xs text-white/80 whitespace-pre-wrap break-words">{reply.content}</p>
+                        <div className="mt-1 flex items-center gap-2 text-[10px] text-white/50">
                           <button
                             type="button"
                             onClick={() => handleLike(reply.id)}
                             disabled={likingPosts.has(reply.id)}
-                            className={`flex items-center gap-1 rounded px-2 py-1 transition-colors ${
+                            className={`flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors ${
                               reply.user_liked
                                 ? 'bg-pink-600/20 text-pink-300'
                                 : 'hover:bg-white/5'
@@ -502,15 +505,15 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
             )}
       </div>
     </div>
-  )
+  ), [user, isAdmin, likingPosts, replyingTo, replyText, handleLike, handleReplySubmit, handlePinToggle, handleDelete, setReplyingTo, setReplyText])
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+      <div className="flex items-center justify-between mb-1 flex-shrink-0">
         <div>
-          <h2 className="text-2xl font-bold text-white">Wall</h2>
-          <p className={`${trollCityTheme.text.muted} text-sm`}>The city timeline. Share updates and join the conversation.</p>
+          <h2 className="text-base font-bold text-white">Wall</h2>
+          <p className={`${trollCityTheme.text.muted} text-[10px]`}>The city timeline. Share updates and join the conversation.</p>
         </div>
       </div>
 
@@ -541,20 +544,22 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
       </div>
 
       {/* Input box - fixed at bottom like live chat */}
-      <div className="flex-shrink-0 pt-3 mt-3 border-t border-white/10">
+      <div className="flex-shrink-0 pt-1 mt-1 border-t border-white/10">
         <CreatePostComposer onPostCreated={handlePostCreated} onRequireAuth={onRequireAuth} />
       </div>
 
       {/* User Profile Popup */}
       {selectedUserId && selectedUsername && (
-        <UserProfilePopup
-          userId={selectedUserId}
-          username={selectedUsername}
-          onClose={() => {
-            setSelectedUserId(null)
-            setSelectedUsername(null)
-          }}
-        />
+        <Suspense fallback={null}>
+          <UserProfilePopup
+            userId={selectedUserId}
+            username={selectedUsername}
+            onClose={() => {
+              setSelectedUserId(null)
+              setSelectedUsername(null)
+            }}
+          />
+        </Suspense>
       )}
     </div>
   )
