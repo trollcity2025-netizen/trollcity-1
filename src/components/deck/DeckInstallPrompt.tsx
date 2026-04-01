@@ -58,8 +58,17 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
         phoneReady: true,
         lastSeen: Date.now(),
       });
+      // Immediately send phone-ready back to deck so it knows we're connected
+      send({
+        type: 'phone-ready',
+        payload: {
+          streamId: useDeckStore.getState().streamConfig.streamId,
+          title: useDeckStore.getState().streamConfig.title,
+          category: useDeckStore.getState().streamConfig.category,
+        },
+      });
     }
-  }, [setDeckInstalled, setPhoneLink]);
+  }, [setDeckInstalled, setPhoneLink, send]);
 
   const { send, isConnected: isPairConnected } = useDeckPair({
     pairCode,

@@ -1,35 +1,38 @@
 /* Troll City Deck - Broadcast Control Theme */
-/* Dark mode first, professional broadcast control interface */
+/* Neon blue, green, purple TrollCity palette */
 
 :root {
-  --deck-bg-primary: #07060b;
-  --deck-bg-secondary: #0e0c15;
-  --deck-bg-panel: #12101a;
-  --deck-bg-card: #181524;
-  --deck-bg-input: #1a1728;
-  --deck-border: #2a2540;
-  --deck-border-active: #6a00ff;
-  --deck-text-primary: #f0eef5;
-  --deck-text-secondary: #9994b8;
-  --deck-text-muted: #6b6585;
-  --deck-accent: #6a00ff;
-  --deck-accent-hover: #7d1aff;
-  --deck-accent-glow: rgba(106, 0, 255, 0.3);
-  --deck-success: #22c55e;
-  --deck-success-bg: rgba(34, 197, 94, 0.12);
-  --deck-warning: #f59e0b;
-  --deck-warning-bg: rgba(245, 158, 11, 0.12);
-  --deck-danger: #ef4444;
-  --deck-danger-bg: rgba(239, 68, 68, 0.12);
-  --deck-info: #3b82f6;
-  --deck-info-bg: rgba(59, 130, 246, 0.12);
-  --deck-live: #ef4444;
-  --deck-live-pulse: rgba(239, 68, 68, 0.4);
+  --deck-bg-primary: #080c14;
+  --deck-bg-secondary: #0c1220;
+  --deck-bg-panel: #0f1628;
+  --deck-bg-card: #131c30;
+  --deck-bg-input: #152038;
+  --deck-border: #1e2d4a;
+  --deck-border-active: #00e5ff;
+  --deck-text-primary: #e8f4ff;
+  --deck-text-secondary: #7ba3c7;
+  --deck-text-muted: #4a6a8a;
+  --deck-accent: #00e5ff;
+  --deck-accent-hover: #33ebff;
+  --deck-accent-glow: rgba(0, 229, 255, 0.3);
+  --deck-accent-secondary: #a855f7;
+  --deck-accent-secondary-glow: rgba(168, 85, 247, 0.3);
+  --deck-success: #00ff88;
+  --deck-success-bg: rgba(0, 255, 136, 0.1);
+  --deck-warning: #ffc107;
+  --deck-warning-bg: rgba(255, 193, 7, 0.1);
+  --deck-danger: #ff3b5c;
+  --deck-danger-bg: rgba(255, 59, 92, 0.1);
+  --deck-info: #00e5ff;
+  --deck-info-bg: rgba(0, 229, 255, 0.1);
+  --deck-live: #ff3b5c;
+  --deck-live-pulse: rgba(255, 59, 92, 0.4);
   --deck-radius: 10px;
   --deck-radius-sm: 6px;
   --deck-radius-lg: 14px;
   --deck-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
   --deck-transition: 0.2s ease;
+  --deck-gradient-main: linear-gradient(135deg, #00e5ff 0%, #a855f7 50%, #00ff88 100%);
 }
 
 .deck-app {
@@ -69,7 +72,7 @@
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  background: linear-gradient(135deg, #6a00ff, #a855f7);
+  background: var(--deck-gradient-main);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin: 0;
@@ -80,8 +83,8 @@
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--deck-accent);
-  color: white;
+  background: linear-gradient(135deg, #00e5ff, #a855f7);
+  color: #080c14;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -103,7 +106,7 @@
 
 .deck-connection-dot.connected {
   background: var(--deck-success);
-  box-shadow: 0 0 6px var(--deck-success);
+  box-shadow: 0 0 8px var(--deck-success);
 }
 
 .deck-connection-dot.connecting {
@@ -319,7 +322,7 @@
   outline: none;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239994b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237ba3c7' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
 }
@@ -350,13 +353,13 @@
 }
 
 .deck-btn-primary {
-  background: var(--deck-accent);
-  color: white;
+  background: linear-gradient(135deg, #00e5ff, #a855f7);
+  color: #080c14;
 }
 
 .deck-btn-primary:hover:not(:disabled) {
-  background: var(--deck-accent-hover);
-  box-shadow: 0 0 12px var(--deck-accent-glow);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.4);
+  filter: brightness(1.1);
 }
 
 .deck-btn-danger {
@@ -365,16 +368,18 @@
 }
 
 .deck-btn-danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: #e63350;
+  box-shadow: 0 0 12px rgba(255, 59, 92, 0.4);
 }
 
 .deck-btn-success {
-  background: var(--deck-success);
-  color: white;
+  background: linear-gradient(135deg, #00ff88, #00e5ff);
+  color: #080c14;
 }
 
 .deck-btn-success:hover:not(:disabled) {
-  background: #16a34a;
+  box-shadow: 0 0 16px rgba(0, 255, 136, 0.4);
+  filter: brightness(1.1);
 }
 
 .deck-btn-ghost {
@@ -386,6 +391,7 @@
 .deck-btn-ghost:hover:not(:disabled) {
   background: var(--deck-bg-card);
   color: var(--deck-text-primary);
+  border-color: var(--deck-accent);
 }
 
 .deck-btn-sm {
@@ -486,7 +492,7 @@
   padding: 6px 0;
   font-size: 13px;
   line-height: 1.4;
-  border-bottom: 1px solid rgba(42, 37, 64, 0.3);
+  border-bottom: 1px solid rgba(30, 45, 74, 0.3);
 }
 
 .deck-chat-message:last-child {
@@ -508,7 +514,7 @@
 }
 
 .deck-chat-system {
-  color: var(--deck-text-muted);
+  color: var(--deck-accent-secondary);
   font-style: italic;
   font-size: 12px;
 }
@@ -649,7 +655,7 @@
 
 .deck-addon-item {
   position: absolute;
-  background: rgba(106, 0, 255, 0.15);
+  background: rgba(0, 229, 255, 0.1);
   border: 1px solid var(--deck-accent);
   border-radius: var(--deck-radius-sm);
   display: flex;
@@ -767,11 +773,22 @@
   color: var(--deck-danger);
 }
 
+.deck-mod-btn-danger {
+  background: rgba(255, 59, 92, 0.15);
+  border-color: rgba(255, 59, 92, 0.4);
+  color: var(--deck-danger);
+}
+
+.deck-mod-btn-danger:hover {
+  background: var(--deck-danger-bg);
+  border-color: var(--deck-danger);
+}
+
 /* Session expired overlay */
 .deck-session-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(7, 6, 11, 0.95);
+  background: rgba(8, 12, 20, 0.95);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -825,7 +842,7 @@
   font-size: 24px;
   font-weight: 700;
   margin: 16px 0 4px;
-  background: linear-gradient(135deg, #6a00ff, #a855f7);
+  background: var(--deck-gradient-main);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -845,7 +862,7 @@
 .deck-auth-error {
   padding: 10px 12px;
   background: var(--deck-danger-bg);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(255, 59, 92, 0.3);
   border-radius: var(--deck-radius-sm);
   color: var(--deck-danger);
   font-size: 12px;
@@ -855,7 +872,7 @@
 .deck-auth-info {
   padding: 10px 12px;
   background: var(--deck-info-bg);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(0, 229, 255, 0.3);
   border-radius: var(--deck-radius-sm);
   color: var(--deck-info);
   font-size: 12px;
@@ -940,8 +957,8 @@
 
 /* Install prompt */
 .deck-install-prompt {
-  background: linear-gradient(135deg, rgba(106, 0, 255, 0.1), rgba(168, 85, 247, 0.05));
-  border: 1px solid var(--deck-accent);
+  background: linear-gradient(135deg, rgba(0, 229, 255, 0.08), rgba(168, 85, 247, 0.05));
+  border: 1px solid var(--deck-border);
   border-radius: var(--deck-radius);
   padding: 20px;
   text-align: center;
@@ -1001,4 +1018,18 @@
 .deck-phone-status-sub {
   font-size: 11px;
   color: var(--deck-text-muted);
+}
+
+/* Neon glow accents */
+.deck-card:hover {
+  border-color: rgba(0, 229, 255, 0.2);
+}
+
+.deck-stat-card:hover {
+  border-color: rgba(0, 229, 255, 0.3);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.1);
+}
+
+.deck-alert-item:hover {
+  background: rgba(0, 229, 255, 0.04);
 }

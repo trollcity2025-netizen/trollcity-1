@@ -32,10 +32,19 @@ export function useBroadcastDeckSync({
   const coinTotal = useRef(0);
 
   const handleDeckCommand = useCallback(async (msg: DeckPairMessage) => {
-    if (!isHost) return;
-
     switch (msg.type) {
+      case 'deck-start-broadcast': {
+        // Phone should trigger broadcast start - handled by SetupPage listener
+        break;
+      }
+      case 'deck-end-broadcast': {
+        if (isHost && onStreamEnd) {
+          onStreamEnd();
+        }
+        break;
+      }
       case 'deck-command': {
+        if (!isHost) return;
         const { command, payload } = msg as any;
         switch (command) {
           case 'mute-mic': {

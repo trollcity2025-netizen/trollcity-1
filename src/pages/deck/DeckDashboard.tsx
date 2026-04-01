@@ -79,6 +79,14 @@ export default function DeckDashboard() {
           lastSeen: Date.now(),
           streamId: (msg.payload as any)?.streamId || null,
         });
+        // Auto-sync title and category from phone
+        const readyPayload = msg.payload as any;
+        if (readyPayload?.title || readyPayload?.category) {
+          useDeckStore.getState().updateStreamConfig({
+            ...(readyPayload?.title && { title: readyPayload.title }),
+            ...(readyPayload?.category && { category: readyPayload.category }),
+          });
+        }
         break;
       case 'phone-stream-stats':
         setStreamStats(msg.payload as any);

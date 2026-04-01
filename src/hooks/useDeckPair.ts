@@ -11,6 +11,8 @@ export type DeckPairMessage =
   | { type: 'phone-stream-started'; payload: Record<string, unknown>; timestamp: number }
   | { type: 'phone-stream-ended'; timestamp: number }
   | { type: 'phone-disconnected'; timestamp: number }
+  | { type: 'deck-start-broadcast'; payload?: Record<string, unknown>; timestamp: number }
+  | { type: 'deck-end-broadcast'; timestamp: number }
   | { type: 'deck-command'; command: string; payload?: Record<string, unknown>; timestamp: number };
 
 interface UseDeckPairOptions {
@@ -19,19 +21,53 @@ interface UseDeckPairOptions {
 }
 
 const activeChannels = new Map<string, ReturnType<typeof supabase.channel>>();
+const channelReady = new Map<string, boolean>();
 
 export function getDeckPairChannel(pairCode: string): ReturnType<typeof supabase.channel> | null {
   return activeChannels.get(pairCode) || null;
 }
 
 export async function sendToDeckPair(pairCode: string, msg: Omit<DeckPairMessage, 'timestamp'>) {
-  const channel = activeChannels.get(pairCode);
-  if (!channel) return;
-  await channel.send({
-    type: 'broadcast',
-    event: 'deck-msg',
-    payload: { ...msg, timestamp: Date.now() },
-  });
+  if (!pairCode) return;
+  
+  let channel = activeChannels.get(pairCode);
+  
+  // If no channel exists, create one temporarily
+  if (!channel) {
+    const channelName = `deck-pair:${pairCode}`;
+    channel = supabase.channel(channelName, {
+      config: { broadcast: { self: false } },
+    });
+    activeChannels.set(pairCode, channel);
+  }
+
+  // Wait for channel to be ready (max 5 seconds)
+  const isReady = channelReady.get(pairCode);
+  if (!isReady) {
+    await new Promise<void>((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (channelReady.get(pairCode)) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
+      // Timeout after 5s - try sending anyway
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        resolve();
+      }, 5000);
+    });
+  }
+
+  try {
+    await channel.send({
+      type: 'broadcast',
+      event: 'deck-msg',
+      payload: { ...msg, timestamp: Date.now() },
+    });
+  } catch (e) {
+    console.error('[DeckPair] Failed to send message:', e);
+  }
 }
 
 export function useDeckPair({ pairCode, onMessage }: UseDeckPairOptions) {
@@ -57,7 +93,9 @@ export function useDeckPair({ pairCode, onMessage }: UseDeckPairOptions) {
     });
 
     channel.subscribe((status) => {
-      setIsConnected(status === 'SUBSCRIBED');
+      const ready = status === 'SUBSCRIBED';
+      setIsConnected(ready);
+      channelReady.set(pairCode, ready);
     });
 
     channelRef.current = channel;
@@ -65,6 +103,7 @@ export function useDeckPair({ pairCode, onMessage }: UseDeckPairOptions) {
 
     return () => {
       activeChannels.delete(pairCode);
+      channelReady.delete(pairCode);
       supabase.removeChannel(channel);
       channelRef.current = null;
       setIsConnected(false);
@@ -73,11 +112,15 @@ export function useDeckPair({ pairCode, onMessage }: UseDeckPairOptions) {
 
   const send = useCallback(async (msg: Omit<DeckPairMessage, 'timestamp'>) => {
     if (!channelRef.current || !isConnected) return;
-    await channelRef.current.send({
-      type: 'broadcast',
-      event: 'deck-msg',
-      payload: { ...msg, timestamp: Date.now() },
-    });
+    try {
+      await channelRef.current.send({
+        type: 'broadcast',
+        event: 'deck-msg',
+        payload: { ...msg, timestamp: Date.now() },
+      });
+    } catch (e) {
+      console.error('[DeckPair] send failed:', e);
+    }
   }, [isConnected]);
 
   return { send, isConnected };
