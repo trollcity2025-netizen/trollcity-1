@@ -10,7 +10,7 @@ import { Environment, ContactShadows, Float, Text3D, Center, MeshDistortMaterial
 import * as THREE from 'three';
 import { createPortal } from 'react-dom';
 import { playGiftSound } from '../../lib/giftSoundMap';
-import './gift-3d.css';
+import '../../pages/dev/gift-3d.css';
 
 // Detect scene type from gift name
 function detectScene(name: string, icon: string): string {
