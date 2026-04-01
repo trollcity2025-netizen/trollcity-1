@@ -8,6 +8,7 @@ import './styles/mobile-theme.css'
 import './styles/leaflet.css'
 import { AuthProvider } from './contexts/AuthProvider'
 import { GlobalAppProvider } from './contexts/GlobalAppContext'
+import AprilFoolsProvider from './components/april-fools/AprilFoolsProvider'
 import { supabase } from './lib/supabase'
 import { initTelemetry } from './lib/telemetry'
 import { initMobilePlatform, isMobilePlatform } from './lib/mobilePlatform'
@@ -300,7 +301,9 @@ createRoot(rootElement).render(
       
         <AuthProvider>
           <GlobalAppProvider>
-            <App />
+            <AprilFoolsProvider>
+              <App />
+            </AprilFoolsProvider>
           </GlobalAppProvider>
         </AuthProvider>
       

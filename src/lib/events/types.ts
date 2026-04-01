@@ -165,6 +165,7 @@ export interface EventFeatureFlags {
 // ============================================================================
 
 export type EventId = 
+  | 'april_fools'
   | 'valentines'
   | 'pride'
   | 'halloween'

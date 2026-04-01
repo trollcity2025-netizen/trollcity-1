@@ -353,15 +353,15 @@ export default function BattleGridOverlay({
       isLocal: isHost
     });
     
-    // Boxes 1-4: Additional broadcaster side participants
-    for (let i = 1; i <= 4; i++) {
+    // Boxes 1-5: Additional broadcaster side participants (5 battle slots)
+    for (let i = 1; i <= 5; i++) {
       const guest = broadcasterTeam.find(p => p.seat_index === i && p.role !== 'host');
       const guestParticipant = guest ? findParticipantByIdentity(getLiveKitIdentity(guest.user_id)) : null;
       
       boxes.push({
         index: i,
         userId: guest?.user_id || null,
-        username: guest?.username || (i === 1 ? 'Teammate 1' : i === 2 ? 'Teammate 2' : i === 3 ? 'Teammate 3' : 'Teammate 4'),
+        username: guest?.username || `Teammate ${i}`,
         avatarUrl: guest?.avatar_url || '',
         isVideoEnabled: hasVideoEnabled(guestParticipant),
         isAudioEnabled: hasAudioEnabled(guestParticipant),
@@ -394,15 +394,15 @@ export default function BattleGridOverlay({
       isLocal: false
     });
     
-    // Boxes 1-4: Challenger team members
-    for (let i = 1; i <= 4; i++) {
+    // Boxes 1-5: Challenger team members (5 battle slots)
+    for (let i = 1; i <= 5; i++) {
       const opponent = challengerTeam.find(p => p.seat_index === i);
       const opponentParticipant = opponent ? findParticipantByIdentity(getLiveKitIdentity(opponent.user_id)) : null;
       
       boxes.push({
         index: i,
         userId: opponent?.user_id || null,
-        username: opponent?.username || (i === 1 ? 'Teammate 1' : i === 2 ? 'Teammate 2' : i === 3 ? 'Teammate 3' : 'Teammate 4'),
+        username: opponent?.username || `Teammate ${i}`,
         avatarUrl: opponent?.avatar_url || '',
         isVideoEnabled: hasVideoEnabled(opponentParticipant),
         isAudioEnabled: hasAudioEnabled(opponentParticipant),

@@ -41,6 +41,9 @@ export interface FiveVFiveBattleState {
   rematchOffered: boolean;
   rematchAccepted: { A: boolean; B: boolean };
   rematchCountdown: number;
+  forfeitResult: { forfeited: boolean; forfeitingTeam: 'A' | 'B' | null };
+  teamAName: string;
+  teamBName: string;
   abilityEffects: Array<{ id: string; type: string; team?: 'A' | 'B'; username: string; timestamp: number }>;
 }
 
@@ -52,6 +55,7 @@ const TEAM_FREEZE_COOLDOWN = 30; // 30 seconds
 const REVERSE_COOLDOWN = 20; // 20 seconds
 const DOUBLE_XP_DURATION = 10; // 10 seconds
 const DOUBLE_XP_COOLDOWN = 25; // 25 seconds
+const CROWNS_PER_WINNER = 2; // Each seat on the winning team gets 2 crowns
 
 const INITIAL_STATE: FiveVFiveBattleState = {
   active: false,
@@ -72,6 +76,9 @@ const INITIAL_STATE: FiveVFiveBattleState = {
   rematchOffered: false,
   rematchAccepted: { A: false, B: false },
   rematchCountdown: 0,
+  forfeitResult: { forfeited: false, forfeitingTeam: null },
+  teamAName: 'Team A',
+  teamBName: 'Team B',
   abilityEffects: [],
 };
 
@@ -120,9 +127,12 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
   }, []);
 
   // ─── MATCHMAKING ───
-  const findMatch = useCallback(async () => {
+  const findMatch = useCallback(async (customTeamA?: string, customTeamB?: string) => {
     if (!user || !streamId || !isGeneralChat) return;
     if (state.phase !== 'idle') return;
+
+    const teamA = customTeamA?.trim() || 'Team A';
+    const teamB = customTeamB?.trim() || 'Team B';
 
     setState(prev => ({ ...prev, phase: 'matchmaking' }));
     toast.loading('Searching for opponent...', { id: 'battle-matchmaking' });
@@ -199,10 +209,10 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
       // Build participants list
       const participants: BattleParticipant[] = [];
 
-      // Team A - My stream (up to 5)
+      // Team A - My stream (host + up to 5 guests)
       const teamAPeople = [
         { userId: user.id, seatIndex: 0, role: 'host' as const },
-        ...(mySeats || []).filter(s => s.user_id !== user.id).slice(0, 4).map((s, i) => ({
+        ...(mySeats || []).filter(s => s.user_id !== user.id).slice(0, 5).map((s, i) => ({
           userId: s.user_id,
           seatIndex: i + 1,
           role: 'guest' as const,
@@ -232,10 +242,10 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
         });
       }
 
-      // Team B - Opponent stream (up to 5)
+      // Team B - Opponent stream (host + up to 5 guests)
       const teamBPeople = [
         { userId: opponent.user_id, seatIndex: 0, role: 'host' as const },
-        ...(oppSeats || []).filter(s => s.user_id !== opponent.user_id).slice(0, 4).map((s, i) => ({
+        ...(oppSeats || []).filter(s => s.user_id !== opponent.user_id).slice(0, 5).map((s, i) => ({
           userId: s.user_id,
           seatIndex: i + 1,
           role: 'guest' as const,
@@ -287,6 +297,8 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
           participants: JSON.stringify(participants),
           score_a: 0,
           score_b: 0,
+          team_a_name: teamA,
+          team_b_name: teamB,
           created_at: new Date().toISOString(),
         });
 
@@ -324,6 +336,8 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
         participants,
         abilities,
         timerSeconds: PRE_BATTLE_COUNTDOWN,
+        teamAName: teamA,
+        teamBName: teamB,
       }));
 
       // Broadcast battle start to opponent
@@ -332,6 +346,8 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
         participants,
         streamIdA: streamId,
         streamIdB: opponent.id,
+        teamAName: teamA,
+        teamBName: teamB,
       });
 
       // Start countdown
@@ -371,6 +387,15 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
     participants: BattleParticipant[],
     abilities: Record<string, AbilityState>
   ) => {
+    // Store started_at in DB so both sides use the same server timestamp (fire-and-forget)
+    const dbStartedAt = new Date().toISOString();
+    supabase
+      .from('battle_sessions')
+      .update({ status: 'active', started_at: dbStartedAt })
+      .eq('id', battleId)
+      .then(() => {})
+      .catch(() => {});
+
     const startedAt = Date.now();
     let remaining = BATTLE_DURATION;
 
@@ -381,10 +406,10 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
       totalDuration: BATTLE_DURATION,
     }));
 
-    broadcastState('battle_start', { battleId, duration: BATTLE_DURATION, startedAt });
+    // Include the DB timestamp so non-host can sync against it
+    broadcastState('battle_start', { battleId, duration: BATTLE_DURATION, startedAt, dbStartedAt });
 
     timerRef.current = setInterval(() => {
-      // Calculate remaining time based on shared timestamp for sync accuracy
       const elapsed = Math.floor((Date.now() - startedAt) / 1000);
       remaining = Math.max(0, BATTLE_DURATION - elapsed);
 
@@ -437,6 +462,45 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
     }, 1000);
   }, [broadcastState]);
 
+  // ─── AWARD CROWNS TO WINNING TEAM ───
+  const awardCrownsToWinner = useCallback(async (winner: 'A' | 'B', participants: BattleParticipant[]) => {
+    const winners = participants.filter(p => p.team === winner && p.isActive);
+    if (winners.length === 0) return;
+
+    console.log(`[5v5Battle] Awarding ${CROWNS_PER_WINNER} crowns to each of ${winners.length} winning team members`);
+
+    for (const winner of winners) {
+      try {
+        // Fetch current crowns and increment
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('battle_crowns, battle_crown_streak, total_battle_wins')
+          .eq('id', winner.userId)
+          .maybeSingle();
+
+        const currentCrowns = profile?.battle_crowns || 0;
+        const currentStreak = profile?.battle_crown_streak || 0;
+        const currentWins = profile?.total_battle_wins || 0;
+
+        await supabase
+          .from('user_profiles')
+          .update({
+            battle_crowns: currentCrowns + CROWNS_PER_WINNER,
+            battle_crown_streak: currentStreak + 1,
+            total_battle_wins: currentWins + 1,
+            last_battle_win_at: new Date().toISOString(),
+          })
+          .eq('id', winner.userId);
+
+        console.log(`[5v5Battle] Awarded ${CROWNS_PER_WINNER} crowns to ${winner.username}`);
+      } catch (err) {
+        console.warn(`[5v5Battle] Failed to award crowns to ${winner.username}:`, err);
+      }
+    }
+
+    toast.success(`Winner team awarded ${CROWNS_PER_WINNER} crowns each! 👑`);
+  }, []);
+
   // ─── END BATTLE ───
   const endBattle = useCallback(async () => {
     cleanup();
@@ -444,6 +508,11 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
     const currentState = stateRef.current;
     const winner = currentState.teamAScore > currentState.teamBScore ? 'A' :
       currentState.teamBScore > currentState.teamAScore ? 'B' : 'draw';
+
+    // Award crowns to winning team
+    if (winner !== 'draw') {
+      await awardCrownsToWinner(winner, currentState.participants);
+    }
 
     broadcastState('battle_ended', {
       winner,
@@ -483,13 +552,55 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
         resetBattle();
       }
     }, 1000);
-  }, [cleanup, broadcastState, streamId]);
+  }, [cleanup, broadcastState, streamId, awardCrownsToWinner]);
 
   // ─── RESET ───
   const resetBattle = useCallback(() => {
     cleanup();
     setState(INITIAL_STATE);
   }, [cleanup]);
+
+  // ─── FORFEIT BATTLE ───
+  const forfeitBattle = useCallback(async () => {
+    if (!state.active || state.phase !== 'active') return;
+
+    cleanup();
+
+    const currentState = stateRef.current;
+    // Determine which team the forfeiting user is on
+    const userParticipant = currentState.participants.find(p => p.userId === user?.id);
+    const forfeitingTeam = userParticipant?.team || 'A';
+    const winner = forfeitingTeam === 'A' ? 'B' : 'A';
+
+    // Award crowns to the winning team
+    await awardCrownsToWinner(winner, currentState.participants);
+
+    // Broadcast battle end to all participants
+    broadcastState('battle_ended', {
+      winner,
+      teamAScore: currentState.teamAScore,
+      teamBScore: currentState.teamBScore,
+      forfeited: true,
+      forfeitingTeam,
+    });
+
+    // Clear battle mode on ALL streams
+    if (currentState.battleId) {
+      await supabase
+        .from('streams')
+        .update({ is_battle: false, battle_id: null })
+        .eq('battle_id', currentState.battleId);
+      await supabase
+        .from('streams')
+        .update({ is_battle: false, battle_id: null })
+        .eq('id', streamId);
+    }
+
+    toast.success('You forfeited. The other team wins! 👑');
+
+    // Reset battle state immediately - forfeiter goes straight back to their stream
+    resetBattle();
+  }, [state.active, state.phase, cleanup, broadcastState, streamId, awardCrownsToWinner, user?.id, resetBattle]);
 
   // ─── PROCESS GIFT ───
   const processGift = useCallback((
@@ -725,12 +836,17 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
             phase: 'pre_battle',
             participants: data.participants,
             timerSeconds: PRE_BATTLE_COUNTDOWN,
+            teamAName: data.teamAName || 'Team A',
+            teamBName: data.teamBName || 'Team B',
           }));
         }
         break;
       }
       case 'battle_start': {
-        const battleStartedAt = data.startedAt || Date.now();
+        // Use DB server timestamp if available for perfect sync, otherwise use broadcast timestamp
+        const battleStartedAt = data.dbStartedAt
+          ? new Date(data.dbStartedAt).getTime()
+          : (data.startedAt || Date.now());
         // Start independent timer on non-host side using shared timestamp for sync
         if (!isHost && timerRef.current) {
           clearInterval(timerRef.current);
@@ -814,6 +930,7 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
       }
       case 'battle_ended': {
         if (timerRef.current) clearInterval(timerRef.current);
+        const forfeited = data.forfeited || false;
         setState(prev => ({
           ...prev,
           phase: 'ended',
@@ -821,6 +938,7 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
           active: false,
           teamAScore: data.teamAScore,
           teamBScore: data.teamBScore,
+          forfeitResult: { forfeited, forfeitingTeam: data.forfeitingTeam || null },
         }));
         break;
       }
@@ -853,9 +971,11 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
     useAbility,
     processGift,
     requestRematch,
+    forfeitBattle,
     resetBattle,
     joinBattle,
     isGeneralChat,
+    setTeamNames: (a: string, b: string) => setState(prev => ({ ...prev, teamAName: a, teamBName: b })),
     BATTLE_DURATION,
     TEAM_FREEZE_DURATION,
     TEAM_FREEZE_COOLDOWN,

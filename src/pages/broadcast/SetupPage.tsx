@@ -66,8 +66,6 @@ export default function SetupPage() {
   const [isProtected, setIsProtected] = useState(false);
   const [broadcastPassword, setBroadcastPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  // Battle enabled state
-  const [battleEnabled, setBattleEnabled] = useState(false);
   
   // Check if user can create protected broadcast (admin/staff or level >= 50)
   const canCreateProtected = profile && (
@@ -1145,8 +1143,6 @@ export default function SetupPage() {
         insertData.password_hash = null;
       }
 
-      // Add battle enabled setting
-      insertData.battle_enabled = battleEnabled;
 
       const { data, error } = await supabase
         .from('streams')
@@ -1575,29 +1571,6 @@ export default function SetupPage() {
 
           {/* Right Column: Quick Setting Cards */}
           <div className="flex-1 flex flex-col gap-2.5 min-w-0" style={{ minWidth: '160px' }}>
-
-            {/* Battle Toggle Card */}
-            {categorySupportsBattles && (
-              <div className="flex-1 bg-zinc-900/80 rounded-xl border border-white/10 p-3 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Swords size={13} className="text-orange-400" />
-                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Battle</span>
-                </div>
-                <p className="text-[9px] text-slate-500 mb-2">Allow {categoryMatchingTerm.toLowerCase()} during broadcast</p>
-                <button
-                  type="button"
-                  onClick={() => setBattleEnabled(!battleEnabled)}
-                  className={cn(
-                    "w-full py-1.5 rounded-lg text-[10px] font-bold transition-all border",
-                    battleEnabled
-                      ? "bg-orange-500/15 border-orange-500/30 text-orange-400"
-                      : "bg-white/5 border-white/10 text-slate-500 hover:text-white hover:bg-white/10"
-                  )}
-                >
-                  {battleEnabled ? 'ENABLED' : 'DISABLED'}
-                </button>
-              </div>
-            )}
 
             {/* Password Protection Card */}
             {canCreateProtected && (

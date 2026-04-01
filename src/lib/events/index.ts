@@ -65,6 +65,15 @@ export type {
   PrideConfig,
 };
 
+// April Fools utilities
+export {
+  isAprilFoolsActive,
+  canTriggerPrank,
+  UI_RENAMES,
+  FAKE_ITEMS,
+  FAKE_CHARGES,
+} from './aprilFools';
+
 // ============================================================================
 // Quick Start Guide
 // ============================================================================

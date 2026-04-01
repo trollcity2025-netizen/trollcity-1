@@ -681,6 +681,7 @@ function BroadcastPage() {
     useAbility: fiveVFiveUseAbility,
     processGift: fiveVFiveProcessGift,
     requestRematch: fiveVFiveRequestRematch,
+    forfeitBattle: fiveVFiveForfeit,
     resetBattle: fiveVFiveReset,
     isGeneralChat: fiveVFiveIsGeneralChat,
     TEAM_FREEZE_COOLDOWN,
@@ -776,7 +777,9 @@ function BroadcastPage() {
           roomRef.current = newRoom;
 
           // If publisher, publish local tracks to battle room
+          // Small delay to ensure connection is fully established before publishing
           if (shouldPublish && localTracksRef.current) {
+            await new Promise(resolve => setTimeout(resolve, 300));
             const [audioTrack, videoTrack] = localTracksRef.current;
             if (audioTrack && typeof audioTrack.getMediaStreamTrack === 'function') {
               const mediaTrack = audioTrack.getMediaStreamTrack();
@@ -815,8 +818,13 @@ function BroadcastPage() {
         try { currentRoom.disconnect().catch(() => {}); } catch {}
       }
 
+      // Clear PreflightStore so re-init creates fresh tracks instead of reusing stale ones
+      PreflightStore.setLivekitRoom(null);
+      PreflightStore.setLivekitTracks(null);
+
       // Re-initialize LiveKit connection to original stream room
       hasJoinedRef.current = false;
+      setLocalTracks(null);
       setRemoteParticipants(new Map());
       setStream((prev: any) => prev ? { ...prev } : prev); // Trigger re-init
     }
@@ -2848,6 +2856,8 @@ function BroadcastPage() {
                 currentUserId={user?.id || ''}
                 onUseAbility={isHost ? fiveVFiveUseAbility : () => {}}
                 onRequestRematch={isHost ? fiveVFiveRequestRematch : () => {}}
+                onForfeit={isHost ? fiveVFiveForfeit : undefined}
+                onDismiss={isHost ? fiveVFiveReset : undefined}
                 TEAM_FREEZE_COOLDOWN={TEAM_FREEZE_COOLDOWN}
                 REVERSE_COOLDOWN={REVERSE_COOLDOWN}
                 DOUBLE_XP_COOLDOWN={DOUBLE_XP_COOLDOWN}
@@ -2856,6 +2866,8 @@ function BroadcastPage() {
                 localTracks={localTracks}
                 remoteParticipants={Array.from(remoteParticipants.values())}
                 isHost={isHost}
+                teamAName={effectiveBattleState.teamAName || 'Team A'}
+                teamBName={effectiveBattleState.teamBName || 'Team B'}
               />
             )}
           </div>

@@ -2040,7 +2040,9 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
 
     const interval = setInterval(() => {
       const now = new Date();
-      const start = new Date(arenaReadyAtMs || battle.started_at);
+      // Use battle.started_at from DB as single source of truth for all participants
+      // arenaReadyAtMs uses local Date.now() which differs between broadcasters
+      const start = new Date(battle.started_at);
       const elapsed = (now.getTime() - start.getTime()) / 1000;
       
       const BATTLE_DURATION = 180; // 3 minutes
@@ -2146,15 +2148,9 @@ export default function BattleView({ battleId, currentStreamId, viewerId, localT
   // Return to stream handler - returns each broadcaster to their own stream
   // Also broadcasts to all participants to return to their respective broadcasts
   const handleReturnToStream = useCallback(async () => {
-    // Cleanup media
-    if (battleLocalAudioTrack) {
-      battleLocalAudioTrack.stop();
-      battleLocalAudioTrack.close();
-    }
-    if (battleLocalVideoTrack) {
-      battleLocalVideoTrack.stop();
-      battleLocalVideoTrack.close();
-    }
+    // Only disconnect the battle LiveKit room
+    // Do NOT stop/close local tracks - they belong to the broadcaster's main stream
+    // and are shared with BroadcastPage. Closing them here would kill the camera.
     if (livekitRoom) {
       livekitRoom.disconnect();
     }

@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
-import { Swords, Shield, Clock, Coins, Gift, Zap, Snowflake, RotateCcw, Star, Timer, Users, Trophy, Flame, User, Crown, Home } from 'lucide-react';
+import { Swords, Shield, Clock, Coins, Gift, Zap, Snowflake, RotateCcw, Star, Timer, Users, Trophy, Flame, User, Crown, Home, Flag, Wifi, MicOff } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { FiveVFiveBattleState, BattleParticipant } from '../../hooks/useFiveVFiveBattle';
 import type { UserAbility } from '../../types/broadcastAbilities';
@@ -22,6 +22,8 @@ interface FiveVFiveBattleOverlayProps {
   currentUserId: string;
   onUseAbility: (type: 'team_freeze' | 'reverse' | 'double_xp') => void;
   onRequestRematch: () => void;
+  onForfeit?: () => void;
+  onDismiss?: () => void;
   TEAM_FREEZE_COOLDOWN: number;
   REVERSE_COOLDOWN: number;
   DOUBLE_XP_COOLDOWN: number;
@@ -31,6 +33,8 @@ interface FiveVFiveBattleOverlayProps {
   localTracks?: [LocalAudioTrack | undefined, LocalVideoTrack | undefined];
   remoteParticipants?: RemoteParticipant[];
   isHost?: boolean;
+  teamAName?: string;
+  teamBName?: string;
 }
 
 // ─── LIVEKIT VIDEO PLAYER ───
@@ -53,7 +57,134 @@ function LiveKitVideoPlayer({
     if (attachedTrackIdRef.current === currentTrackId && videoElementRef.current) return;
 
     if (containerRef.current.querySelector('video')) {
-      try { videoTrack.detach(); } catch {}
+      try { videoTrack.detach(  );
+}
+
+// ─── PREMIUM BATTLE SLOT ───
+
+function PremiumBattleSlot({
+  participant,
+  videoTrack,
+  audioTrack,
+  hasVideo,
+  hasAudio,
+  isLocal,
+  isCurrent,
+  teamColor,
+}: {
+  participant: BattleParticipant;
+  videoTrack: LocalVideoTrack | RemoteVideoTrack | undefined;
+  audioTrack: LocalAudioTrack | RemoteAudioTrack | undefined;
+  hasVideo: boolean;
+  hasAudio: boolean;
+  isLocal: boolean;
+  isCurrent: boolean;
+  teamColor: 'red' | 'blue';
+}) {
+  const glowColor = teamColor === 'red' ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)';
+  const borderColor = teamColor === 'red' ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.25)';
+  const borderActive = teamColor === 'red' ? 'rgba(239,68,68,0.6)' : 'rgba(59,130,246,0.6)';
+  const avatarBg = teamColor === 'red' ? 'rgba(239,68,68,0.2)' : 'rgba(59,130,246,0.2)';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, type: 'spring', damping: 20 }}
+      className="relative rounded-xl overflow-hidden border transition-all duration-300"
+      style={{
+        borderColor: isCurrent ? borderActive : borderColor,
+        boxShadow: isCurrent ? `0 0 20px ${glowColor}, inset 0 0 20px ${glowColor}` : `0 0 8px ${glowColor}`,
+        background: `linear-gradient(135deg, rgba(15,15,25,0.9), rgba(10,10,20,0.95))`,
+      }}
+    >
+      {hasVideo && videoTrack ? (
+        <>
+          <LiveKitVideoPlayer videoTrack={videoTrack} isLocal={isLocal} />
+          {/* Current user indicator */}
+          {isCurrent && (
+            <div className="absolute top-1.5 left-1.5 bg-green-500/80 text-white text-[7px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 z-10">
+              <Wifi size={6} /> LIVE
+            </div>
+          )}
+          {/* Bottom info bar */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-6 pb-1.5 px-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1 min-w-0">
+                {participant.role === 'host' && <Crown size={8} className="text-amber-400 shrink-0" />}
+                <span className="text-[10px] font-bold text-white truncate drop-shadow-lg">{participant.username}</span>
+              </div>
+              <span className="text-[8px] font-bold text-amber-400/80 tabular-nums shrink-0">+{participant.coinsEarned.toLocaleString()}</span>
+            </div>
+          </div>
+          {!hasAudio && (
+            <div className="absolute top-1.5 right-1.5 bg-red-500/70 rounded-full p-0.5 z-10">
+              <MicOff size={8} className="text-white" />
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center h-full p-2 gap-1">
+          <motion.div
+            className="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center"
+            style={{ borderColor: teamColor === 'red' ? 'rgba(239,68,68,0.4)' : 'rgba(59,130,246,0.4)', background: avatarBg }}
+            animate={isCurrent ? { boxShadow: [`0 0 0px ${glowColor}`, `0 0 12px ${glowColor}`, `0 0 0px ${glowColor}`] } : {}}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            <span className="text-sm font-black" style={{ color: teamColor === 'red' ? '#f87171' : '#60a5fa' }}>
+              {participant.username.charAt(0).toUpperCase()}
+            </span>
+          </motion.div>
+          <div className="flex items-center gap-0.5 min-w-0 max-w-full">
+            {participant.role === 'host' && <Crown size={7} className="text-amber-400 shrink-0" />}
+            <span className="text-[9px] font-bold text-white/70 truncate">{participant.username}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            {participant.isActive ? (
+              <span className="text-[7px] text-green-400/60 font-medium flex items-center gap-0.5">
+                <div className="w-1 h-1 bg-green-400 rounded-full animate-pulse" /> Active
+              </span>
+            ) : (
+              <span className="text-[7px] text-zinc-500">Offline</span>
+            )}
+            <span className="text-[7px] font-bold text-amber-400/50 tabular-nums">+{participant.coinsEarned.toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+// ─── EMPTY BATTLE SLOT ───
+
+function EmptyBattleSlot({ teamColor, slotIndex }: { teamColor: 'red' | 'blue'; slotIndex: number }) {
+  const borderColor = teamColor === 'red' ? 'rgba(239,68,68,0.1)' : 'rgba(59,130,246,0.1)';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: slotIndex * 0.05 }}
+      className="rounded-xl border flex flex-col items-center justify-center gap-1.5"
+      style={{
+        borderColor,
+        background: 'rgba(15,15,25,0.4)',
+      }}
+    >
+      <motion.div
+        className="w-8 h-8 rounded-full border border-dashed flex items-center justify-center"
+        style={{ borderColor: teamColor === 'red' ? 'rgba(239,68,68,0.2)' : 'rgba(59,130,246,0.2)' }}
+        animate={{ opacity: [0.3, 0.6, 0.3] }}
+        transition={{ duration: 3, repeat: Infinity }}
+      >
+        <User size={14} style={{ color: teamColor === 'red' ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.25)' }} />
+      </motion.div>
+      <span className="text-[8px] font-medium" style={{ color: teamColor === 'red' ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.25)' }}>
+        Waiting for player
+      </span>
+    </motion.div>
+  );
+} catch {}
     }
 
     try {
@@ -149,6 +280,8 @@ export default function FiveVFiveBattleOverlay({
   currentUserId,
   onUseAbility,
   onRequestRematch,
+  onForfeit,
+  onDismiss,
   TEAM_FREEZE_COOLDOWN,
   REVERSE_COOLDOWN,
   DOUBLE_XP_COOLDOWN,
@@ -158,6 +291,8 @@ export default function FiveVFiveBattleOverlay({
   localTracks,
   remoteParticipants = [],
   isHost = false,
+  teamAName = 'Team A',
+  teamBName = 'Team B',
 }: FiveVFiveBattleOverlayProps) {
   const navigate = useNavigate();
   const { phase } = state;
@@ -297,7 +432,7 @@ export default function FiveVFiveBattleOverlay({
                 {/* Team A */}
                 <div className="text-center">
                   <div className="text-[10px] md:text-xs font-bold text-red-400 uppercase tracking-wider mb-2 md:mb-3 flex items-center gap-1 justify-center">
-                    <Shield size={10} className="md:w-3 md:h-3" /> Team A
+                    <Shield size={10} className="md:w-3 md:h-3" /> {teamAName}
                   </div>
                   <div className="space-y-2">
                     {teamAParticipants.map(p => (
@@ -309,7 +444,7 @@ export default function FiveVFiveBattleOverlay({
                         {p.role === 'host' && <span className="text-[8px] bg-red-600 text-white px-1 rounded">HOST</span>}
                       </div>
                     ))}
-                    {Array.from({ length: Math.max(0, 5 - teamAParticipants.length) }).map((_, i) => (
+                    {Array.from({ length: Math.max(0, 6 - teamAParticipants.length) }).map((_, i) => (
                       <div key={`empty-a-${i}`} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 opacity-30">
                         <div className="w-6 h-6 rounded-full bg-white/10" />
                         <span className="text-xs text-zinc-500">Empty</span>
@@ -323,7 +458,7 @@ export default function FiveVFiveBattleOverlay({
                 {/* Team B */}
                 <div className="text-center">
                   <div className="text-[10px] md:text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 md:mb-3 flex items-center gap-1 justify-center">
-                    <Swords size={10} className="md:w-3 md:h-3" /> Team B
+                    <Swords size={10} className="md:w-3 md:h-3" /> {teamBName}
                   </div>
                   <div className="space-y-2">
                     {teamBParticipants.map(p => (
@@ -335,7 +470,7 @@ export default function FiveVFiveBattleOverlay({
                         {p.role === 'host' && <span className="text-[8px] bg-blue-600 text-white px-1 rounded">HOST</span>}
                       </div>
                     ))}
-                    {Array.from({ length: Math.max(0, 5 - teamBParticipants.length) }).map((_, i) => (
+                    {Array.from({ length: Math.max(0, 6 - teamBParticipants.length) }).map((_, i) => (
                       <div key={`empty-b-${i}`} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 opacity-30">
                         <div className="w-6 h-6 rounded-full bg-white/10" />
                         <span className="text-xs text-zinc-500">Empty</span>
@@ -353,109 +488,156 @@ export default function FiveVFiveBattleOverlay({
 
   // ─── ACTIVE BATTLE ───
   if (phase === 'active') {
+    const momentumPercent = state.teamAScore + state.teamBScore > 0
+      ? (state.teamAScore / (state.teamAScore + state.teamBScore)) * 100
+      : 50;
+    const momentumText = momentumPercent > 60 ? 'Team A dominating' :
+      momentumPercent > 52 ? 'Team A pushing' :
+      momentumPercent < 40 ? 'Team B dominating' :
+      momentumPercent < 48 ? 'Team B pushing' : 'Battle tied';
+
     return (
-      <div className="absolute inset-0 z-50 bg-[#0a0a0f] flex flex-col">
-        {/* Top HUD - Score + Timer */}
-        <div className="shrink-0 z-50">
-          <div className="flex items-start justify-center pt-3 px-4">
-            <div className="bg-black/85 backdrop-blur-xl border border-white/10 rounded-2xl px-3 py-2 md:px-4 md:py-2.5 shadow-2xl flex items-center gap-3 md:gap-4 max-w-md w-full mx-2 md:mx-0">
-              {/* Team A Score */}
-              <div className="flex-1 text-center">
-                <div className="text-[9px] font-bold text-red-400 uppercase tracking-wider mb-0.5">Team A</div>
-                <div className={cn(
-                  "text-2xl font-black tabular-nums transition-all",
-                  scoreDiff > 0 ? "text-red-400" : "text-white"
-                )}>
-                  {state.teamAScore.toLocaleString()}
-                </div>
-                <div className="flex items-center justify-center gap-1 mt-0.5">
-                  <Gift size={10} className="text-red-400/60" />
-                  <span className="text-[10px] text-red-400/80 font-medium">{state.teamAGiftCount}</span>
-                </div>
+      <div className="absolute inset-0 z-50 flex flex-col overflow-hidden" style={{ background: 'linear-gradient(180deg, #07070d 0%, #0d0a1a 40%, #07070d 100%)' }}>
+        {/* Ambient glow effects */}
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+
+        {/* ═══ TOP SCOREBOARD ═══ */}
+        <div className="shrink-0 z-50 px-3 pt-3">
+          <div className="mx-auto max-w-2xl">
+            {/* Main score panel */}
+            <div className="relative bg-black/70 backdrop-blur-2xl border border-white/8 rounded-2xl shadow-2xl overflow-hidden">
+              {/* Momentum bar - very top */}
+              <div className="h-1 flex">
+                <motion.div
+                  className="bg-gradient-to-r from-red-600 to-red-400"
+                  animate={{ width: `${momentumPercent}%` }}
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                />
+                <motion.div
+                  className="bg-gradient-to-r from-blue-400 to-blue-600"
+                  animate={{ width: `${100 - momentumPercent}%` }}
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                />
               </div>
 
-              {/* Timer */}
-              <div className="flex flex-col items-center min-w-[70px]">
-                <div className={cn(
-                  "px-3 py-1 rounded-full font-mono font-black text-lg tabular-nums",
-                  state.timerSeconds <= 10
-                    ? "bg-red-600 text-white animate-pulse"
-                    : state.timerSeconds <= 30
-                    ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
-                    : "bg-white/10 text-white border border-white/20"
-                )}>
-                  {timerMinutes}:{timerSeconds.toString().padStart(2, '0')}
+              <div className="flex items-center px-4 py-3 gap-4">
+                {/* Team A Score */}
+                <div className="flex-1">
+                  <div className="text-[9px] font-extrabold text-red-400/70 uppercase tracking-[0.2em] mb-0.5">{state.teamAGiftCount} gifts</div>
+                  <motion.div
+                    key={state.teamAScore}
+                    initial={{ scale: 1.15, color: '#f87171' }}
+                    animate={{ scale: 1, color: state.teamAScore > state.teamBScore ? '#f87171' : '#ffffff' }}
+                    transition={{ duration: 0.3 }}
+                    className="text-3xl font-black tabular-nums leading-none"
+                  >
+                    {state.teamAScore.toLocaleString()}
+                  </motion.div>
                 </div>
-                <div className="w-full h-1 bg-white/10 rounded-full mt-1.5 overflow-hidden">
+
+                {/* Timer - center */}
+                <div className="flex flex-col items-center min-w-[80px]">
                   <motion.div
                     className={cn(
-                      "h-full rounded-full",
-                      state.timerSeconds <= 10 ? "bg-red-500" :
-                      state.timerSeconds <= 30 ? "bg-yellow-500" : "bg-gradient-to-r from-red-500 to-blue-500"
+                      "px-4 py-1.5 rounded-xl font-mono font-black text-xl tabular-nums",
+                      state.timerSeconds <= 10
+                        ? "bg-red-600/30 text-red-300 border border-red-500/40 animate-pulse"
+                        : state.timerSeconds <= 30
+                        ? "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20"
+                        : "bg-white/5 text-white/90 border border-white/10"
                     )}
-                    style={{ width: `${timerPercent}%` }}
-                    transition={{ duration: 0.5 }}
-                  />
+                  >
+                    {timerMinutes}:{timerSeconds.toString().padStart(2, '0')}
+                  </motion.div>
+                  <div className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mt-1">{momentumText}</div>
                 </div>
-                {state.frozenTeams.A && (
-                  <span className="text-[8px] text-cyan-400 font-bold mt-0.5 animate-pulse">❄️ FROZEN</span>
-                )}
-                {state.doubleXpTeams.A && (
-                  <span className="text-[8px] text-yellow-400 font-bold mt-0.5 animate-pulse">💰 2x XP</span>
-                )}
+
+                {/* Team B Score */}
+                <div className="flex-1 text-right">
+                  <div className="text-[9px] font-extrabold text-blue-400/70 uppercase tracking-[0.2em] mb-0.5">{state.teamBGiftCount} gifts</div>
+                  <motion.div
+                    key={state.teamBScore}
+                    initial={{ scale: 1.15, color: '#60a5fa' }}
+                    animate={{ scale: 1, color: state.teamBScore > state.teamAScore ? '#60a5fa' : '#ffffff' }}
+                    transition={{ duration: 0.3 }}
+                    className="text-3xl font-black tabular-nums leading-none"
+                  >
+                    {state.teamBScore.toLocaleString()}
+                  </motion.div>
+                </div>
               </div>
 
-              {/* Team B Score */}
-              <div className="flex-1 text-center">
-                <div className="text-[9px] font-bold text-blue-400 uppercase tracking-wider mb-0.5">Team B</div>
-                <div className={cn(
-                  "text-2xl font-black tabular-nums transition-all",
-                  scoreDiff < 0 ? "text-blue-400" : "text-white"
-                )}>
-                  {state.teamBScore.toLocaleString()}
-                </div>
-                <div className="flex items-center justify-center gap-1 mt-0.5">
-                  <Gift size={10} className="text-blue-400/60" />
-                  <span className="text-[10px] text-blue-400/80 font-medium">{state.teamBGiftCount}</span>
-                </div>
+              {/* Timer progress bar */}
+              <div className="h-0.5 flex">
+                <motion.div
+                  className={cn(
+                    "h-full",
+                    state.timerSeconds <= 10 ? "bg-red-500" :
+                    state.timerSeconds <= 30 ? "bg-yellow-500" : "bg-gradient-to-r from-red-500/60 via-white/20 to-blue-500/60"
+                  )}
+                  style={{ width: `${timerPercent}%` }}
+                  transition={{ duration: 0.5 }}
+                />
               </div>
             </div>
-          </div>
 
-          {/* Frozen team indicators */}
-          <AnimatePresence>
-            {(state.frozenTeams.A || state.frozenTeams.B) && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="flex justify-center mt-1"
-              >
+            {/* Status indicators row */}
+            <div className="flex justify-center gap-2 mt-1.5">
+              <AnimatePresence>
                 {state.frozenTeams.A && (
-                  <div className="bg-cyan-500/20 border border-cyan-400/30 rounded-full px-3 py-0.5 text-[10px] font-bold text-cyan-300 flex items-center gap-1">
-                    <Snowflake size={10} /> Team A Frozen
-                  </div>
+                  <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="bg-cyan-500/15 border border-cyan-400/25 rounded-full px-2.5 py-0.5 text-[9px] font-bold text-cyan-300 flex items-center gap-1">
+                    <Snowflake size={8} /> {teamAName} Frozen
+                  </motion.div>
                 )}
                 {state.frozenTeams.B && (
-                  <div className="bg-cyan-500/20 border border-cyan-400/30 rounded-full px-3 py-0.5 text-[10px] font-bold text-cyan-300 flex items-center gap-1 ml-2">
-                    <Snowflake size={10} /> Team B Frozen
-                  </div>
+                  <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="bg-cyan-500/15 border border-cyan-400/25 rounded-full px-2.5 py-0.5 text-[9px] font-bold text-cyan-300 flex items-center gap-1">
+                    <Snowflake size={8} /> {teamBName} Frozen
+                  </motion.div>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                {state.doubleXpTeams.A && (
+                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                    className="bg-yellow-500/15 border border-yellow-400/25 rounded-full px-2.5 py-0.5 text-[9px] font-bold text-yellow-300 animate-pulse">
+                    2x XP A
+                  </motion.div>
+                )}
+                {state.doubleXpTeams.B && (
+                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                    className="bg-yellow-500/15 border border-yellow-400/25 rounded-full px-2.5 py-0.5 text-[9px] font-bold text-yellow-300 animate-pulse">
+                    2x XP B
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Forfeit */}
+              {onForfeit && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to forfeit? The other team will win and receive crowns.')) {
+                      onForfeit();
+                    }
+                  }}
+                  className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/15 hover:border-red-500/30 text-red-400/50 hover:text-red-400 text-[8px] font-bold px-2.5 py-0.5 rounded-full transition-all flex items-center gap-1"
+                >
+                  <Flag size={8} /> FORFEIT
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* Battle Arena - Both teams visible */}
-        <div className="flex-1 flex min-h-0 px-2 pb-2 gap-1">
-          {/* Team A Column */}
-          <div className="flex-1 flex flex-col gap-1">
+        {/* ═══ BATTLE ARENA - 5v5 PLAYER GRID ═══ */}
+        <div className="flex-1 flex min-h-0 px-2 md:px-4 pb-2 pt-2 gap-2 md:gap-3">
+          {/* ──── TEAM A ──── */}
+          <div className="flex-1 flex flex-col min-h-0">
             <div className="text-center py-1">
-              <span className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center justify-center gap-1">
-                <Shield size={10} /> Team A
+              <span className="text-[10px] font-black text-red-400/80 uppercase tracking-[0.25em] flex items-center justify-center gap-1.5">
+                <Shield size={10} /> {teamAName}
               </span>
             </div>
-            <div className="flex-1 grid grid-cols-2 gap-1 auto-rows-fr">
+            <div className="flex-1 grid grid-cols-2 md:grid-cols-3 gap-1.5 auto-rows-fr">
               {teamAParticipants.map((p) => {
                 const isCurrentUser = p.userId === currentUserId;
                 const isLocal = isCurrentUser && !!localTracks;
@@ -465,7 +647,7 @@ export default function FiveVFiveBattleOverlay({
                 const hasVideo = isLocal ? !!localTracks?.[1] : hasVideoEnabled(lkParticipant);
                 const hasAudio = isLocal ? !!localTracks?.[0] : hasAudioEnabled(lkParticipant);
                 return (
-                  <BattleParticipantCard
+                  <PremiumBattleSlot
                     key={p.userId}
                     participant={p}
                     videoTrack={videoTrack}
@@ -473,33 +655,35 @@ export default function FiveVFiveBattleOverlay({
                     hasVideo={hasVideo}
                     hasAudio={hasAudio}
                     isLocal={isLocal}
+                    isCurrent={isCurrentUser}
                     teamColor="red"
                   />
                 );
               })}
-              {Array.from({ length: Math.max(0, 5 - teamAParticipants.length) }).map((_, i) => (
-                <div key={`empty-a-${i}`} className="bg-white/5 border border-white/5 rounded-lg flex items-center justify-center opacity-30">
-                  <User size={16} className="text-zinc-600" />
-                </div>
+              {Array.from({ length: Math.max(0, 6 - teamAParticipants.length) }).map((_, i) => (
+                <EmptyBattleSlot key={`empty-a-${i}`} teamColor="red" slotIndex={teamAParticipants.length + i} />
               ))}
             </div>
           </div>
 
-          {/* Center VS divider */}
-          <div className="flex flex-col items-center justify-center w-10 shrink-0">
-            <div className="w-px flex-1 bg-gradient-to-b from-transparent via-red-500/30 to-transparent" />
-            <span className="text-xs font-black text-zinc-500 my-2">VS</span>
-            <div className="w-px flex-1 bg-gradient-to-b from-transparent via-blue-500/30 to-transparent" />
+          {/* ──── CENTER VS DIVIDER ──── */}
+          <div className="flex flex-col items-center justify-center w-12 md:w-16 shrink-0">
+            <div className="w-px flex-1 bg-gradient-to-b from-transparent via-red-500/20 to-red-500/40" />
+            <div className="relative my-2">
+              <div className="absolute inset-0 bg-white/5 rounded-full blur-md" />
+              <span className="relative text-sm md:text-base font-black text-white/40 tracking-wider">VS</span>
+            </div>
+            <div className="w-px flex-1 bg-gradient-to-b from-blue-500/40 via-blue-500/20 to-transparent" />
           </div>
 
-          {/* Team B Column */}
-          <div className="flex-1 flex flex-col gap-1">
+          {/* ──── TEAM B ──── */}
+          <div className="flex-1 flex flex-col min-h-0">
             <div className="text-center py-1">
-              <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center justify-center gap-1">
-                Team B <Swords size={10} />
+              <span className="text-[10px] font-black text-blue-400/80 uppercase tracking-[0.25em] flex items-center justify-center gap-1.5">
+                {teamBName} <Swords size={10} />
               </span>
             </div>
-            <div className="flex-1 grid grid-cols-2 gap-1 auto-rows-fr">
+            <div className="flex-1 grid grid-cols-2 md:grid-cols-3 gap-1.5 auto-rows-fr">
               {teamBParticipants.map((p) => {
                 const isCurrentUser = p.userId === currentUserId;
                 const isLocal = isCurrentUser && !!localTracks;
@@ -509,7 +693,7 @@ export default function FiveVFiveBattleOverlay({
                 const hasVideo = isLocal ? !!localTracks?.[1] : hasVideoEnabled(lkParticipant);
                 const hasAudio = isLocal ? !!localTracks?.[0] : hasAudioEnabled(lkParticipant);
                 return (
-                  <BattleParticipantCard
+                  <PremiumBattleSlot
                     key={p.userId}
                     participant={p}
                     videoTrack={videoTrack}
@@ -517,14 +701,13 @@ export default function FiveVFiveBattleOverlay({
                     hasVideo={hasVideo}
                     hasAudio={hasAudio}
                     isLocal={isLocal}
+                    isCurrent={isCurrentUser}
                     teamColor="blue"
                   />
                 );
               })}
-              {Array.from({ length: Math.max(0, 5 - teamBParticipants.length) }).map((_, i) => (
-                <div key={`empty-b-${i}`} className="bg-white/5 border border-white/5 rounded-lg flex items-center justify-center opacity-30">
-                  <User size={16} className="text-zinc-600" />
-                </div>
+              {Array.from({ length: Math.max(0, 6 - teamBParticipants.length) }).map((_, i) => (
+                <EmptyBattleSlot key={`empty-b-${i}`} teamColor="blue" slotIndex={teamBParticipants.length + i} />
               ))}
             </div>
           </div>
@@ -670,7 +853,7 @@ export default function FiveVFiveBattleOverlay({
           {/* Final Scores */}
           <div className="flex items-center justify-center gap-6 mb-6">
             <div className="text-center">
-              <div className="text-xs font-bold text-red-400 uppercase tracking-wider mb-1">Team A</div>
+              <div className="text-xs font-bold text-red-400 uppercase tracking-wider mb-1">{teamAName}</div>
               <div className={cn(
                 "text-3xl font-black tabular-nums",
                 state.winner === 'A' ? 'text-red-400' : 'text-zinc-400'
@@ -684,7 +867,7 @@ export default function FiveVFiveBattleOverlay({
             </div>
             <div className="text-zinc-600 text-lg font-bold">vs</div>
             <div className="text-center">
-              <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Team B</div>
+              <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">{teamBName}</div>
               <div className={cn(
                 "text-3xl font-black tabular-nums",
                 state.winner === 'B' ? 'text-blue-400' : 'text-zinc-400'
@@ -731,31 +914,51 @@ export default function FiveVFiveBattleOverlay({
             </div>
           </div>
 
-          {/* Rematch */}
+          {/* Rematch / Forfeit result */}
           <div className="space-y-2">
-            {state.rematchAccepted[myTeam] ? (
-              <div className="text-xs text-purple-400 font-medium animate-pulse">
-                Waiting for opponent to accept rematch...
-              </div>
+            {state.forfeitResult.forfeited ? (
+              <>
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl py-3 px-4 text-center">
+                  <div className="text-sm font-bold text-amber-400 mb-1">Victory by Forfeit</div>
+                  <div className="text-[10px] text-amber-300/60">The other team forfeited the match</div>
+                </div>
+                <div className="text-[10px] text-zinc-500 text-center">
+                  Returning in {state.rematchCountdown}s
+                </div>
+              </>
             ) : (
-              <button
-                onClick={onRequestRematch}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
-              >
-                <Flame size={16} />
-                REMATCH
-              </button>
+              <>
+                {state.rematchAccepted[myTeam] ? (
+                  <div className="text-xs text-purple-400 font-medium animate-pulse">
+                    Waiting for opponent to accept rematch...
+                  </div>
+                ) : (
+                  <button
+                    onClick={onRequestRematch}
+                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                    <Flame size={16} />
+                    REMATCH
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (onDismiss) {
+                      onDismiss();
+                    } else {
+                      navigate('/');
+                    }
+                  }}
+                  className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 border border-white/10"
+                >
+                  <Home size={16} />
+                  {onDismiss ? 'Return to Broadcast' : 'Back to Home'}
+                </button>
+                <div className="text-[10px] text-zinc-500 text-center">
+                  Auto-returns in {state.rematchCountdown}s
+                </div>
+              </>
             )}
-            <button
-              onClick={() => navigate('/')}
-              className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 border border-white/10"
-            >
-              <Home size={16} />
-              Back to Home
-            </button>
-            <div className="text-[10px] text-zinc-500 text-center">
-              Auto-returns in {state.rematchCountdown}s
-            </div>
           </div>
         </motion.div>
       </motion.div>

@@ -81,12 +81,12 @@ export async function initMobilePlatform() {
     // Handle URL open (deep links)
     CapApp.addListener('appUrlOpen', (data) => {
       console.log('[Mobile] App opened with URL:', data.url);
-      // Handle deep link navigation
+      // Handle deep link navigation - preserve query params for pairing tokens etc.
       const url = new URL(data.url);
-      const path = url.pathname;
-      if (path) {
+      const fullPath = url.pathname + url.search;
+      if (fullPath) {
         // Navigate to the path using your router
-        window.location.href = path;
+        window.location.href = fullPath;
       }
     });
 

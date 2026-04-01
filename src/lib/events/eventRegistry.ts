@@ -811,10 +811,53 @@ export const winterEvent = createYearlyEvent(
 );
 
 // ============================================================================
-// Global Event Registry
+// April Fools Day (April 1) - Chaos Mode
+// ============================================================================
+
+export const aprilFoolsEvent = createYearlyEvent(
+  'april_fools',
+  'Chaos Mode',
+  'April Fools! Nothing is what it seems today. Max 2 pranks per user.',
+  4, 1, 4, 1,
+  {
+    theme: {
+      primaryColor: '#8b5cf6',
+      secondaryColor: '#f59e0b',
+      backgroundAccent: 'bg-purple-500/10',
+      textHighlight: 'text-purple-400',
+      borderAccent: 'border-purple-500/30',
+      buttonClass: 'bg-gradient-to-r from-purple-600 to-amber-500',
+      badgeBackground: 'bg-purple-500/20',
+      particleEffect: 'none',
+      cssVariables: {
+        '--event-primary': '#8b5cf6',
+        '--event-secondary': '#f59e0b',
+        '--event-accent': '#ef4444',
+        '--event-bg': 'linear-gradient(135deg, #1a0533, #2d1b69)',
+        '--event-glow': '0 0 20px rgba(139, 92, 246, 0.3)',
+      },
+    },
+    giftPacks: [],
+    bonuses: [],
+    socialHighlights: {
+      showFrequentGifter: false,
+      showTopSupporter: false,
+      specialBadgeText: 'CHOS',
+      specialBadgeColor: '#8b5cf6',
+      enableVIPFrame: false,
+      customEntranceEffect: undefined,
+    },
+    priority: 100, // High priority
+    isGlobal: true,
+  }
+);
+
+// ============================================================================
+// Event Registry Export
 // ============================================================================
 
 export const GlobalEvents: GlobalEventRegistry = {
+  april_fools: aprilFoolsEvent,
   valentines: valentinesEvent,
   pride: prideEvent,
   easter: easterEvent,

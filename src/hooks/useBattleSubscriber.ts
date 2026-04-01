@@ -85,7 +85,10 @@ export function useBattleSubscriber(stream: any) {
       const setupChannel = async () => {
         // Fetch initial battle state from database (we may have missed the broadcast)
         let initialParticipants: any[] = [];
+        let isOneVOne = false;
+        let battleData: any = null;
         try {
+          // Try 5v5 battle_sessions first
           const { data: session } = await supabase
             .from('battle_sessions')
             .select('*')
@@ -104,17 +107,48 @@ export function useBattleSubscriber(stream: any) {
           console.warn('[BattleSubscriber] Could not fetch battle session:', e);
         }
 
+        // If no 5v5 session found, try 1v1 battles table
+        if (initialParticipants.length === 0) {
+          try {
+            const { data: battle } = await supabase
+              .from('battles')
+              .select('*')
+              .eq('id', battleId)
+              .in('status', ['active', 'pending'])
+              .maybeSingle();
+
+            if (battle) {
+              isOneVOne = true;
+              battleData = battle;
+              // Build participants from challenger/opponent stream data
+              const [cStream, oStream] = await Promise.all([
+                supabase.from('streams').select('user_id').eq('id', battle.challenger_stream_id).maybeSingle(),
+                supabase.from('streams').select('user_id').eq('id', battle.opponent_stream_id).maybeSingle(),
+              ]);
+              initialParticipants = [
+                { userId: cStream?.data?.user_id, team: 'A', role: 'host' },
+                { userId: oStream?.data?.user_id, team: 'B', role: 'host' },
+              ].filter(p => p.userId);
+            }
+          } catch (e) {
+            console.warn('[BattleSubscriber] Could not fetch 1v1 battle:', e);
+          }
+        }
+
         // If we got participants from DB, set initial state
         if (initialParticipants.length > 0) {
+          const timerSeconds = isOneVOne && battleData?.started_at
+            ? Math.max(0, 180 - Math.floor((Date.now() - new Date(battleData.started_at).getTime()) / 1000))
+            : 5;
           setState({
             active: true,
             battleId,
-            phase: 'pre_battle',
-            teamAScore: 0,
-            teamBScore: 0,
+            phase: isOneVOne ? 'active' : 'pre_battle',
+            teamAScore: isOneVOne ? (battleData?.score_challenger || 0) : 0,
+            teamBScore: isOneVOne ? (battleData?.score_opponent || 0) : 0,
             teamAGiftCount: 0,
             teamBGiftCount: 0,
-            timerSeconds: 5,
+            timerSeconds: isOneVOne ? timerSeconds : 5,
             totalDuration: 180,
             participants: initialParticipants,
             frozenTeams: { A: false, B: false },
@@ -128,9 +162,9 @@ export function useBattleSubscriber(stream: any) {
           // No local timer - we sync to host's timer_sync broadcasts
         }
 
-        // Subscribe to battle channel for live updates
-        const channel = supabase.channel(`5v5-battle:${battleId}`);
-        channel.on('broadcast', { event: '*' }, (payload) => {
+        // Subscribe to battle channels - support both 5v5 and 1v1
+        const channel5v5 = supabase.channel(`5v5-battle:${battleId}`);
+        channel5v5.on('broadcast', { event: '*' }, (payload) => {
         const { event, payload: data } = payload;
         switch (event) {
           case 'battle_found': {
@@ -256,8 +290,56 @@ export function useBattleSubscriber(stream: any) {
           }
         }
       });
-        channel.subscribe();
-        channelRef.current = channel;
+        channel5v5.subscribe();
+
+        // Also subscribe to 1v1 battle timer channel for score/timer updates
+        const channel1v1 = supabase.channel(`battle:${battleId}`);
+        channel1v1.on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'battles',
+          filter: `id=eq.${battleId}`
+        }, (payload) => {
+          const updated = payload.new as any;
+          if (updated.status === 'active') {
+            const timerSecs = updated.started_at
+              ? Math.max(0, 180 - Math.floor((Date.now() - new Date(updated.started_at).getTime()) / 1000))
+              : 0;
+            setState(prev => ({
+              ...prev,
+              active: true,
+              phase: 'active',
+              teamAScore: updated.score_challenger || 0,
+              teamBScore: updated.score_opponent || 0,
+              timerSeconds: timerSecs,
+            }));
+          } else if (updated.status === 'ended') {
+            setState(prev => ({
+              ...prev,
+              phase: 'ended',
+              active: false,
+              winner: updated.score_challenger > updated.score_opponent ? 'A' :
+                      updated.score_opponent > updated.score_challenger ? 'B' : 'draw',
+              teamAScore: updated.score_challenger || 0,
+              teamBScore: updated.score_opponent || 0,
+            }));
+          }
+        }).subscribe();
+
+        // Subscribe to 1v1 timer sync broadcasts
+        const timerChannel = supabase.channel(`battle_timer:${battleId}`);
+        timerChannel.on('broadcast', { event: 'timer_sync' }, (payload) => {
+          const syncData = payload.payload;
+          if (syncData && syncData.timeLeft !== undefined) {
+            setState(prev => ({
+              ...prev,
+              timerSeconds: syncData.timeLeft,
+              ...(syncData.battleEnded ? { phase: 'ended', active: false } : {}),
+            }));
+          }
+        }).subscribe();
+
+        channelRef.current = channel5v5;
         currentBattleIdRef.current = battleId;
       };
 
