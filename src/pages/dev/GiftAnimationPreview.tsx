@@ -2,15 +2,25 @@
  * Gift Animation Preview - Dev Page
  * 
  * Preview all gift animations with different animation styles.
- * Choose which animation type looks best for each gift.
+ * Fetches all gifts from the gift_items database table.
  * 
  * Route: /dev/gift-animations
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { OFFICIAL_GIFTS, GiftItem } from '../../lib/giftConstants';
+import { supabase } from '../../lib/supabase';
 import { createPortal } from 'react-dom';
 import './gift-animations.css';
+
+interface GiftItem {
+  id: string;
+  name: string;
+  icon: string;
+  value: number;
+  category?: string;
+  gift_slug?: string;
+  is_active?: boolean;
+}
 
 type AnimationStyle = 'burst' | 'float' | 'spiral' | 'explosion' | 'rain' | 'spotlight' | 'shatter' | 'morph' | 'stomp' | 'glitch';
 
@@ -31,6 +41,14 @@ function getDuration(cost: number): number {
   if (cost >= 1500) return 8;
   if (cost >= 500) return 6;
   return 3;
+}
+
+function getTier(cost: number): string {
+  if (cost >= 50000) return 'V';
+  if (cost >= 10000) return 'IV';
+  if (cost >= 2500) return 'III';
+  if (cost >= 500) return 'II';
+  return 'I';
 }
 
 function getTierColor(tier: string): string {
@@ -55,6 +73,21 @@ function getTierBg(tier: string): string {
   }
 }
 
+function getTierRange(tier: string): string {
+  switch (tier) {
+    case 'I': return '1 - 499';
+    case 'II': return '500 - 2,499';
+    case 'III': return '2,500 - 9,999';
+    case 'IV': return '10,000 - 49,999';
+    case 'V': return '50,000+';
+    default: return '';
+  }
+}
+
+function formatGiftName(gift: GiftItem): string {
+  return gift.name?.replace(/^gift_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Gift';
+}
+
 // Animation overlay component
 function GiftAnimationOverlay({
   gift,
@@ -68,7 +101,8 @@ function GiftAnimationOverlay({
   onComplete: () => void;
 }) {
   const [phase, setPhase] = useState<'enter' | 'active' | 'exit'>('enter');
-  const particleCount = gift.cost >= 1500 ? 40 : gift.cost >= 500 ? 25 : 15;
+  const tier = getTier(gift.value);
+  const particleCount = gift.value >= 1500 ? 40 : gift.value >= 500 ? 25 : 15;
 
   useEffect(() => {
     const enterTimer = setTimeout(() => setPhase('active'), 100);
@@ -81,7 +115,9 @@ function GiftAnimationOverlay({
     };
   }, [duration, onComplete]);
 
-  const color = getTierColor(gift.tier);
+  const color = getTierColor(tier);
+  const displayName = formatGiftName(gift);
+  const icon = gift.icon || '🎁';
 
   const renderParticles = () => {
     return Array.from({ length: particleCount }).map((_, i) => {
@@ -106,7 +142,7 @@ function GiftAnimationOverlay({
   };
 
   const renderEmojis = () => {
-    const count = Math.min(gift.cost >= 1500 ? 8 : gift.cost >= 500 ? 5 : 3, 10);
+    const count = Math.min(gift.value >= 1500 ? 8 : gift.value >= 500 ? 5 : 3, 10);
     return Array.from({ length: count }).map((_, i) => {
       const delay = i * 0.15;
       const x = 20 + Math.random() * 60;
@@ -121,10 +157,10 @@ function GiftAnimationOverlay({
             '--delay': `${delay}s`,
             animationDuration: `${duration}s`,
             animationDelay: `${delay}s`,
-            fontSize: gift.cost >= 1500 ? '64px' : gift.cost >= 500 ? '48px' : '36px',
+            fontSize: gift.value >= 1500 ? '64px' : gift.value >= 500 ? '48px' : '36px',
           } as React.CSSProperties}
         >
-          {gift.icon}
+          {icon}
         </div>
       );
     });
@@ -132,7 +168,6 @@ function GiftAnimationOverlay({
 
   return createPortal(
     <div className={`ga-overlay ga-${phase}`} style={{ '--duration': `${duration}s`, '--color': color } as React.CSSProperties}>
-      {/* Background effect */}
       <div className={`ga-bg ga-bg-${style}`}>
         {style === 'spotlight' && <div className="ga-spotlight-beam" />}
         {style === 'rain' && Array.from({ length: 30 }).map((_, i) => (
@@ -142,42 +177,79 @@ function GiftAnimationOverlay({
         {style === 'stomp' && <div className="ga-shockwave" />}
       </div>
 
-      {/* Particles */}
       <div className="ga-particles">{renderParticles()}</div>
-
-      {/* Gift emojis */}
       <div className="ga-emojis">{renderEmojis()}</div>
 
-      {/* Center gift display */}
       <div className={`ga-center ga-center-${style}`}>
-        <div className="ga-gift-icon">{gift.icon}</div>
-        <div className="ga-gift-name">{gift.name}</div>
+        <div className="ga-gift-icon">{icon}</div>
+        <div className="ga-gift-name">{displayName}</div>
         <div className="ga-gift-cost" style={{ color }}>
-          {gift.cost.toLocaleString()} coins
+          {gift.value.toLocaleString()} coins
         </div>
         <div className="ga-gift-duration">
-          {duration}s • Tier {gift.tier}
+          {duration}s • Tier {tier}
         </div>
       </div>
 
-      {/* Tier indicator bar */}
       <div className="ga-tier-bar" style={{ background: color }} />
     </div>,
     document.body
   );
 }
 
-// Tier sections
 const TIERS = ['I', 'II', 'III', 'IV', 'V'] as const;
 
 export default function GiftAnimationPreview() {
+  const [gifts, setGifts] = useState<GiftItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeAnimation, setActiveAnimation] = useState<{
     gift: GiftItem;
     style: AnimationStyle;
   } | null>(null);
   const [selectedStyles, setSelectedStyles] = useState<Record<string, AnimationStyle>>({});
-  const [autoPlay, setAutoPlay] = useState(false);
   const autoPlayRef = useRef(false);
+  const [autoPlaying, setAutoPlaying] = useState(false);
+  const [filter, setFilter] = useState('');
+
+  // Fetch gifts from database
+  useEffect(() => {
+    const fetchGifts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('gift_items')
+          .select('*')
+          .order('value', { ascending: true });
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setGifts(data);
+        } else {
+          // Fallback to purchasable_items
+          const { data: fallback } = await supabase
+            .from('purchasable_items')
+            .select('*')
+            .eq('category', 'gift')
+            .eq('is_active', true)
+            .order('coin_price', { ascending: true });
+
+          if (fallback) {
+            setGifts(fallback.map((g: any) => ({
+              id: g.id,
+              name: g.display_name || g.item_key,
+              icon: g.metadata?.icon || '🎁',
+              value: g.coin_price || 0,
+              category: g.metadata?.subcategory,
+            })));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch gifts:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGifts();
+  }, []);
 
   const playAnimation = useCallback((gift: GiftItem, style: AnimationStyle) => {
     setActiveAnimation({ gift, style });
@@ -197,34 +269,37 @@ export default function GiftAnimationPreview() {
 
   // Auto-play all gifts
   const playAll = useCallback(() => {
+    const filtered = filter
+      ? gifts.filter(g => g.name?.toLowerCase().includes(filter.toLowerCase()) || g.icon?.includes(filter))
+      : gifts;
     let idx = 0;
     const playNext = () => {
-      if (idx >= OFFICIAL_GIFTS.length || !autoPlayRef.current) {
-        setAutoPlay(false);
+      if (idx >= filtered.length || !autoPlayRef.current) {
+        setAutoPlaying(false);
         autoPlayRef.current = false;
         return;
       }
-      const gift = OFFICIAL_GIFTS[idx];
+      const gift = filtered[idx];
       const style = getStyle(gift.id);
       setActiveAnimation({ gift, style });
       idx++;
-      const duration = getDuration(gift.cost);
+      const duration = getDuration(gift.value);
       setTimeout(playNext, (duration + 0.3) * 1000);
     };
     autoPlayRef.current = true;
-    setAutoPlay(true);
+    setAutoPlaying(true);
     playNext();
-  }, [getStyle]);
+  }, [gifts, getStyle, filter]);
 
   const stopAutoPlay = useCallback(() => {
     autoPlayRef.current = false;
-    setAutoPlay(false);
+    setAutoPlaying(false);
     setActiveAnimation(null);
   }, []);
 
   // Play all in a tier
   const playTier = useCallback((tier: string) => {
-    const tierGifts = OFFICIAL_GIFTS.filter(g => g.tier === tier);
+    const tierGifts = gifts.filter(g => getTier(g.value) === tier);
     let idx = 0;
     const playNext = () => {
       if (idx >= tierGifts.length) return;
@@ -232,66 +307,101 @@ export default function GiftAnimationPreview() {
       const style = getStyle(gift.id);
       setActiveAnimation({ gift, style });
       idx++;
-      setTimeout(playNext, (getDuration(gift.cost) + 0.3) * 1000);
+      setTimeout(playNext, (getDuration(gift.value) + 0.3) * 1000);
     };
     playNext();
-  }, [getStyle]);
+  }, [gifts, getStyle]);
+
+  // Filtered gifts
+  const filteredGifts = filter
+    ? gifts.filter(g => g.name?.toLowerCase().includes(filter.toLowerCase()) || g.icon?.includes(filter))
+    : gifts;
+
+  // Group by tier
+  const giftsByTier = TIERS.reduce((acc, tier) => {
+    acc[tier] = filteredGifts.filter(g => getTier(g.value) === tier);
+    return acc;
+  }, {} as Record<string, GiftItem[]>);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#080c14] text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4 animate-pulse">🎁</div>
+          <div className="text-gray-400">Loading gifts from database...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#080c14] text-white p-6 lg:p-8">
-      {/* Active animation */}
       {activeAnimation && (
         <GiftAnimationOverlay
           key={`${activeAnimation.gift.id}-${Date.now()}`}
           gift={activeAnimation.gift}
           style={activeAnimation.style}
-          duration={getDuration(activeAnimation.gift.cost)}
+          duration={getDuration(activeAnimation.gift.value)}
           onComplete={handleComplete}
         />
       )}
 
-      {/* Header */}
       <header className="mb-8">
         <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 via-purple-400 to-green-400 bg-clip-text text-transparent">
           Gift Animation Preview
         </h1>
         <p className="text-sm text-gray-400 mt-2">
-          {OFFICIAL_GIFTS.length} gifts across {TIERS.length} tiers. Click a style button to preview.
+          {gifts.length} gifts loaded from database. Pick an animation style for each gift.
         </p>
+
+        {/* Search filter */}
+        <div className="mt-4 max-w-md">
+          <input
+            type="text"
+            placeholder="Filter gifts by name or icon..."
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            className="w-full px-4 py-2 rounded-lg bg-[#131c30] border border-[#1e2d4a] text-white text-sm placeholder-gray-500 focus:border-cyan-500 focus:outline-none"
+          />
+        </div>
+
         <div className="mt-4 flex flex-wrap gap-2">
-          {autoPlay ? (
+          {autoPlaying ? (
             <button onClick={stopAutoPlay} className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-500">
               Stop Auto-Play
             </button>
           ) : (
             <button onClick={playAll} className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-semibold hover:brightness-110">
-              Play All Gifts
+              Play All ({filteredGifts.length})
             </button>
           )}
-          {TIERS.map(tier => (
-            <button
-              key={tier}
-              onClick={() => playTier(tier)}
-              className="px-3 py-2 rounded-lg text-sm font-semibold hover:brightness-110"
-              style={{ background: getTierBg(tier), border: `1px solid ${getTierColor(tier)}40`, color: getTierColor(tier) }}
-            >
-              Play Tier {tier}
-            </button>
-          ))}
+          {TIERS.map(tier => {
+            const count = giftsByTier[tier]?.length || 0;
+            if (count === 0) return null;
+            return (
+              <button
+                key={tier}
+                onClick={() => playTier(tier)}
+                className="px-3 py-2 rounded-lg text-sm font-semibold hover:brightness-110"
+                style={{ background: getTierBg(tier), border: `1px solid ${getTierColor(tier)}40`, color: getTierColor(tier) }}
+              >
+                Tier {tier} ({count})
+              </button>
+            );
+          })}
         </div>
       </header>
 
       {/* Duration legend */}
       <div className="mb-6 flex flex-wrap gap-4 text-xs text-gray-400">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-cyan-400" /> &lt;200 coins = 3s</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-400" /> 200-500 = 3s</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400" /> &gt;500 = 6s</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-400" /> &gt;1500 = 8s</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-cyan-400" /> &lt;500 coins = 3s</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400" /> 500-1499 = 6s</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-400" /> 1500+ = 8s</span>
       </div>
 
-      {/* Animation style selector */}
+      {/* Animation style selector info */}
       <div className="mb-6 p-4 rounded-xl bg-[#0f1628] border border-[#1e2d4a]">
-        <h2 className="text-sm font-bold text-gray-300 mb-3">Animation Styles (click to set for selected gift)</h2>
+        <h2 className="text-sm font-bold text-gray-300 mb-3">10 Animation Styles</h2>
         <div className="flex flex-wrap gap-2">
           {ANIMATION_STYLES.map(s => (
             <div key={s.id} className="px-3 py-1.5 rounded-lg bg-[#131c30] border border-[#1e2d4a] text-xs">
@@ -304,21 +414,22 @@ export default function GiftAnimationPreview() {
 
       {/* Gift tiers */}
       {TIERS.map(tier => {
-        const tierGifts = OFFICIAL_GIFTS.filter(g => g.tier === tier);
-        if (tierGifts.length === 0) return null;
+        const tierGifts = giftsByTier[tier];
+        if (!tierGifts || tierGifts.length === 0) return null;
         const color = getTierColor(tier);
         return (
           <section key={tier} className="mb-8">
             <h2 className="text-lg font-bold mb-3 flex items-center gap-2" style={{ color }}>
               Tier {tier}
               <span className="text-xs font-normal text-gray-500">
-                {tierGifts[0]?.cost?.toLocaleString()} coins • {getDuration(tierGifts[0]?.cost)}s duration
+                {getTierRange(tier)} coins • {getDuration(tierGifts[0]?.value)}s duration • {tierGifts.length} gifts
               </span>
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {tierGifts.map(gift => {
                 const currentStyle = getStyle(gift.id);
-                const duration = getDuration(gift.cost);
+                const duration = getDuration(gift.value);
+                const displayName = formatGiftName(gift);
                 return (
                   <div
                     key={gift.id}
@@ -326,17 +437,17 @@ export default function GiftAnimationPreview() {
                     style={{ borderColor: activeAnimation?.gift.id === gift.id ? color : undefined }}
                   >
                     <div className="flex items-center gap-3 mb-3">
-                      <span className="text-4xl">{gift.icon}</span>
+                      <span className="text-4xl">{gift.icon || '🎁'}</span>
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-sm truncate">{gift.name}</div>
+                        <div className="font-bold text-sm truncate">{displayName}</div>
                         <div className="text-xs text-gray-500">
-                          {gift.cost.toLocaleString()} coins • {duration}s • {currentStyle}
+                          {gift.value.toLocaleString()} coins • {duration}s
                         </div>
                       </div>
                     </div>
 
-                    {/* Style buttons */}
-                    <div className="flex flex-wrap gap-1 mb-2">
+                    {/* Style buttons - first row */}
+                    <div className="flex flex-wrap gap-1 mb-1">
                       {ANIMATION_STYLES.slice(0, 5).map(s => (
                         <button
                           key={s.id}
@@ -351,6 +462,7 @@ export default function GiftAnimationPreview() {
                         </button>
                       ))}
                     </div>
+                    {/* Style buttons - second row */}
                     <div className="flex flex-wrap gap-1 mb-3">
                       {ANIMATION_STYLES.slice(5).map(s => (
                         <button
@@ -367,13 +479,12 @@ export default function GiftAnimationPreview() {
                       ))}
                     </div>
 
-                    {/* Play button */}
                     <button
                       onClick={() => playAnimation(gift, currentStyle)}
                       className="w-full py-2 rounded-lg text-xs font-bold transition hover:brightness-110"
                       style={{ background: `${color}20`, border: `1px solid ${color}40`, color }}
                     >
-                      ▶ Preview {currentStyle} ({duration}s)
+                      ▶ Preview {currentStyle}
                     </button>
                   </div>
                 );
@@ -383,25 +494,38 @@ export default function GiftAnimationPreview() {
         );
       })}
 
-      {/* Summary */}
-      <footer className="mt-8 p-4 rounded-xl bg-[#0f1628] border border-[#1e2d4a]">
-        <h3 className="font-bold text-sm mb-2 text-gray-300">Selection Summary</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
-          {TIERS.map(tier => {
-            const tierGifts = OFFICIAL_GIFTS.filter(g => g.tier === tier);
-            return (
-              <div key={tier} className="p-2 rounded-lg" style={{ background: getTierBg(tier) }}>
-                <div className="font-bold" style={{ color: getTierColor(tier) }}>Tier {tier}</div>
-                {tierGifts.map(g => (
-                  <div key={g.id} className="text-gray-400 mt-1">
-                    {g.icon} {g.name}: <span className="text-white">{getStyle(g.id)}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
+      {/* Empty state */}
+      {gifts.length === 0 && (
+        <div className="text-center py-20">
+          <div className="text-6xl mb-4">🎁</div>
+          <h2 className="text-xl font-bold text-gray-400">No gifts found</h2>
+          <p className="text-sm text-gray-500 mt-2">Check your gift_items or purchasable_items table in the database.</p>
         </div>
-      </footer>
+      )}
+
+      {/* Summary */}
+      {gifts.length > 0 && (
+        <footer className="mt-8 p-4 rounded-xl bg-[#0f1628] border border-[#1e2d4a]">
+          <h3 className="font-bold text-sm mb-2 text-gray-300">Selection Summary ({gifts.length} total gifts)</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
+            {TIERS.map(t => {
+              const tGifts = giftsByTier[t];
+              if (!tGifts || tGifts.length === 0) return null;
+              return (
+                <div key={t} className="p-2 rounded-lg" style={{ background: getTierBg(t) }}>
+                  <div className="font-bold" style={{ color: getTierColor(t) }}>Tier {t} ({tGifts.length})</div>
+                  {tGifts.slice(0, 5).map(g => (
+                    <div key={g.id} className="text-gray-400 mt-1 truncate">
+                      {g.icon} {formatGiftName(g)}: <span className="text-white">{getStyle(g.id)}</span>
+                    </div>
+                  ))}
+                  {tGifts.length > 5 && <div className="text-gray-500 mt-1">+{tGifts.length - 5} more</div>}
+                </div>
+              );
+            })}
+          </div>
+        </footer>
+      )}
     </div>
   );
 }
