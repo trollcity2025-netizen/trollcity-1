@@ -76,34 +76,6 @@ export default function DeckAuth() {
         })
         .eq('id', data.user.id);
 
-      // Check for pending QR pairing token
-      const pendingToken = localStorage.getItem('tc_deck_pair_token');
-      if (pendingToken) {
-        localStorage.removeItem('tc_deck_pair_token');
-        // Notify desktop via BroadcastChannel that phone is paired
-        try {
-          const channel = new BroadcastChannel('tc-deck-pair-' + pendingToken);
-          channel.postMessage({
-            type: 'phone-paired',
-            payload: {
-              userId: data.user.id,
-              email: data.user.email,
-              timestamp: now,
-            },
-          });
-          setTimeout(() => channel.close(), 2000);
-        } catch {}
-        // Mark token as used in DB
-        await supabase
-          .from('deck_pair_tokens')
-          .update({ used: true })
-          .eq('token', pendingToken)
-          .eq('user_id', data.user.id)
-          .catch(() => {});
-        navigate('/deck', { replace: true });
-        return;
-      }
-
       navigate('/deck', { replace: true });
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDeckStore } from '../../stores/deckStore';
-import DeckPhonePair from './DeckPhonePair';
 import {
-  Download, ExternalLink, X, Radio, CheckCircle, Loader2, QrCode
+  Download, ExternalLink, X, Radio, CheckCircle, Loader2
 } from 'lucide-react';
 import { isStandalone, getInstallStatus } from '../../pwa/install';
 
@@ -105,7 +104,6 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
               Connect Deck
             </button>
           </div>
-          {showQrModal && <DeckPhonePair onClose={() => setShowQrModal(false)} />}
         </>
       );
     }
@@ -157,7 +155,6 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
           </button>
         </div>
       </div>
-      {showQrModal && <DeckPhonePair onClose={() => setShowQrModal(false)} />}
     </>
   );
 }

@@ -249,7 +249,6 @@ const TCNNViewerPage = lazyWithRetry(() => import("./pages/tcnn/TCNNViewerPage")
 // Troll City Deck - Broadcast Control Companion
 const DeckAuth = lazyWithRetry(() => import("./pages/deck/DeckAuth"));
 const DeckDashboard = lazyWithRetry(() => import("./pages/deck/DeckDashboard"));
-const DeckPairPage = lazyWithRetry(() => import("./pages/deck/DeckPairPage"));
 
 const ShopView = lazyWithRetry(() => import("./pages/ShopView"));
 const CourtRoom = lazyWithRetry(() => import("./pages/CourtRoom"));
@@ -1138,7 +1137,6 @@ function AppContent() {
                 <Route path="/dev/setup-preview" element={<SetupPreview />} />
 
                 {/* 📡 Troll Deck - Broadcast Control Companion (separate auth) */}
-                <Route path="/deck-pair" element={<DeckPairPage />} />
                 <Route path="/deck" element={<DeckDashboard />} />
                 <Route path="/deck/auth" element={<DeckAuth />} />
                 <Route path="/deck/*" element={<DeckDashboard />} />

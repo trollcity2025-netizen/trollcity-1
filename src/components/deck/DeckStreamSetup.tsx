@@ -1,22 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDeckStore } from '../../stores/deckStore';
 import {
   BROADCAST_CATEGORIES,
 } from '../../config/broadcastCategories';
 import {
-  Play, Square, Tag, X, Plus, Smartphone, AlertTriangle, Loader2, QrCode
+  Play, Square, Tag, X, Plus, Smartphone, AlertTriangle, Loader2, LogIn, LogOut, CheckCircle
 } from 'lucide-react';
 import DeckStreamQuality from './DeckStreamQuality';
 import DeckThemeSelector from './DeckThemeSelector';
-import DeckPhonePair from './DeckPhonePair';
 
 export default function DeckStreamSetup() {
+  const navigate = useNavigate();
   const {
     streamConfig,
-    phoneLink,
+    session,
+    sessionStatus,
     updateStreamConfig,
     triggerBroadcastStart,
     triggerBroadcastEnd,
+    clearSession,
   } = useDeckStore();
 
   const [title, setTitle] = useState(streamConfig.title);
@@ -24,7 +27,9 @@ export default function DeckStreamSetup() {
   const [starting, setStarting] = useState(false);
   const [ending, setEnding] = useState(false);
   const [startError, setStartError] = useState('');
-  const [showPairModal, setShowPairModal] = useState(false);
+
+  // If session is valid, phone is "connected"
+  const isConnected = sessionStatus === 'active' && session?.isValid;
 
   // Sync title changes
   useEffect(() => {
@@ -73,26 +78,48 @@ export default function DeckStreamSetup() {
 
   return (
     <div className="deck-panel-body">
-      {/* Phone connection status */}
-      <div className={`deck-phone-status ${phoneLink.status}`}>
+      {/* Connection status */}
+      <div className={`deck-phone-status ${isConnected ? 'connected' : 'disconnected'}`}>
         <div className="deck-phone-status-icon">
-          {phoneLink.status === 'connected' ? <Smartphone size={20} /> : <AlertTriangle size={20} />}
+          {isConnected ? <CheckCircle size={20} /> : <AlertTriangle size={20} />}
         </div>
         <div>
           <div className="deck-phone-status-text">
-            {phoneLink.status === 'connected'
-              ? 'Phone Connected'
-              : phoneLink.status === 'connecting'
-              ? 'Connecting to Phone...'
-              : 'Phone Not Connected'}
+            {isConnected ? 'Logged In' : 'Not Logged In'}
           </div>
           <div className="deck-phone-status-sub">
-            {phoneLink.status === 'connected'
-              ? 'Your phone is ready as the broadcast source device.'
-              : 'Scan QR code with your phone to connect.'}
+            {isConnected
+              ? `Signed in as ${session?.userId ? 'your account' : 'user'}. Ready to broadcast.`
+              : 'Log in with your Troll City account to start broadcasting.'}
           </div>
         </div>
       </div>
+
+      {/* Login / Logout */}
+      {!isConnected ? (
+        <div className="deck-card">
+          <button
+            className="deck-btn deck-btn-primary deck-btn-block"
+            onClick={() => navigate('/deck/auth')}
+          >
+            <LogIn size={14} />
+            Log In to Start Broadcasting
+          </button>
+        </div>
+      ) : (
+        <div className="deck-card">
+          <button
+            className="deck-btn deck-btn-ghost deck-btn-block"
+            onClick={() => {
+              clearSession();
+            }}
+            style={{ fontSize: 12, color: '#6b6585' }}
+          >
+            <LogOut size={12} />
+            Log Out
+          </button>
+        </div>
+      )}
 
       {/* Stream Title */}
       <div className="deck-card">
@@ -174,20 +201,6 @@ export default function DeckStreamSetup() {
       {/* Theme */}
       <DeckThemeSelector />
 
-      {/* Connect Phone via QR */}
-      <div className="deck-card">
-        <button
-          className={`deck-btn ${phoneLink.status === 'connected' ? 'deck-btn-success' : 'deck-btn-primary'} deck-btn-block`}
-          onClick={() => setShowPairModal(true)}
-        >
-          <QrCode size={14} />
-          {phoneLink.status === 'connected' ? 'Phone Connected - Show QR' : 'Connect Phone via QR Code'}
-        </button>
-        <div style={{ fontSize: 10, color: 'var(--deck-text-muted)', textAlign: 'center', marginTop: 6 }}>
-          QR code is unique to your account and expires after 24 hours
-        </div>
-      </div>
-
       {/* Broadcast controls */}
       <div className="deck-card" style={{ textAlign: 'center' }}>
         {startError && (
@@ -200,7 +213,7 @@ export default function DeckStreamSetup() {
           <button
             className="deck-btn deck-btn-success deck-btn-lg deck-btn-block deck-start-btn"
             onClick={handleStartBroadcast}
-            disabled={starting || !title.trim() || phoneLink.status !== 'connected'}
+            disabled={starting || !title.trim() || !isConnected}
           >
             {starting ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
             {starting ? 'Starting Broadcast...' : 'Start Broadcast'}
@@ -216,20 +229,12 @@ export default function DeckStreamSetup() {
           </button>
         )}
 
-        {phoneLink.status !== 'connected' && !streamConfig.isLive && (
+        {!isConnected && !streamConfig.isLive && (
           <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 8 }}>
-            Connect your phone first to start broadcasting.
+            Log in first to start broadcasting.
           </div>
         )}
       </div>
-
-      {/* QR Pair Modal */}
-      {showPairModal && (
-        <DeckPhonePair
-          onClose={() => setShowPairModal(false)}
-          onPaired={handleStartBroadcast}
-        />
-      )}
     </div>
   );
 }
