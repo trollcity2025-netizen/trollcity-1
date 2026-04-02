@@ -1,17 +1,16 @@
 /**
  * Gift Animation Preview - Dev Page
  * 
- * 3D realistic gift animations with per-gift sounds.
- * Each gift gets a unique Three.js scene with proper materials and lighting.
+ * Plays per-gift themed CSS animations with transparent backgrounds.
+ * Each gift has its own unique animation based on name/icon/theme.
  * 
  * Route: /dev/gift-animations
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Gift3DOverlay } from '../../components/broadcast/Gift3DAnimations';
+import { GiftThemePlayer } from '../../components/broadcast/GiftThemePlayer';
 import { preloadGiftSounds } from '../../lib/giftSoundMap';
-import './gift-3d.css';
 
 interface GiftItem {
   id: string;
@@ -19,6 +18,7 @@ interface GiftItem {
   icon: string;
   value: number;
   category?: string;
+  gift_slug?: string;
 }
 
 function getDuration(cost: number): number {
@@ -57,63 +57,8 @@ function getTierBg(tier: string): string {
   }
 }
 
-function formatName(gift: GiftItem): string {
-  return gift.name?.replace(/^gift_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Gift';
-}
-
-function detectSceneType(name: string, icon: string): string {
-  const s = `${name} ${icon}`.toLowerCase().replace(/[_-]/g, ' ');
-  if (s.includes('rose') || s.includes('flower') || s.includes('bouquet') || s.includes('🌹')) return 'rose';
-  if (s.includes('heart') || s.includes('love') || s.includes('pulse') || s.includes('❤') || s.includes('💖')) return 'heart';
-  if (s.includes('crown') || s.includes('king') || s.includes('queen') || s.includes('👑')) return 'crown';
-  if (s.includes('diamond') || s.includes('gem') || s.includes('💎')) return 'diamond';
-  if (s.includes('fire') || s.includes('flame') || s.includes('blaze') || s.includes('🔥')) return 'fire';
-  if (s.includes('car') || s.includes('auto') || s.includes('drift') || s.includes('🏎')) return 'car';
-  if (s.includes('rocket') || s.includes('launch') || s.includes('🚀')) return 'rocket';
-  if (s.includes('money') || s.includes('cash') || s.includes('dollar') || s.includes('💵')) return 'money';
-  if (s.includes('coin') || s.includes('flip') || s.includes('🪙')) return 'coin';
-  if (s.includes('bomb') || s.includes('explode') || s.includes('💣') || s.includes('tnt')) return 'bomb';
-  if (s.includes('trophy') || s.includes('award') || s.includes('🏆')) return 'trophy';
-  if (s.includes('star') || s.includes('⭐')) return 'star';
-  if (s.includes('police') || s.includes('siren') || s.includes('🚨')) return 'police';
-  if (s.includes('snow') || s.includes('❄') || s.includes('ice')) return 'snow';
-  if (s.includes('dragon') || s.includes('🐉')) return 'dragon';
-  if (s.includes('champagne') || s.includes('🍾')) return 'champagne';
-  if (s.includes('music') || s.includes('🎵') || s.includes('mic') || s.includes('🎤')) return 'music';
-  if (s.includes('camera') || s.includes('📸') || s.includes('flash')) return 'camera';
-  if (s.includes('rainbow') || s.includes('🌈')) return 'rainbow';
-  if (s.includes('ghost') || s.includes('👻')) return 'ghost';
-  if (s.includes('skull') || s.includes('💀')) return 'skull';
-  if (s.includes('pizza') || s.includes('🍕')) return 'pizza';
-  if (s.includes('coffee') || s.includes('☕')) return 'coffee';
-  if (s.includes('beer') || s.includes('🍺')) return 'beer';
-  if (s.includes('wine') || s.includes('🍷')) return 'wine';
-  if (s.includes('balloon') || s.includes('🎈')) return 'balloon';
-  if (s.includes('gift') || s.includes('present') || s.includes('🎁')) return 'gift-box';
-  if (s.includes('ring') || s.includes('💍')) return 'ring';
-  if (s.includes('like') || s.includes('👍')) return 'like';
-  if (s.includes('clap') || s.includes('applause') || s.includes('👏')) return 'clap';
-  if (s.includes('hammer') || s.includes('🔨')) return 'hammer';
-  if (s.includes('sword') || s.includes('🗡')) return 'sword';
-  if (s.includes('house') || s.includes('🏠') || s.includes('castle') || s.includes('🏰')) return 'house';
-  if (s.includes('helicopter') || s.includes('🚁')) return 'helicopter';
-  if (s.includes('candle') || s.includes('🕯')) return 'candle';
-  if (s.includes('smoke') || s.includes('blunt') || s.includes('🚬')) return 'smoke';
-  if (s.includes('wave') || s.includes('🌊') || s.includes('ocean')) return 'wave';
-  if (s.includes('tornado') || s.includes('🌪')) return 'tornado';
-  if (s.includes('volcano') || s.includes('🌋')) return 'volcano';
-  if (s.includes('spark') || s.includes('⚡') || s.includes('zap')) return 'spark';
-  if (s.includes('sun') || s.includes('☀')) return 'sun';
-  if (s.includes('moon') || s.includes('🌙')) return 'moon';
-  if (s.includes('earth') || s.includes('🌍')) return 'earth';
-  if (s.includes('hug') || s.includes('🤗')) return 'hug';
-  if (s.includes('kiss') || s.includes('💋')) return 'kiss';
-  if (s.includes('laugh') || s.includes('😂')) return 'laugh';
-  if (s.includes('cry') || s.includes('😢')) return 'cry';
-  if (s.includes('angry') || s.includes('😤')) return 'angry';
-  if (s.includes('cool') || s.includes('😎')) return 'cool';
-  if (s.includes('game') || s.includes('🎮')) return 'game';
-  return 'default';
+function formatName(g: GiftItem): string {
+  return g.name?.replace(/^gift_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Gift';
 }
 
 const TIERS = ['I', 'II', 'III', 'IV', 'V'] as const;
@@ -125,19 +70,21 @@ export default function GiftAnimationPreview() {
   const autoPlayRef = useRef(false);
   const [autoPlaying, setAutoPlaying] = useState(false);
   const [filter, setFilter] = useState('');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [tierFilter, setTierFilter] = useState<string | null>(null);
 
   useEffect(() => {
     preloadGiftSounds();
-    const fetchGifts = async () => {
+    const fetch = async () => {
       try {
         const { data, error } = await supabase
           .from('gift_items')
-          .select('*')
+          .select('id, name, icon, value, category, gift_slug')
           .order('value', { ascending: true });
+
         if (error) throw error;
         if (data && data.length > 0) {
           setGifts(data);
+          console.log(`[GiftPreview] Loaded ${data.length} gifts from gift_items`);
         } else {
           const { data: fb } = await supabase
             .from('purchasable_items')
@@ -150,25 +97,30 @@ export default function GiftAnimationPreview() {
               id: g.id, name: g.display_name || g.item_key,
               icon: g.metadata?.icon || '🎁', value: g.coin_price || 0,
             })));
+            console.log(`[GiftPreview] Loaded ${fb.length} gifts from purchasable_items`);
           }
         }
       } catch (e) {
-        console.error('Failed to fetch gifts:', e);
+        console.error('[GiftPreview] Failed to fetch gifts:', e);
       } finally {
         setLoading(false);
       }
     };
-    fetchGifts();
+    fetch();
   }, []);
 
   const playGift = useCallback((gift: GiftItem) => {
     setActiveGift(gift);
   }, []);
 
+  const filteredGifts = gifts.filter(g => {
+    if (filter && !g.name?.toLowerCase().includes(filter.toLowerCase()) && !g.icon?.includes(filter)) return false;
+    if (tierFilter && getTier(g.value) !== tierFilter) return false;
+    return true;
+  });
+
   const playAll = useCallback(() => {
-    const list = filter
-      ? gifts.filter(g => g.name?.toLowerCase().includes(filter.toLowerCase()))
-      : gifts;
+    const list = filteredGifts;
     let idx = 0;
     const next = () => {
       if (idx >= list.length || !autoPlayRef.current) {
@@ -183,7 +135,7 @@ export default function GiftAnimationPreview() {
     autoPlayRef.current = true;
     setAutoPlaying(true);
     next();
-  }, [gifts, filter]);
+  }, [gifts, filter, tierFilter]);
 
   const stopAutoPlay = useCallback(() => {
     autoPlayRef.current = false;
@@ -203,12 +155,8 @@ export default function GiftAnimationPreview() {
     next();
   }, [gifts]);
 
-  const filteredGifts = filter
-    ? gifts.filter(g => g.name?.toLowerCase().includes(filter.toLowerCase()) || g.icon?.includes(filter))
-    : gifts;
-
   const giftsByTier = TIERS.reduce((acc, t) => {
-    acc[t] = filteredGifts.filter(g => getTier(g.value) === t);
+    acc[t] = gifts.filter(g => getTier(g.value) === t);
     return acc;
   }, {} as Record<string, GiftItem[]>);
 
@@ -217,7 +165,7 @@ export default function GiftAnimationPreview() {
       <div className="min-h-screen bg-[#080c14] text-white flex items-center justify-center">
         <div className="text-center">
           <div className="text-5xl mb-4 animate-pulse">🎁</div>
-          <div className="text-gray-400">Loading gifts...</div>
+          <div className="text-gray-400">Loading gifts from database...</div>
         </div>
       </div>
     );
@@ -226,7 +174,7 @@ export default function GiftAnimationPreview() {
   return (
     <div className="min-h-screen bg-[#080c14] text-white p-6 lg:p-8">
       {activeGift && (
-        <Gift3DOverlay
+        <GiftThemePlayer
           key={`${activeGift.id}-${Date.now()}`}
           giftName={activeGift.name}
           giftIcon={activeGift.icon}
@@ -237,16 +185,11 @@ export default function GiftAnimationPreview() {
       )}
 
       <header className="mb-8">
-        <div className="flex items-center gap-4 flex-wrap">
-          <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 via-purple-400 to-green-400 bg-clip-text text-transparent">
-            3D Gift Animations
-          </h1>
-          <span className="text-xs px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-            Three.js + Sound
-          </span>
-        </div>
+        <h1 className="text-3xl font-extrabold bg-gradient-to-r from-cyan-400 via-purple-400 to-green-400 bg-clip-text text-transparent">
+          Gift Animations
+        </h1>
         <p className="text-sm text-gray-400 mt-2">
-          {gifts.length} gifts • Realistic 3D scenes with per-gift sounds
+          {gifts.length} gifts loaded • Each gift has a unique themed animation with transparent background
         </p>
 
         <div className="mt-4 flex flex-wrap gap-3 items-center">
@@ -267,100 +210,97 @@ export default function GiftAnimationPreview() {
               Play All ({filteredGifts.length})
             </button>
           )}
-
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold ${soundEnabled ? 'bg-green-600/20 text-green-400 border border-green-500/30' : 'bg-gray-700/20 text-gray-400 border border-gray-600/30'}`}
-          >
-            {soundEnabled ? '🔊 Sound On' : '🔇 Sound Off'}
-          </button>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            onClick={() => setTierFilter(null)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${!tierFilter ? 'bg-white/10 text-white' : 'bg-[#131c30] text-gray-400 hover:text-white'}`}
+          >
+            All ({gifts.length})
+          </button>
           {TIERS.map(t => {
             const count = giftsByTier[t]?.length || 0;
             if (!count) return null;
             return (
               <button
                 key={t}
-                onClick={() => playTier(t)}
+                onClick={() => setTierFilter(tierFilter === t ? null : t)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold hover:brightness-110"
-                style={{ background: getTierBg(t), border: `1px solid ${getTierColor(t)}40`, color: getTierColor(t) }}
+                style={{
+                  background: tierFilter === t ? `${getTierColor(t)}30` : getTierBg(t),
+                  border: `1px solid ${getTierColor(t)}${tierFilter === t ? '80' : '40'}`,
+                  color: getTierColor(t),
+                }}
               >
                 Tier {t} ({count})
               </button>
             );
           })}
+          <button
+            onClick={() => playTier(tierFilter || 'I')}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-600/20 text-green-400 border border-green-500/30 hover:brightness-110"
+          >
+            Play Tier
+          </button>
         </div>
       </header>
 
-      {/* 3D scene type legend */}
-      <div className="mb-6 p-3 rounded-lg bg-[#0f1628] border border-[#1e2d4a]">
-        <div className="text-xs text-gray-400 mb-2">3D Scene Types Available:</div>
-        <div className="flex flex-wrap gap-1.5">
-          {['rose', 'heart', 'crown', 'diamond', 'fire', 'car', 'money', 'coin', 'rocket', 'bomb', 'trophy', 'police', 'snow', 'star'].map(s => (
-            <span key={s} className="px-2 py-0.5 rounded text-[10px] bg-[#131c30] text-cyan-400 border border-[#1e2d4a]">{s}</span>
-          ))}
-          <span className="px-2 py-0.5 rounded text-[10px] bg-[#131c30] text-gray-500 border border-[#1e2d4a]">+default for others</span>
+      <div className="mb-6 flex flex-wrap gap-4 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-green-400" />
+          <span className="text-gray-400">All {gifts.length} gifts have unique themed animations</span>
         </div>
+        <div className="text-gray-600">|</div>
+        <span className="text-gray-500">&lt;500 = 3s &bull; 500-1499 = 6s &bull; 1500+ = 8s</span>
       </div>
 
-      {/* Gift grid by tier */}
-      {TIERS.map(tier => {
-        const tGifts = giftsByTier[tier];
-        if (!tGifts?.length) return null;
-        const color = getTierColor(tier);
-        return (
-          <section key={tier} className="mb-8">
-            <h2 className="text-lg font-bold mb-3" style={{ color }}>
-              Tier {tier} <span className="text-xs font-normal text-gray-500">{tGifts.length} gifts</span>
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {tGifts.map(gift => {
-                const sceneType = detectSceneType(gift.name, gift.icon);
-                const duration = getDuration(gift.value);
-                const displayName = formatName(gift);
-                return (
-                  <div
-                    key={gift.id}
-                    className="rounded-xl border border-[#1e2d4a] bg-[#0f1628] p-4 hover:border-cyan-500/40 transition-all"
-                    style={{ borderColor: activeGift?.id === gift.id ? color : undefined }}
-                  >
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="text-3xl">{gift.icon || '🎁'}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-sm truncate">{displayName}</div>
-                        <div className="text-xs text-gray-500">
-                          {gift.value.toLocaleString()} coins • {duration}s
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase" style={{ background: `${color}20`, color }}>
-                        {sceneType}
-                      </span>
-                      <span className="text-[10px] text-gray-600">3D scene + sound</span>
-                    </div>
-                    <button
-                      onClick={() => playGift(gift)}
-                      className="w-full py-2 rounded-lg text-xs font-bold transition hover:brightness-110"
-                      style={{ background: `${color}20`, border: `1px solid ${color}40`, color }}
-                    >
-                      ▶ Preview 3D
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
-
-      {gifts.length === 0 && (
+      {filteredGifts.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-6xl mb-4">🎁</div>
           <h2 className="text-xl font-bold text-gray-400">No gifts found</h2>
-          <p className="text-sm text-gray-500 mt-2">Check your gift_items table.</p>
+          <p className="text-sm text-gray-500 mt-2">Check your gift_items table in Supabase.</p>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {filteredGifts.map(gift => {
+            const tier = getTier(gift.value);
+            const color = getTierColor(tier);
+            const duration = getDuration(gift.value);
+            const displayName = formatName(gift);
+            return (
+              <div
+                key={gift.id}
+                className="rounded-xl border border-[#1e2d4a] bg-[#0f1628] p-4 hover:border-cyan-500/40 transition-all"
+                style={{ borderColor: activeGift?.id === gift.id ? color : undefined }}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-3xl">{gift.icon || '🎁'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate">{displayName}</div>
+                    <div className="text-xs text-gray-500">
+                      {gift.value.toLocaleString()} coins &bull; {duration}s
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: `${color}20`, color }}>
+                    Tier {tier}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400">
+                    Themed
+                  </span>
+                </div>
+                <button
+                  onClick={() => playGift(gift)}
+                  className="w-full py-2 rounded-lg text-xs font-bold transition hover:brightness-110"
+                  style={{ background: `${color}20`, border: `1px solid ${color}40`, color }}
+                >
+                  Play
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-/* 3D Gift Animation Overlay */
+/* 3D Gift Animation Overlay - Transparent background for clean app overlay */
 .gift-3d-overlay {
   position: fixed;
   inset: 0;
@@ -8,6 +8,7 @@
 .gift-3d-overlay canvas {
   width: 100% !important;
   height: 100% !important;
+  background: transparent !important;
 }
 
 .g3d-enter {
@@ -49,6 +50,7 @@
   letter-spacing: 3px;
   margin-bottom: 8px;
   animation: g3dNameIn 0.5s ease-out 0.2s both;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
 }
 
 @keyframes g3dNameIn {
@@ -61,6 +63,7 @@
   font-weight: 700;
   letter-spacing: 1px;
   animation: g3dNameIn 0.5s ease-out 0.4s both;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
 }
 
 .g3d-scene {

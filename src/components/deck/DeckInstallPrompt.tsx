@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
 import { useDeckStore } from '../../stores/deckStore';
 import { useDeckPair, generatePairCode } from '../../hooks/useDeckPair';
@@ -28,6 +28,37 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [deckJoined, setDeckJoined] = useState(false);
+  const sendRef = useRef<((msg: any) => void) | null>(null);
+
+  const handlePairMessage = useCallback((msg: DeckPairMessage) => {
+    if (msg.type === 'deck-joined') {
+      setDeckJoined(true);
+      setDeckInstalled(true);
+      setPhoneLink({
+        status: 'connected',
+        phoneReady: true,
+        lastSeen: Date.now(),
+      });
+      sendRef.current?.({
+        type: 'phone-ready',
+        payload: {
+          streamId: useDeckStore.getState().streamConfig.streamId,
+          title: useDeckStore.getState().streamConfig.title,
+          category: useDeckStore.getState().streamConfig.category,
+        },
+      });
+    }
+  }, [setDeckInstalled, setPhoneLink]);
+
+  const { send, isConnected: isPairConnected } = useDeckPair({
+    pairCode,
+    onMessage: handlePairMessage,
+  });
+
+  // Keep ref in sync
+  useEffect(() => {
+    sendRef.current = send;
+  }, [send]);
 
   // Check if Deck is already installed
   useEffect(() => {
@@ -48,32 +79,6 @@ export default function DeckInstallPrompt({ onDismiss }: DeckInstallPromptProps)
     };
     checkInstalled();
   }, [setDeckInstalled]);
-
-  const handlePairMessage = useCallback((msg: DeckPairMessage) => {
-    if (msg.type === 'deck-joined') {
-      setDeckJoined(true);
-      setDeckInstalled(true);
-      setPhoneLink({
-        status: 'connected',
-        phoneReady: true,
-        lastSeen: Date.now(),
-      });
-      // Immediately send phone-ready back to deck so it knows we're connected
-      send({
-        type: 'phone-ready',
-        payload: {
-          streamId: useDeckStore.getState().streamConfig.streamId,
-          title: useDeckStore.getState().streamConfig.title,
-          category: useDeckStore.getState().streamConfig.category,
-        },
-      });
-    }
-  }, [setDeckInstalled, setPhoneLink, send]);
-
-  const { send, isConnected: isPairConnected } = useDeckPair({
-    pairCode,
-    onMessage: handlePairMessage,
-  });
 
   // Send heartbeats to deck when paired
   useEffect(() => {

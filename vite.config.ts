@@ -148,7 +148,8 @@ export default defineConfig(({ mode: _mode }) => ({
         drop_console: true, // Remove console.log in production
         drop_debugger: true,
         pure_funcs: ['console.log', 'console.info', 'console.debug'],
-        passes: 2, // Multiple compression passes
+        // Note: passes: 2 removed — multiple passes can reorder const/let
+        // declarations and cause "Cannot access before initialization" TDZ errors
       },
       mangle: {
         safari10: true,
