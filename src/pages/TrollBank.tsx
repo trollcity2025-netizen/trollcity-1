@@ -4,16 +4,43 @@ import { supabase } from '@/lib/supabase'
 import { useBank } from '@/lib/hooks/useBank'
 import { useCoins } from '@/lib/hooks/useCoins'
 import { toast } from 'sonner'
-import { Coins, CreditCard, Landmark, History, AlertCircle, CheckCircle, Lock } from 'lucide-react'
+import { Coins, CreditCard, Landmark, History, AlertCircle, CheckCircle, Lock, Plus } from 'lucide-react'
 import { trollCityTheme } from '@/styles/trollCityTheme'
+import SquarePaymentModal from '@/components/broadcast/SquarePaymentModal'
+import { useAuthStore } from '@/lib/store'
 
 export default function TrollBank() {
+  const { user, profile } = useAuthStore()
   const { balances, refreshCoins } = useCoins()
   const { loans, ledger, payLoan, payCreditCard, creditInfo } = useBank()
   const activeLoan = loans && loans.length > 0 ? loans[0] : null
   
   const [bankBalance, setBankBalance] = useState<number | null>(null)
   
+  const [savedCards, setSavedCards] = useState<any[]>([])
+  const [showSaveCardModal, setShowSaveCardModal] = useState(false)
+  
+  // Fetch saved cards
+  useEffect(() => {
+    const fetchSavedCards = async () => {
+      if (!user?.id) return
+      try {
+        const { data, error } = await supabase
+          .from('user_payment_methods')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('is_default', { ascending: false })
+        
+        if (error) throw error
+        setSavedCards(data || [])
+      } catch (err) {
+        console.error('Failed to fetch saved cards:', err)
+      }
+    }
+
+    fetchSavedCards()
+  }, [user?.id])
+
   // Fetch and Subscribe to Bank Reserves
   useEffect(() => {
     const fetchReserves = async () => {
@@ -236,6 +263,114 @@ export default function TrollBank() {
           </div>
         </div>
 
+        {/* Saved Payment Methods */}
+        <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-6`}>
+          <h2 className="text-xl font-bold mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-blue-400" />
+              Saved Payment Methods
+            </div>
+            <button
+              onClick={() => setShowSaveCardModal(true)}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Card
+            </button>
+          </h2>
+
+          <div className="space-y-3">
+            {savedCards.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">
+                No saved payment methods. Click "Add Card" to save a payment method for faster checkout.
+              </p>
+            ) : (
+              savedCards.map((card) => (
+                <div
+                  key={card.id}
+                  className={`flex items-center justify-between p-4 rounded-xl border ${
+                    card.is_default 
+                      ? 'bg-blue-500/10 border-blue-500/30' 
+                      : `${trollCityTheme.backgrounds.input} border-white/5`
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center">
+                      <CreditCard className="w-5 h-5 text-gray-300" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-white">
+                        {card.brand} •••• {card.last4}
+                      </div>
+                      <div className="text-sm text-gray-400">
+                        {card.provider === 'square' ? 'Cash App' : card.provider}
+                        {card.is_default && (
+                          <span className="ml-2 text-blue-400 font-medium">Default</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!card.is_default && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            await supabase
+                              .from('user_payment_methods')
+                              .update({ is_default: false })
+                              .eq('user_id', user?.id)
+                              .neq('id', card.id)
+
+                            const { error } = await supabase
+                              .from('user_payment_methods')
+                              .update({ is_default: true })
+                              .eq('id', card.id)
+
+                            if (error) throw error
+
+                            setSavedCards(prev => prev.map(c => ({ ...c, is_default: c.id === card.id })))
+                            toast.success('Default payment method updated')
+                          } catch (err: any) {
+                            toast.error('Failed to set default')
+                          }
+                        }}
+                        className="text-xs text-gray-400 hover:text-blue-400"
+                      >
+                        Set Default
+                      </button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Are you sure you want to remove this payment method?')) return
+                        
+                        try {
+                          const { error } = await supabase
+                            .from('user_payment_methods')
+                            .delete()
+                            .eq('id', card.id)
+                            .eq('user_id', user?.id)
+
+                          if (error) throw error
+
+                          setSavedCards(prev => prev.filter(c => c.id !== card.id))
+                          toast.success('Payment method removed')
+                        } catch (err: any) {
+                          toast.error('Failed to remove payment method')
+                        }
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-400"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
         {/* Legacy Loan Section (Only visible if active) */}
         {activeLoan && (
             <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-6 border-red-500/30`}>
@@ -300,6 +435,38 @@ export default function TrollBank() {
         </div>
 
       </div>
-    </div>
+      {/* Save Card Modal */}
+      {showSaveCardModal && (
+        <SquarePaymentModal
+          isOpen={showSaveCardModal}
+          onClose={() => setShowSaveCardModal(false)}
+          pkg={{ id: 'save_card', name: 'Save Card', purchaseType: 'save_card' }}
+          userId={user?.id}
+          profile={profile}
+          onPaymentSuccess={() => {}}
+          saveOnly={true}
+          onCardSaved={() => {
+            // Refresh saved cards
+            const fetchSavedCards = async () => {
+              if (!user?.id) return
+              try {
+                const { data, error } = await supabase
+                  .from('user_payment_methods')
+                  .select('*')
+                  .eq('user_id', user.id)
+                  .order('is_default', { ascending: false })
+                
+                if (error) throw error
+                setSavedCards(data || [])
+              } catch (err) {
+                console.error('Failed to fetch saved cards:', err)
+              }
+            }
+            fetchSavedCards()
+            setShowSaveCardModal(false)
+            toast.success('Card saved successfully!')
+          }}
+        />
+      )}    </div>
   )
 }
