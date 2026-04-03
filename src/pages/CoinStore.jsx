@@ -16,6 +16,7 @@ import { useLiveContextStore } from '../lib/liveContextStore';
 
 import { trollCityTheme } from '@/styles/trollCityTheme';
 import ManualPaymentModal from '@/components/broadcast/ManualPaymentModal';
+import SquarePaymentModal from '@/components/broadcast/SquarePaymentModal';
 import TrollPassBanner from '@/components/ui/TrollPassBanner';
 import { toast } from 'sonner';
 
@@ -421,6 +422,7 @@ export default function CoinStore() {
 
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [manualPaymentModalOpen, setManualPaymentModalOpen] = useState(false);
+  const [squarePaymentModalOpen, setSquarePaymentModalOpen] = useState(false);
   const [selectedProviderId, setSelectedProviderId] = useState('venmo');
 
   const handleManualPurchase = (pkg) => {
@@ -439,6 +441,48 @@ export default function CoinStore() {
 
     setSelectedPackage(pkg);
     setManualPaymentModalOpen(true);
+  };
+
+  const handleSquarePurchase = async (pkg) => {
+    const purchasePkg = {
+      ...pkg,
+      purchaseType: 'coins',
+      coin_amount: pkg.coin_amount || pkg.coins || 0
+    };
+
+    if (!profile?.encrypted_card_data) {
+      toast.info('Please add a card first. Opening the Square card setup modal.')
+      setSelectedPackage(purchasePkg)
+      setSquarePaymentModalOpen(true)
+      return
+    }
+
+    setLoadingPackage(pkg.id)
+
+    try {
+      const { data, error } = await supabase.functions.invoke('charge-stored-card', {
+        body: {
+          userId: user?.id,
+          amountUsd: pkg.usd_price || pkg.price || 0,
+          coins: purchasePkg.coin_amount,
+          packageId: pkg.id,
+          packageName: pkg.name || `${purchasePkg.coin_amount} Troll Coins`,
+          purchaseType: 'coins',
+        },
+      })
+
+      if (error) throw error
+      if (!data?.success) throw new Error(data?.error || 'Purchase failed')
+
+      toast.success('Coin pack purchased and credited successfully!')
+      showPurchaseCompleteOverlay()
+      refreshCoins()
+    } catch (err) {
+      console.error('Square purchase error:', err)
+      toast.error(err?.message || 'Failed to process card purchase')
+    } finally {
+      setLoadingPackage(null)
+    }
   };
 
   const [durationMultiplier, setDurationMultiplier] = useState(1);
@@ -1480,23 +1524,7 @@ export default function CoinStore() {
                 </div>
               </div>
 
-              {/* Payment Provider Selector */}
-              <div className="mb-4 flex gap-2">
-                {MANUAL_PROVIDERS.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setSelectedProviderId(p.id);
-                    }}
-                    className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 border transition-colors ${selectedProviderId === p.id ? 'bg-purple-600 text-white border-purple-400' : 'bg-[#181825] text-gray-300 border-[#2C2C2C] hover:bg-[#232336]'}`}
-                  >
-                    <span>{p.icon}</span>
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-              
-              {selectedPackage && manualPaymentModalOpen ? null : (
+              {selectedPackage && (manualPaymentModalOpen || squarePaymentModalOpen) ? null : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {coinPackages.map((pkg) => {
                     const priceMatch = pkg.price.match(/\$(\d+\.?\d*)/);
@@ -1547,11 +1575,11 @@ export default function CoinStore() {
                           <button
                             onClick={() => {
                               const purchasePkg = (isEmployee || showNewUserBadge) ? { ...pkg, price: `${discountedPrice.toFixed(2)}` } : pkg;
-                              handleManualPurchase(purchasePkg);
+                              handleSquarePurchase(purchasePkg);
                             }}
-                            className={`w-full py-2 rounded font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${isEmployee ? 'bg-green-600 hover:bg-green-500' : (showNewUserBadge ? 'bg-blue-600 hover:bg-blue-500' : (MANUAL_PROVIDERS.find(p => p.id === selectedProviderId)?.color || 'bg-purple-600'))} hover:brightness-110`}
+                            className={`w-full py-2 rounded font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500`}
                           >
-                            Buy with {MANUAL_PROVIDERS.find(p => p.id === selectedProviderId)?.name}
+                            Pay with Card
                           </button>
                         </div>
                       </div>
@@ -2082,6 +2110,21 @@ export default function CoinStore() {
             setManualPaymentModalOpen(false);
             showPurchaseCompleteOverlay();
             refreshCoins();
+          }}
+        />
+        <SquarePaymentModal
+          isOpen={squarePaymentModalOpen}
+          onClose={() => setSquarePaymentModalOpen(false)}
+          pkg={selectedPackage}
+          userId={user?.id}
+          profile={profile}
+          onSaveCard={true}
+          requireCardOnFile={!profile?.encrypted_card_data}
+          onPaymentSuccess={() => {
+            setSquarePaymentModalOpen(false);
+            showPurchaseCompleteOverlay();
+            refreshCoins();
+            refreshProfile();
           }}
         />
         </div>

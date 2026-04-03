@@ -157,6 +157,9 @@ export interface UserProfile {
   square_customer_id?: string | null
   square_card_id?: string | null
 
+  // TrollCity Saved Card (encrypted locally, hidden from everyone including admin)
+  encrypted_card_data?: string | null
+
   // Empire Partner
   empire_role?: string | null // 'partner' when approved as Empire Partner
   empire_partner?: boolean // New field for partner status
