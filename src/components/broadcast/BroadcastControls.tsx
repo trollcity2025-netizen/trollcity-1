@@ -495,17 +495,19 @@ export default function BroadcastControls({
           />
         )}
 
-        {/* Games Controller - Coming Soon */}
-        <OrbBtn
-          active={false}
-          onClick={() => toast.info("Games feature coming soon!")}
-          icon={Gamepad2}
-          label="Games"
-          glow={undefined}
-          size="sm"
-          disabled={true}
-          tooltip="Coming Soon"
-        />
+        {/* Games Controller - Troll Toe */}
+        {onTrollToeController && (
+          <OrbBtn
+            active={trollToeActive}
+            onClick={onTrollToeController}
+            icon={Gamepad2}
+            label="Games"
+            glow={undefined}
+            size="sm"
+            disabled={false}
+            tooltip="Open Game Controller"
+          />
+        )}
 
         {/* End Stream (host) - center large orb */}
         {isHost && (

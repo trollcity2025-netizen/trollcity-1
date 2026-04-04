@@ -158,30 +158,10 @@ export default function SquarePaymentModal({
         cardholderName: cardHolderName,
       };
 
-      // Encrypt locally for display
       const encrypted = await encryptCardData(cardData);
 
-      // Also save with Square for payment processing
-      let squareCustomerId = profile?.square_customer_id;
-      let squareCardId = profile?.square_card_id;
-
-      // If no Square customer, create one and save the card
-      if (!squareCustomerId || !squareCardId) {
-        const { data: saveData, error: saveError } = await supabase.functions.invoke('square-save-card', {
-          body: { userId },
-        });
-
-        if (!saveError && saveData?.customerId && saveData?.cardId) {
-          squareCustomerId = saveData.customerId;
-          squareCardId = saveData.cardId;
-        }
-      }
-
-      // Update profile with both local encryption AND Square IDs
+      // Update profile with encrypted card data
       const profileUpdate: any = { encrypted_card_data: encrypted };
-      if (squareCustomerId) profileUpdate.square_customer_id = squareCustomerId;
-      if (squareCardId) profileUpdate.square_card_id = squareCardId;
-
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update(profileUpdate)
@@ -189,12 +169,24 @@ export default function SquarePaymentModal({
 
       if (updateError) throw updateError;
 
-      // Update local profile
+      // Also save to user_payment_methods table for troll bank integration
+      const { error: paymentMethodError } = await supabase
+        .from('user_payment_methods')
+        .insert({
+          user_id: userId,
+          provider: 'square',
+          brand: cardData.cardNumber.startsWith('4') ? 'Visa' : 
+                 cardData.cardNumber.startsWith('5') ? 'Mastercard' : 
+                 cardData.cardNumber.startsWith('3') ? 'Amex' : 'Card',
+          last4: cleanNumber.slice(-4),
+          is_default: true,
+        });
+
+      // Ignore if payment method insert fails - we still saved encrypted data
+
       const updatedProfile = { 
         ...profile, 
         encrypted_card_data: encrypted,
-        square_customer_id: squareCustomerId,
-        square_card_id: squareCardId,
       };
       onProfileUpdate?.(updatedProfile);
 
