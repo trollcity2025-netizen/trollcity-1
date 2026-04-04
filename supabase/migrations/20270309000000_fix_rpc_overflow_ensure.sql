@@ -68,10 +68,10 @@ CREATE OR REPLACE VIEW public.earnings_view AS
           WHERE payout_requests.status = 'paid'::text
           GROUP BY payout_requests.user_id, (date_part('year'::text, payout_requests.created_at))
         )
- SELECT p.id,
+  SELECT p.id,
     p.username,
-    p.total_earned_coins,
-    p.troll_coins,
+    COALESCE(p.total_earned_coins, 0)::bigint AS total_earned_coins,
+    COALESCE(p.troll_coins, 0)::bigint AS troll_coins,
     COALESCE(ce.total_coins, 0::numeric) AS current_month_earnings,
     COALESCE(ce.transaction_count, 0::bigint) AS current_month_transactions,
     COALESCE(ps.paid_out_usd, 0::numeric) AS current_month_paid_out,

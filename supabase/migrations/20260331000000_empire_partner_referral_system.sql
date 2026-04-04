@@ -98,7 +98,7 @@ RETURNS TABLE (
   is_qualified_referral boolean,
   qualified_referral_at timestamptz,
   referred_at timestamptz,
-  progress_percent numeric
+  progress_percent bigint
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -109,13 +109,13 @@ BEGIN
     up.id AS referred_user_id,
     up.username,
     up.avatar_url,
-    COALESCE(up.troll_coins, 0) AS troll_coins,
-    COALESCE(up.total_earned_coins, 0) AS total_earned_coins,
+    COALESCE(up.troll_coins, 0)::bigint AS troll_coins,
+    COALESCE(up.total_earned_coins, 0)::bigint AS total_earned_coins,
     COALESCE(up.onboarding_complete, false) AS onboarding_complete,
     COALESCE(up.is_qualified_referral, false) AS is_qualified_referral,
     up.qualified_referral_at,
     up.created_at AS referred_at,
-    LEAST(100, ROUND((COALESCE(up.troll_coins, 0)::numeric / 5000) * 100, 1)) AS progress_percent
+    LEAST(100, ((COALESCE(up.troll_coins, 0)::numeric / 5000) * 100)::bigint) AS progress_percent
   FROM public.user_profiles up
   WHERE up.referred_by_user_id = p_user_id
   ORDER BY up.created_at DESC;
