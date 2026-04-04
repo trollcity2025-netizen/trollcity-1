@@ -22,6 +22,8 @@ export default function EconomyDashboard() {
   }, [profile, navigate])
 
   useEffect(() => {
+    let coinPurchasesChannel: any = null
+
     const load = async () => {
       if (!profile || !['admin', 'troll_officer'].includes(profile.role)) return
 
@@ -54,14 +56,24 @@ export default function EconomyDashboard() {
           const date = new Date(tx.created_at)
           const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01` // YYYY-MM-01 format
           
-          // Determine USD amount
-          // 1. Check platform_profit (most accurate for revenue)
-          // 2. Check metadata.amount_paid
-          // 3. Check metadata.price
-          let usdAmount = Number(tx.platform_profit || 0)
-          if (usdAmount <= 0) {
-             const meta = tx.metadata as any || {}
-             usdAmount = Number(meta.amount_paid || meta.price || 0)
+          // Determine USD amount - check multiple sources
+          let usdAmount = 0
+          
+          // 1. Check platform_profit first (if it exists)
+          if (tx.platform_profit) {
+            usdAmount = Number(tx.platform_profit)
+          }
+          // 2. Check metadata.amount_usd (from Square/charge-stored-card)
+          else if (tx.metadata?.amount_usd) {
+            usdAmount = Number(tx.metadata.amount_usd)
+          }
+          // 3. Check metadata.amount_paid (from PayPal)
+          else if (tx.metadata?.amount_paid) {
+            usdAmount = Number(tx.metadata.amount_paid)
+          }
+          // 4. Check metadata.price (fallback)
+          else if (tx.metadata?.price) {
+            usdAmount = Number(tx.metadata.price)
           }
           
           // If still 0, maybe it's in the amount field (but amount is usually coins)
@@ -122,6 +134,29 @@ export default function EconomyDashboard() {
     }
 
     load()
+
+    // Subscribe to new coin purchases in real-time
+    coinPurchasesChannel = supabase
+      .channel('economy-coin-purchases')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: "type=eq.store_purchase" }, () => {
+        console.log('📊 New store purchase detected in Economy Dashboard')
+        load()
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: "type=eq.paypal_purchase" }, () => {
+        console.log('📊 New PayPal purchase detected in Economy Dashboard')
+        load()
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: "type=eq.purchase" }, () => {
+        console.log('📊 New purchase detected in Economy Dashboard')
+        load()
+      })
+      .subscribe()
+
+    return () => {
+      if (coinPurchasesChannel) {
+        supabase.removeChannel(coinPurchasesChannel)
+      }
+    }
   }, [profile])
 
   if (!profile || !['admin', 'troll_officer'].includes(profile.role)) {

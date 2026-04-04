@@ -35,11 +35,39 @@ export default function Stats() {
   const { user, profile } = useAuthStore()
   const { balances, loading: coinsLoading } = useCoins()
   const { xpTotal, level, xpToNext, progress, fetchXP, subscribeToXP, unsubscribe } = useXPStore()
-  const { data: creditData, loading: creditLoading } = useCreditScore()
+  const { data: creditData, loading: creditLoading, refresh: refreshCredit } = useCreditScore()
   const [stats, setStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
   const isInitialized = useRef(false)
   const prevXPData = useRef({ level: 0, xpTotal: 0, xpToNext: 0 })
+  const prevCreditScore = useRef<number | null>(null)
+
+  // Refresh credit score when profile.credit_score changes
+  useEffect(() => {
+    if (profile?.credit_score !== undefined && profile.credit_score !== prevCreditScore.current) {
+      console.log('[Stats] Profile credit_score changed to:', profile.credit_score, 'refreshing credit data')
+      prevCreditScore.current = profile.credit_score
+      refreshCredit()
+    }
+  }, [profile?.credit_score, refreshCredit])
+
+  // Log credit data when it updates
+  useEffect(() => {
+    console.log('[Stats] Credit data updated:', {
+      score: creditData?.score,
+      tier: creditData?.tier,
+      loading: creditLoading
+    })
+  }, [creditData, creditLoading])
+
+  // Log credit data when it updates
+  useEffect(() => {
+    console.log('[Stats] Credit data updated:', {
+      score: creditData?.score,
+      tier: creditData?.tier,
+      loading: creditLoading
+    })
+  }, [creditData, creditLoading])
 
   // Initialize XP data and subscription only once
   useEffect(() => {

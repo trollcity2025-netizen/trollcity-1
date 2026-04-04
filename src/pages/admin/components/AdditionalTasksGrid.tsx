@@ -24,7 +24,6 @@ import {
   Activity,
   Award,
   Zap,
-  Gift,
   Home,
   PieChart,
   Shuffle,
@@ -144,19 +143,11 @@ export default function AdditionalTasksGrid({
       {
         icon: <DollarSign className="w-5 h-5" />,
         label: 'Cashout Mgr',
-        description: 'Requests & Gifts',
+        description: 'Payout requests',
         action: () => navigate('/admin/cashout-manager'),
         color: 'text-green-400',
         bgColor: 'bg-green-500/20',
         count: counts.cashouts
-      },
-      {
-        icon: <Gift className="w-5 h-5" />,
-        label: 'Gift Cards',
-        description: 'Manage fulfillments',
-        action: () => navigate('/admin/gift-cards'),
-        color: 'text-pink-400',
-        bgColor: 'bg-pink-500/20'
       },
       {
         icon: <Bell className="w-5 h-5" />,

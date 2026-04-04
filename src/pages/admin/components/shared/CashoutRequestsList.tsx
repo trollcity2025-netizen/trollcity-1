@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../../lib/supabase'
 import { CashoutRequest } from '../../../../types/admin'
 import { toast } from 'sonner'
-import { DollarSign, Check, X, CreditCard, Lock, Unlock } from 'lucide-react'
+import { DollarSign, Check, X, Lock, Unlock } from 'lucide-react'
 import { useAuthStore } from '../../../../lib/store'
 
 interface CashoutRequestsListProps {
@@ -25,8 +25,6 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
   const [requests, setRequests] = useState<ExtendedCashoutRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedRequest, setSelectedRequest] = useState<ExtendedCashoutRequest | null>(null)
-  const [giftCardCode, setGiftCardCode] = useState('')
-  const [isFulfillModalOpen, setIsFulfillModalOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>('pending')
   const [filterUser, setFilterUser] = useState<string>('')
   const [holdReason, setHoldReason] = useState('')
@@ -110,36 +108,6 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
     } catch (error) {
       console.error(error)
       toast.error('Failed to update hold status')
-    }
-  }
-
-  const openFulfillModal = (req: ExtendedCashoutRequest) => {
-    setSelectedRequest(req)
-    setGiftCardCode('')
-    setIsFulfillModalOpen(true)
-  }
-
-  const handleFulfill = async () => {
-    if (!selectedRequest || !giftCardCode) return
-    if (!user) return
-
-    try {
-      const { error } = await supabase.functions.invoke('admin-actions', {
-        body: { 
-          action: 'fulfill_cashout_request',
-          requestId: selectedRequest.id,
-          giftCardCode,
-          notes: 'Fulfilled via admin panel'
-        }
-      });
-
-      if (error) throw error
-      toast.success('Request fulfilled with Gift Card code!')
-      setIsFulfillModalOpen(false)
-      fetchRequests()
-    } catch (error) {
-      console.error(error)
-      toast.error('Failed to fulfill request')
     }
   }
 
@@ -305,26 +273,6 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
                         )}
                       </>
                     )}
-                    {req.status === 'approved' && (
-                      <button 
-                        onClick={() => openFulfillModal(req)}
-                        className="p-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded transition-colors flex items-center gap-1 px-2"
-                        title="Fulfill with Gift Card"
-                      >
-                        <CreditCard className="w-4 h-4" />
-                        <span className="text-xs font-bold">Fulfill</span>
-                      </button>
-                    )}
-                    {req.status === 'processing' && (
-                      <button 
-                        onClick={() => openFulfillModal(req)}
-                        className="p-1.5 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded transition-colors flex items-center gap-1 px-2"
-                        title="Mark Fulfilled"
-                      >
-                        <CreditCard className="w-4 h-4" />
-                        <span className="text-xs font-bold">Fulfill</span>
-                      </button>
-                    )}
                   </td>
                 </tr>
               ))
@@ -332,65 +280,6 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
           </tbody>
         </table>
       </div>
-      {isFulfillModalOpen && selectedRequest && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1A1A24] border border-[#2C2C2C] rounded-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xl font-bold text-white">Fulfill Cashout Request</h3>
-              <button 
-                onClick={() => setIsFulfillModalOpen(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-              <div className="bg-[#0D0D16] p-4 rounded-lg space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">User:</span>
-                  <span className="text-white font-medium">{selectedRequest.user_profile?.username}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Amount:</span>
-                  <span className="text-yellow-400 font-mono">
-                  {(selectedRequest.coin_amount || 0).toLocaleString()} coins
-                  </span>
-                </div>
-              {/* USD value and delivery method omitted due to schema differences */}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">Gift Card Code / Link</label>
-              <input
-                type="text"
-                value={giftCardCode}
-                onChange={(e) => setGiftCardCode(e.target.value)}
-                placeholder="Enter code or claim link..."
-                className="w-full bg-[#0D0D16] border border-[#2C2C2C] rounded-lg p-3 text-white focus:outline-none focus:border-purple-500"
-              />
-              <p className="text-xs text-gray-500">
-                This will be securely sent to the user&apos;s Gift Cards page.
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsFulfillModalOpen(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-[#2C2C2C] text-gray-300 hover:bg-[#2C2C2C] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleFulfill}
-                disabled={!giftCardCode}
-                className="flex-1 px-4 py-2 rounded-lg bg-purple-600 text-white font-medium hover:bg-purple-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Send Gift Card
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {requestToHold && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">

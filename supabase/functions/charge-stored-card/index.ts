@@ -304,6 +304,96 @@ Deno.serve(async (req) => {
       console.error(`[ChargeStoredCard ${requestId}] PAYMENT SUCCESSFUL BUT COINS NOT CREDITED - MANUAL FIX NEEDED`)
     }
 
+    // Record in purchase_ledger (Revenue Sync)
+    if (packageId) {
+      await fetch(
+        `${supabaseUrl}/rest/v1/purchasable_items?item_key=eq.${packageId}&select=id`,
+        {
+          headers: {
+            'apikey': supabaseKey!,
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+        }
+      )
+        .then(res => res.json())
+        .then(items => {
+          if (items && items.length > 0) {
+            return fetch(
+              `${supabaseUrl}/rest/v1/purchase_ledger`,
+              {
+                method: 'POST',
+                headers: {
+                  'apikey': supabaseKey!,
+                  'Authorization': `Bearer ${supabaseKey}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal',
+                },
+                body: JSON.stringify({
+                  user_id: userId,
+                  item_id: items[0].id,
+                  usd_amount: amountUsd,
+                  coin_amount: coinAmount,
+                  payment_method: 'card',
+                  source_context: 'CoinStore',
+                  metadata: {
+                    payment_id: payment.id,
+                    square_payment: true
+                  }
+                }),
+              }
+            )
+          }
+        })
+        .catch(err => {
+          console.warn(`[ChargeStoredCard ${requestId}] Failed to insert into purchase_ledger:`, err)
+        })
+    }
+
+    // Record in purchase_ledger (Revenue Sync)
+    if (packageId) {
+      await fetch(
+        `${supabaseUrl}/rest/v1/purchasable_items?item_key=eq.${packageId}&select=id`,
+        {
+          headers: {
+            'apikey': supabaseKey!,
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+        }
+      )
+        .then(res => res.json())
+        .then(items => {
+          if (items && items.length > 0) {
+            return fetch(
+              `${supabaseUrl}/rest/v1/purchase_ledger`,
+              {
+                method: 'POST',
+                headers: {
+                  'apikey': supabaseKey!,
+                  'Authorization': `Bearer ${supabaseKey}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal',
+                },
+                body: JSON.stringify({
+                  user_id: userId,
+                  item_id: items[0].id,
+                  usd_amount: amountUsd,
+                  coin_amount: coinAmount,
+                  payment_method: 'card',
+                  source_context: 'CoinStore',
+                  metadata: {
+                    payment_id: payment.id,
+                    square_payment: true
+                  }
+                }),
+              }
+            )
+          }
+        })
+        .catch(err => {
+          console.warn(`[ChargeStoredCard ${requestId}] Failed to insert into purchase_ledger:`, err)
+        })
+    }
+
     // Log transaction
     await fetch(
       `${supabaseUrl}/rest/v1/coin_transactions`,
@@ -321,6 +411,7 @@ Deno.serve(async (req) => {
           status: 'completed',
           coin_type: 'paid',
           amount: coinAmount,
+          platform_profit: amountUsd,
           balance_after: null, // Not fetched for performance
           metadata: {
             payment_id: payment.id,

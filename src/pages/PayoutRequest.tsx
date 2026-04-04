@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuthStore } from "../lib/store";
 import { useBank } from "@/lib/hooks/useBank";
 import { supabase } from "../lib/supabase";
@@ -8,12 +9,21 @@ import { isPayoutWindowOpen, PAYOUT_WINDOW_LABEL } from "../lib/payoutWindow";
 import { TIERS, FIXED_FEE_USD, getRateForCoins } from "../config/coinConfig";
 
 export default function PayoutRequest() {
+  const location = useLocation();
   const { user, profile, refreshProfile } = useAuthStore() as any;
   const { creditInfo } = useBank();
   const creditUsed = creditInfo.used;
   const [coins, setCoins] = useState("");
   const [loading, setLoading] = useState(false);
   const payoutWindowOpen = isPayoutWindowOpen();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const coinsParam = params.get('coins');
+    if (coinsParam) {
+      setCoins(coinsParam);
+    }
+  }, [location.search]);
 
   if (!user) {
     return (

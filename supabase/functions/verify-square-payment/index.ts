@@ -208,6 +208,52 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ troll_coins: currentCoins + coinAmount }),
       })
 
+      // Record in purchase_ledger (Revenue Sync)
+      if (pkgId) {
+        await fetch(
+          `${supabaseUrl}/rest/v1/purchasable_items?item_key=eq.${pkgId}&select=id`,
+          {
+            headers: {
+              'apikey': supabaseKey!,
+              'Authorization': `Bearer ${supabaseKey}`,
+            },
+          }
+        )
+          .then(res => res.json())
+          .then(items => {
+            if (items && items.length > 0) {
+              return fetch(
+                `${supabaseUrl}/rest/v1/purchase_ledger`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'apikey': supabaseKey!,
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal',
+                  },
+                  body: JSON.stringify({
+                    user_id: userId,
+                    item_id: items[0].id,
+                    usd_amount: paymentAmount,
+                    coin_amount: coinAmount,
+                    payment_method: 'card',
+                    source_context: 'CoinStore',
+                    metadata: {
+                      order_id: orderId,
+                      payment_id: paymentId,
+                      square_payment: true
+                    }
+                  }),
+                }
+              )
+            }
+          })
+          .catch(err => {
+            console.warn(`[VerifySquarePayment ${requestId}] Failed to insert into purchase_ledger:`, err)
+          })
+      }
+
       // Record transaction
       await fetch(`${supabaseUrl}/rest/v1/coin_transactions`, {
         method: 'POST',
@@ -223,6 +269,7 @@ Deno.serve(async (req) => {
           type: 'store_purchase',
           status: 'completed',
           description: `Purchased ${coinAmount} coins via Square`,
+          platform_profit: paymentAmount,
           metadata: {
             order_id: orderId,
             payment_id: paymentId,

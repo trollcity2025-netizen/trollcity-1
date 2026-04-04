@@ -119,15 +119,29 @@ export function useBank() {
     if (!user) return { success: false, error: 'User not logged in' }
     setLoading(true)
     try {
+        console.log('[payCreditCard] Calling pay_credit_card RPC with amount:', amount)
         const { data, error } = await supabase.rpc('pay_credit_card', {
             p_amount: amount
         })
 
-        if (error) throw error
-        if (data && data.success === false) throw new Error(data.message || 'Payment failed')
+        if (error) {
+          console.error('[payCreditCard] RPC error:', error)
+          throw error
+        }
+        if (data && data.success === false) {
+          console.error('[payCreditCard] Payment failed:', data)
+          throw new Error(data.message || 'Payment failed')
+        }
 
+        console.log('[payCreditCard] Payment successful, response:', data)
         toast.success(`Paid ${amount.toLocaleString()} coins towards credit card!`)
-        await refreshProfile() // Update local profile state
+        
+        // Force refresh profile to update credit_score in the UI
+        // Bypass debounce to ensure immediate update
+        console.log('[payCreditCard] Forcing profile refresh...')
+        await refreshProfile(true)
+        console.log('[payCreditCard] Profile refresh complete')
+        
         fetchBankData() // Update ledger
         return { success: true, data }
     } catch (error: any) {

@@ -26,7 +26,7 @@ interface AuthState {
   setLoading: (loading: boolean) => void
   setAdmin: (isAdmin: boolean | null) => void
   setShowLegacySidebar: (value: boolean) => void
-  refreshProfile: () => Promise<void>
+  refreshProfile: (force?: boolean) => Promise<void>
   logout: () => void
 }
 
@@ -161,18 +161,23 @@ export const useAuthStore = create<AuthState>()(
       setShowLegacySidebar: (value) => set({ showLegacySidebar: value }),
 
       // Reload profile from DB - NON-BLOCKING & FAIL-SAFE
-      refreshProfile: async () => {
+      refreshProfile: async (force = false) => {
         const state = get()
         const u = state.user
         if (!u) return
 
-        // Global debounce: prevent multiple refreshes within 3 seconds
+        // Global debounce: prevent multiple refreshes within 3 seconds (unless forced)
         const now = Date.now()
-        if (now - lastRefreshProfileTime < REFRESH_PROFILE_DEBOUNCE_MS) {
+        if (!force && now - lastRefreshProfileTime < REFRESH_PROFILE_DEBOUNCE_MS) {
           console.log('[refreshProfile] Skipping - refreshed too recently')
           return
         }
+        if (force) {
+          console.log('[refreshProfile] Force refresh - bypassing debounce')
+        }
         lastRefreshProfileTime = now
+
+        console.log('[refreshProfile] Fetching profile for user:', u.id)
 
         // Prevent concurrent refreshes
         if (state.isRefreshing) {
@@ -200,6 +205,13 @@ export const useAuthStore = create<AuthState>()(
 
           if (data) {
             let profileData = data as any
+            
+            console.log('[refreshProfile] Fetched profile data:', {
+              id: profileData.id,
+              credit_score: profileData.credit_score,
+              credit_used: profileData.credit_used,
+              troll_coins: profileData.troll_coins
+            })
             
             // Update state immediately with core data
             get().setProfile(profileData as UserProfile)
@@ -383,13 +395,18 @@ export const useAuthStore = create<AuthState>()(
 let initDone = false
 let initialAuthHandled = false
 let profileChannel: any = null
+let creditChannel: any = null
 
 // Setup realtime subscription for profile changes
 export function setupProfileRealtime(userId: string) {
-  // Remove existing subscription if any
+  // Remove existing subscriptions if any
   if (profileChannel) {
     supabase.removeChannel(profileChannel)
     profileChannel = null
+  }
+  if (creditChannel) {
+    supabase.removeChannel(creditChannel)
+    creditChannel = null
   }
 
   // Subscribe to profile changes for real-time balance updates
@@ -405,11 +422,13 @@ export function setupProfileRealtime(userId: string) {
       },
       (payload) => {
         console.log('[ProfileRealtime] Profile updated:', payload.new)
+        console.log('[ProfileRealtime] credit_score changed from', payload.old?.credit_score, 'to', payload.new?.credit_score)
         // Update the profile in store immediately - bypass debounce for realtime updates
         const currentProfile = useAuthStore.getState().profile
         if (currentProfile && currentProfile.id === userId) {
           // Force bypass debounce by resetting the debounce timer
           lastProfileUpdateTime = 0
+          console.log('[ProfileRealtime] Updating profile in store with new credit_score:', payload.new?.credit_score)
           useAuthStore.getState().setProfile({
             ...currentProfile,
             ...payload.new
@@ -419,7 +438,33 @@ export function setupProfileRealtime(userId: string) {
     )
     .subscribe()
 
-  console.log('[ProfileRealtime] Subscribed to profile changes for user:', userId)
+  // Also subscribe to user_credit table for credit score updates
+  creditChannel = supabase
+    .channel(`credit-${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'user_credit',
+        filter: `user_id=eq.${userId}`
+      },
+      (payload) => {
+        console.log('[CreditRealtime] user_credit updated:', payload)
+        // When user_credit is updated, also refresh the profile to get the latest credit_score
+        const currentProfile = useAuthStore.getState().profile
+        if (currentProfile && currentProfile.id === userId) {
+          console.log('[CreditRealtime] Refreshing profile to sync credit_score')
+          // Force refresh to get latest credit_score from user_profiles
+          lastProfileUpdateTime = 0
+          lastRefreshProfileTime = 0
+          useAuthStore.getState().refreshProfile(true)
+        }
+      }
+    )
+    .subscribe()
+
+  console.log('[ProfileRealtime] Subscribed to profile and user_credit changes for user:', userId)
 }
 
 // Cleanup realtime subscription
@@ -428,6 +473,11 @@ export function cleanupProfileRealtime() {
     supabase.removeChannel(profileChannel)
     profileChannel = null
     console.log('[ProfileRealtime] Cleaned up profile subscription')
+  }
+  if (creditChannel) {
+    supabase.removeChannel(creditChannel)
+    creditChannel = null
+    console.log('[ProfileRealtime] Cleaned up credit subscription')
   }
 }
 

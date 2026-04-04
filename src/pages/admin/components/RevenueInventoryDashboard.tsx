@@ -77,6 +77,26 @@ export default function RevenueInventoryDashboard() {
 
   useEffect(() => {
     fetchData();
+
+    const coinPurchasesChannel = supabase
+      .channel('revenue-coin-purchases')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: "type=eq.store_purchase" }, () => {
+        console.log('📊 New store purchase detected in Revenue Dashboard')
+        fetchData()
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: "type=eq.paypal_purchase" }, () => {
+        console.log('📊 New PayPal purchase detected in Revenue Dashboard')
+        fetchData()
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: "type=eq.purchase" }, () => {
+        console.log('📊 New purchase detected in Revenue Dashboard')
+        fetchData()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(coinPurchasesChannel)
+    }
   }, []);
 
   const categories = useMemo(() => {

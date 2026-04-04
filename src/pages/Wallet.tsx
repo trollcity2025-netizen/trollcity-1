@@ -276,7 +276,11 @@ export default function Wallet() {
         <h2 className="text-xl font-semibold mb-3">Cashout Tiers</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           {TIERS.map((tier) => (
-            <div key={tier.coins} className="bg-zinc-900/50 border border-zinc-700 rounded-xl p-4 flex flex-col items-center text-center hover:border-purple-500 transition-colors">
+            <button
+              key={tier.coins}
+              onClick={() => navigate(`/payouts/request?coins=${tier.coins}`)}
+              className="bg-zinc-900/50 border border-zinc-700 rounded-xl p-4 flex flex-col items-center text-center hover:border-purple-500 hover:bg-zinc-800/50 transition-all cursor-pointer"
+            >
               <div className="text-2xl font-bold text-white mb-1">
                 ${tier.usd}
               </div>
@@ -288,7 +292,10 @@ export default function Wallet() {
                   3 Day Manual Review
                 </div>
               )}
-            </div>
+              <div className="text-xs text-gray-500 mt-2">
+                Click to request
+              </div>
+            </button>
           ))}
         </div>
       </div>

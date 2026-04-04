@@ -191,7 +191,6 @@ const Career = lazyWithRetry(() => import("./pages/Career"));
 const LeadOfficerApplication = lazyWithRetry(() => import("./pages/LeadOfficerApplication"));
 const PastorApplication = lazyWithRetry(() => import("./pages/PastorApplication"));
 const ShopEarnings = lazyWithRetry(() => import("./pages/ShopEarnings"));
-const AdminPayoutMobile = lazyWithRetry(() => import("./pages/admin/AdminPayoutMobile"));
 const MobileAdminDashboard = lazyWithRetry(() => import("./pages/admin/MobileAdminDashboard"));
 const PaymentsDashboard = lazyWithRetry(() => import("./pages/admin/PaymentsDashboard"));
 const EconomyDashboard = lazyWithRetry(() => import("./pages/admin/EconomyDashboard"));
@@ -228,7 +227,6 @@ const AdminVerifiedUsers = lazyWithRetry(() => import("./pages/admin/AdminVerifi
 const AdminVerificationReview = lazyWithRetry(() => import("./pages/admin/AdminVerificationReview"));
 const AdminPoliciesDocs = lazyWithRetry(() => import("./pages/admin/AdminPoliciesDocs"));
 const ExecutiveSecretaries = lazyWithRetry(() => import("./pages/admin/ExecutiveSecretaries"));
-const GiftCardsManager = lazyWithRetry(() => import("./pages/admin/GiftCardsManager"));
 const ExecutiveIntake = lazyWithRetry(() => import("./pages/admin/ExecutiveIntake"));
 const ExecutiveReports = lazyWithRetry(() => import("./pages/admin/ExecutiveReports"));
 const AdminManualOrders = lazyWithRetry(() => import("./pages/admin/AdminManualOrders"));
@@ -1443,14 +1441,6 @@ function AppContent() {
                     }
                   />
                   <Route
-                    path="/admin/payouts-mobile"
-                    element={
-                      <RequireRole roles={[UserRole.ADMIN]}>
-                        <AdminPayoutMobile />
-                      </RequireRole>
-                    }
-                  />
-                  <Route
                     path="/admin-mobile"
                     element={
                       <RequireRole roles={[UserRole.ADMIN]}>
@@ -1626,14 +1616,6 @@ function AppContent() {
                       }
                     />
                     <Route
-                      path="/admin/gift-cards"
-                      element={
-                        <RequireRole roles={[UserRole.ADMIN]}>
-                          <GiftCardsManager />
-                        </RequireRole>
-                      }
-                    />
-                    <Route
                       path="/admin/executive-intake"
                       element={
                         <RequireRole roles={[UserRole.ADMIN]}>
@@ -1666,10 +1648,10 @@ function AppContent() {
                       }
                     />
                     <Route
-                      path="/admin/critical-alerts"
+                      path="/admin/executive-intake"
                       element={
                         <RequireRole roles={[UserRole.ADMIN]}>
-                          <CriticalAlertsManager />
+                          <ExecutiveIntake />
                         </RequireRole>
                       }
                     />

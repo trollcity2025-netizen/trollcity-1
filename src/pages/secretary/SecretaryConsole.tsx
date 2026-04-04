@@ -4,7 +4,6 @@ import { useAuthStore } from '../../lib/store'
 import {
   ClipboardList,
   CreditCard,
-  Gift,
   AlertTriangle,
   FileText,
   LogOut,
@@ -18,7 +17,6 @@ import {
 } from 'lucide-react'
 import ExecutiveIntakeList from '../admin/components/shared/ExecutiveIntakeList'
 import CashoutRequestsList from '../admin/components/shared/CashoutRequestsList'
-import GiftCardFulfillmentList from '../admin/components/shared/GiftCardFulfillmentList'
 import CriticalAlertsList from '../admin/components/shared/CriticalAlertsList'
 import ExecutiveReportsList from '../admin/components/shared/ExecutiveReportsList'
 import ManualCoinOrdersList from '../admin/components/shared/ManualCoinOrdersList'
@@ -33,7 +31,7 @@ import NeighborApprovals from './components/NeighborApprovals'
 import CityAdsManager from './components/CityAdsManager'
 import EmpirePartnerAdminPanel from './components/EmpirePartnerAdminPanel'
 
-type Tab = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors' | 'promo_ads' | 'empire_partners'
+type Tab = 'intake' | 'cashouts' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors' | 'promo_ads' | 'empire_partners'
 
 interface TabInfo {
   id: Tab
@@ -55,7 +53,6 @@ const tabs: TabInfo[] = [
   { id: 'manual_payments', label: 'Manual', icon: <CreditCard className="w-4 h-4" />, color: 'emerald' },
   { id: 'troll_pass', label: 'Troll Pass', icon: <Crown className="w-4 h-4" />, color: 'pink' },
   { id: 'pastor_apps', label: 'Pastors', icon: <BookOpen className="w-4 h-4" />, color: 'indigo' },
-  { id: 'giftcards', label: 'Gift Cards', icon: <Gift className="w-4 h-4" />, color: 'pink' },
   { id: 'alerts', label: 'Alerts', icon: <AlertTriangle className="w-4 h-4" />, color: 'red' },
   { id: 'staff', label: 'Staff', icon: <Users className="w-4 h-4" />, color: 'purple' },
   { id: 'promo_ads', label: 'Promo Ads', icon: <FileText className="w-4 h-4" />, color: 'orange' },
@@ -176,16 +173,6 @@ export default function SecretaryConsole() {
               <p className="text-slate-400">Review applications for church/pastor roles.</p>
             </div>
             <PastorApplicationsList />
-          </div>
-        )
-      case 'giftcards':
-        return (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-white mb-2">Gift Card Fulfillment</h2>
-              <p className="text-slate-400">Process and fulfill gift card orders.</p>
-            </div>
-            <GiftCardFulfillmentList viewMode="secretary" />
           </div>
         )
       case 'alerts':

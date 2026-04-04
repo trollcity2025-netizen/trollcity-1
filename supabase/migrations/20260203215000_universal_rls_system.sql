@@ -359,20 +359,34 @@ CREATE OR REPLACE FUNCTION public.protect_profile_fields()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Allow admins to bypass these checks
+    -- Note: When called via SECURITY DEFINER functions (like pay_credit_card),
+    -- auth.uid() returns the function owner (admin), so this check passes
     IF public.is_admin(auth.uid()) THEN
         RETURN NEW;
     END IF;
 
-    -- Check restricted fields
+    -- Check restricted fields (excluding credit_score which can be increased by users)
+    -- credit_score is handled separately below to allow increases
     IF NEW.banned_at IS DISTINCT FROM OLD.banned_at OR
        NEW.suspended_until IS DISTINCT FROM OLD.suspended_until OR
-       NEW.credit_score IS DISTINCT FROM OLD.credit_score OR
        NEW.clocked_in IS DISTINCT FROM OLD.clocked_in OR
        NEW.clocked_in_at IS DISTINCT FROM OLD.clocked_in_at OR
        NEW.staff_override_until IS DISTINCT FROM OLD.staff_override_until OR
        NEW.admin_override_until IS DISTINCT FROM OLD.admin_override_until OR
        NEW.marketplace_approved IS DISTINCT FROM OLD.marketplace_approved THEN
         RAISE EXCEPTION 'You are not authorized to modify restricted profile fields.';
+    END IF;
+    
+    -- Allow users to increase their own credit_score (via SECURITY DEFINER functions like pay_credit_card)
+    -- Block decreases unless by admin
+    IF NEW.credit_score IS DISTINCT FROM OLD.credit_score THEN
+        IF NEW.credit_score < OLD.credit_score THEN
+            -- Decreasing credit score - only admins can do this
+            IF NOT public.is_admin(auth.uid()) THEN
+                RAISE EXCEPTION 'You are not authorized to decrease credit score.';
+            END IF;
+        END IF;
+        -- Increasing credit score is allowed (typically via pay_credit_card function)
     END IF;
     
     RETURN NEW;

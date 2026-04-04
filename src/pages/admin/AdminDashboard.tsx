@@ -323,21 +323,31 @@ export default function AdminDashboard() {
       let platformProfit = 0 // Track real profit
 
       for (const t of coinTx as any[]) {
-        let profit = Number(t.platform_profit || 0)
-        let revenue = profit 
+        // Try multiple sources for the USD amount paid
+        let amountPaid = 0
         
-        // Fallback if profit is 0 (e.g. older transactions or direct purchases)
-        if (profit <= 0) {
-          const meta = t.metadata || {}
-          const amountPaid = Number(meta.amount_paid || meta.price || 0)
-          if (!isNaN(amountPaid) && amountPaid > 0) {
-            revenue = amountPaid
-            profit = revenue // Simplified assumption if profit not tracked
-          }
+        // 1. Check platform_profit first (if it exists)
+        if (t.platform_profit) {
+          amountPaid = Number(t.platform_profit)
+        }
+        // 2. Check metadata.amount_usd (from Square/charge-stored-card)
+        else if (t.metadata?.amount_usd) {
+          amountPaid = Number(t.metadata.amount_usd)
+        }
+        // 3. Check metadata.amount_paid (from PayPal)
+        else if (t.metadata?.amount_paid) {
+          amountPaid = Number(t.metadata.amount_paid)
+        }
+        // 4. Check metadata.price (fallback)
+        else if (t.metadata?.price) {
+          amountPaid = Number(t.metadata.price)
         }
 
-        if (revenue > 0) coinSalesRevenue += revenue
-        if (profit > 0) platformProfit += profit
+        // Only count if we have a valid amount
+        if (!isNaN(amountPaid) && amountPaid > 0) {
+          coinSalesRevenue += amountPaid
+          platformProfit += amountPaid // For now, treat all revenue as profit (fees handled separately)
+        }
       }
 
       // Add PayPal revenue (if we still need to fetch from view, but we are using coin_transactions now which should include paypal_purchase)
@@ -571,10 +581,33 @@ export default function AdminDashboard() {
       })
       .subscribe()
 
+    const coinPurchasesChannel = supabase
+      .channel('admin-coin-purchases')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: "type=eq.store_purchase" }, () => {
+        console.log('📊 New coin purchase detected, refreshing dashboard...')
+        loadDashboardData()
+        loadEconomySummary()
+        toast.success('New coin purchase detected!')
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: "type=eq.paypal_purchase" }, () => {
+        console.log('📊 New PayPal coin purchase detected, refreshing dashboard...')
+        loadDashboardData()
+        loadEconomySummary()
+        toast.success('New PayPal coin purchase detected!')
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'coin_transactions', filter: "type=eq.purchase" }, () => {
+        console.log('📊 New coin purchase detected, refreshing dashboard...')
+        loadDashboardData()
+        loadEconomySummary()
+        toast.success('New coin purchase detected!')
+      })
+      .subscribe()
+
     return () => {
       clearInterval(interval)
       supabase.removeChannel(appsChannel)
       supabase.removeChannel(payoutsChannel)
+      supabase.removeChannel(coinPurchasesChannel)
     }
   }, [isAuthorized, loadLiveStreams, loadDashboardData, loadEconomySummary])
 

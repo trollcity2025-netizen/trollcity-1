@@ -1177,7 +1177,7 @@ export default function CoinStore() {
                 </h1>
             </div>
 
-            <div className="flex gap-2 hidden md:flex relative">
+            <div className="flex gap-2 hidden md:flex relative items-center">
               <button type="button" className={`px-3 py-2 rounded ${tab==='coins'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('coins')}>Coins</button>
               <button type="button" className={`px-3 py-2 rounded ${tab==='bank'?'bg-purple-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('bank')}>Bank</button>
               <button type="button" className={`px-3 py-2 rounded ${tab==='market'?'bg-green-600':trollCityTheme.backgrounds.card}`} onClick={() => setTab('market')}>Market</button>
@@ -1202,8 +1202,27 @@ export default function CoinStore() {
                     </div>
                 )}
               </div>
+              
+              {/* Use Credit Card Toggle */}
+              {creditInfo?.limit > 0 && creditInfo?.available > 0 && (
+                <div className="ml-4 flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-purple-500/30 rounded-lg">
+                  <CreditCard className="w-4 h-4 text-purple-400" />
+                  <label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useCredit}
+                      onChange={(e) => setUseCredit(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-600 bg-zinc-800 text-purple-600 focus:ring-purple-500"
+                    />
+                    Use Credit Card
+                  </label>
+                  <span className="text-xs text-gray-500">
+                    (${creditInfo?.available?.toLocaleString()} available)
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="md:hidden w-full">
+            <div className="md:hidden w-full space-y-2">
               <select
                 value={tab}
                 onChange={(e) => setTab(e.target.value)}
@@ -1218,6 +1237,25 @@ export default function CoinStore() {
                 <option value="calls">Call Minutes</option>
                 <option value="insurance">Insurance</option>
               </select>
+              
+              {/* Mobile Use Credit Card Toggle */}
+              {creditInfo?.limit > 0 && creditInfo?.available > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-purple-500/30 rounded-lg">
+                  <CreditCard className="w-4 h-4 text-purple-400" />
+                  <label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useCredit}
+                      onChange={(e) => setUseCredit(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-600 bg-zinc-800 text-purple-600 focus:ring-purple-500"
+                    />
+                    Use Credit Card
+                  </label>
+                  <span className="text-xs text-gray-500">
+                    (${creditInfo?.available?.toLocaleString()} available)
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1584,16 +1622,7 @@ export default function CoinStore() {
                 </div>
               )}
 
-              <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg flex items-start gap-3">
-                <AlertTriangle className="w-6 h-6 text-yellow-500 shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="text-sm font-bold text-yellow-200 mb-1">Launch Notice: Manual Purchases</h3>
-                  <p className="text-sm text-yellow-200/80">
-                    Manual coin purchases are temporarily enabled to ensure accurate tracking and credit verification during our initial launch. 
-                    Staff will personally verify all transactions to prevent issues. Thank you for your patience!
-                  </p>
-                </div>
-              </div>
+
 
               {selectedPackage && (manualPaymentModalOpen || squarePaymentModalOpen) ? null : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

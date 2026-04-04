@@ -16,10 +16,23 @@ BEGIN
     END IF;
     
     -- Also allow credit_score decrease by admin
+    -- Note: When called via SECURITY DEFINER functions (like pay_credit_card),
+    -- auth.uid() returns the function owner (admin), so we check if the user
+    -- is updating their own profile (NEW.id) OR if it's the admin
     IF NEW.credit_score < OLD.credit_score 
        AND auth.uid() <> '8dff9f37-21b5-4b8e-adc2-b9286874be1a'::uuid
        AND auth.uid() <> NEW.id THEN
          RAISE EXCEPTION 'You are not authorized to modify restricted profile fields.';
+    END IF;
+    
+    -- Allow users to increase their own credit_score (via SECURITY DEFINER functions)
+    -- When a user calls pay_credit_card, it runs as admin (SECURITY DEFINER),
+    -- but we want to allow credit_score increases for the user's own profile
+    IF NEW.credit_score > OLD.credit_score 
+       AND NEW.id <> '8dff9f37-21b5-4b8e-adc2-b9286874be1a'::uuid THEN
+         -- This is a credit score increase for a non-admin user, which is allowed
+         -- (typically via pay_credit_card function)
+         RETURN NEW;
     END IF;
     
     RETURN NEW;
