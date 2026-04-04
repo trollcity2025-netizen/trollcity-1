@@ -78,7 +78,7 @@ const AuthCallback = () => {
               // Continue with login even if session registration fails
             }
             
-            setAuth(u as any, data.session)
+            setAuth(u as any, data.session, sessionId)
              
             // Check for existing profile
             const { data: profile } = await supabase
@@ -173,7 +173,7 @@ const AuthCallback = () => {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
           console.log('Existing session found')
-          setAuth(session.user as any, session)
+          setAuth(session.user as any, session, null)
           setReady(true)
           clearTimeout(safetyTimer)
         } else {

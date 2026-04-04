@@ -25,6 +25,12 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const { userId, cardNonce, provider } = body
 
+    console.log(`[AddCard ${requestId}] Request body:`, {
+      userId,
+      cardNonce: cardNonce ? cardNonce.substring(0, 10) + '...' : 'null',
+      provider
+    })
+
     if (!userId) {
       return withCors({ success: false, error: 'userId is required' }, 400)
     }
@@ -137,11 +143,16 @@ Deno.serve(async (req) => {
     const cardData = await cardRes.json()
     const cardId = cardData.card?.id
 
+    console.log(`[AddCard ${requestId}] Card creation response:`, {
+      cardId,
+      cardData
+    })
+
     if (!cardId) {
       return withCors({ success: false, error: 'Failed to get card ID' }, 400)
     }
 
-    // Update user profile with card ID
+    // Update user profile with all card details
     await fetch(`${supabaseUrl}/rest/v1/user_profiles?id=eq.${userId}`, {
       method: 'PATCH',
       headers: {
@@ -150,7 +161,14 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
         'Prefer': 'return=minimal',
       },
-      body: JSON.stringify({ square_card_id: cardId }),
+      body: JSON.stringify({
+        square_card_id: cardId,
+        // Save all card display details to user_profiles as well
+        card_brand: cardData.card?.card_brand || 'Card',
+        card_last4: cardData.card?.last4 || '****',
+        card_exp_month: cardData.card?.exp_month,
+        card_exp_year: cardData.card?.exp_year,
+      }),
     })
 
     // Check if user already has a payment method, if not set as default

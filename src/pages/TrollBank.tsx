@@ -7,10 +7,11 @@ import { toast } from 'sonner'
 import { Coins, CreditCard, Landmark, History, AlertCircle, CheckCircle, Lock, Plus } from 'lucide-react'
 import { trollCityTheme } from '@/styles/trollCityTheme'
 import SquarePaymentModal from '@/components/broadcast/SquarePaymentModal'
+import TrollCardSaver from '@/components/payments/TrollCardSaver'
 import { useAuthStore } from '@/lib/store'
 
 export default function TrollBank() {
-  const { user, profile } = useAuthStore()
+  const { user, profile, refreshProfile } = useAuthStore()
   const { balances, refreshCoins } = useCoins()
   const { loans, ledger, payLoan, payCreditCard, creditInfo } = useBank()
   const activeLoan = loans && loans.length > 0 ? loans[0] : null
@@ -19,25 +20,33 @@ export default function TrollBank() {
   
   const [savedCards, setSavedCards] = useState<any[]>([])
   const [showSaveCardModal, setShowSaveCardModal] = useState(false)
-  
-  // Fetch saved cards
-  useEffect(() => {
-    const fetchSavedCards = async () => {
-      if (!user?.id) return
-      try {
-        const { data, error } = await supabase
-          .from('user_payment_methods')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('is_default', { ascending: false })
-        
-        if (error) throw error
-        setSavedCards(data || [])
-      } catch (err) {
-        console.error('Failed to fetch saved cards:', err)
-      }
-    }
 
+  // Refresh profile if not loaded
+  useEffect(() => {
+    if (user && !profile) {
+      refreshProfile()
+    }
+  }, [user, profile, refreshProfile])
+
+  // Function to fetch saved cards
+  const fetchSavedCards = async () => {
+    if (!user?.id) return
+    try {
+      const { data, error } = await supabase
+        .from('user_payment_methods')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false })
+
+      if (error) throw error
+      setSavedCards(data || [])
+    } catch (err) {
+      console.error('Failed to fetch saved cards:', err)
+    }
+  }
+
+  // Fetch saved cards on mount and when user changes
+  useEffect(() => {
     fetchSavedCards()
   }, [user?.id])
 
@@ -437,36 +446,26 @@ export default function TrollBank() {
       </div>
       {/* Save Card Modal */}
       {showSaveCardModal && (
-        <SquarePaymentModal
-          isOpen={showSaveCardModal}
-          onClose={() => setShowSaveCardModal(false)}
-          pkg={{ id: 'save_card', name: 'Save Card', purchaseType: 'save_card' }}
-          userId={user?.id}
-          profile={profile}
-          onPaymentSuccess={() => {}}
-          saveOnly={true}
-          onCardSaved={() => {
-            // Refresh saved cards
-            const fetchSavedCards = async () => {
-              if (!user?.id) return
-              try {
-                const { data, error } = await supabase
-                  .from('user_payment_methods')
-                  .select('*')
-                  .eq('user_id', user.id)
-                  .order('is_default', { ascending: false })
-                
-                if (error) throw error
-                setSavedCards(data || [])
-              } catch (err) {
-                console.error('Failed to fetch saved cards:', err)
-              }
-            }
-            fetchSavedCards()
-            setShowSaveCardModal(false)
-            toast.success('Card saved successfully!')
-          }}
-        />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-6 max-w-md w-full mx-4`}>
+            <h2 className="text-xl font-bold mb-4 text-white">Add Payment Method</h2>
+            <TrollCardSaver
+              onCardSaved={() => {
+                fetchSavedCards()
+                setShowSaveCardModal(false)
+              }}
+              onCancel={() => setShowSaveCardModal(false)}
+              buttonText="Save Card Securely"
+              showCancelButton={true}
+            />
+            <button
+              onClick={() => setShowSaveCardModal(false)}
+              className="mt-4 w-full text-gray-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}    </div>
   )
 }

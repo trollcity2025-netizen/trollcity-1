@@ -260,7 +260,7 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
         }
       })
       
-      setAuth(data.user, data.session)
+      setAuth(data.user, data.session, sessionId)
       
       // Check if profile exists
       let profileData = null

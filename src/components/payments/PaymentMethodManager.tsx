@@ -16,6 +16,11 @@ declare global {
   }
 }
 
+interface PaymentMethodManagerProps {
+  title?: string;
+  description?: string;
+}
+
 export default function PaymentMethodManager({
   title = 'Payment Methods',
   description = 'Manage your saved payment methods for faster checkout.'
@@ -35,15 +40,16 @@ export default function PaymentMethodManager({
     if (!profile?.id) return
     setLoading(true)
 
-    try {
-      const { data, error } = await supabase
-        .from('user_payment_methods')
-        .select('*')
-        .eq('user_id', profile.id)
-        .order('is_default', { ascending: false })
+      try {
+        const { data, error } = await supabase
+          .from('saved_cards')
+          .select('*')
+          .eq('user_id', profile.id)
+          .eq('status', 'active')
+          .order('is_default', { ascending: false })
 
-      if (error) throw error
-      setMethods(data || [])
+        if (error) throw error
+        setMethods(data || [])
     } catch (err: any) {
       console.error('Load methods failed', err)
     } finally {
@@ -155,19 +161,65 @@ export default function PaymentMethodManager({
   const remove = async (id: string) => {
     if (!profile) return
 
+    const methodToDelete = methods.find(m => m.id === id)
+    const wasDefault = methodToDelete?.is_default
+
+    console.log('Deleting payment method:', {
+      id,
+      wasDefault,
+      method: methodToDelete
+    })
+
     const backup = methods
     setMethods((old) => old.filter((m) => m.id !== id))
 
     try {
       const { error } = await supabase
-        .from('user_payment_methods')
+        .from('saved_cards')
         .delete()
         .eq('id', id)
         .eq('user_id', profile.id)
 
       if (error) throw error
+
+      // If we deleted the default card, set another valid card as default
+      if (wasDefault) {
+        const remainingValidCards = methods.filter(m =>
+          m.id !== id &&
+          m.square_customer_id &&
+          m.square_card_id &&
+          m.status === 'active'
+        )
+
+        console.log('Remaining valid cards after deletion:', remainingValidCards)
+
+        if (remainingValidCards.length > 0) {
+          const newDefault = remainingValidCards[0]
+          console.log('Setting new default:', newDefault)
+
+          // First unset all defaults
+          await supabase
+            .from('saved_cards')
+            .update({ is_default: false })
+            .eq('user_id', profile.id)
+
+          // Then set the new default
+          await supabase
+            .from('saved_cards')
+            .update({ is_default: true })
+            .eq('id', newDefault.id)
+            .eq('user_id', profile.id)
+
+          toast.info(`Set ${newDefault.brand} •••• ${newDefault.last_4} as your default payment method`)
+        } else {
+          console.log('No remaining valid cards to set as default')
+        }
+      }
+
       toast.success('Payment method removed')
+      await loadMethods() // Refresh the list to ensure consistency
     } catch (err: any) {
+      console.error('Delete payment method error:', err)
       setMethods(backup)
       toast.error(err?.message || 'Remove failed')
     }
@@ -177,24 +229,30 @@ export default function PaymentMethodManager({
     if (!profile) return
 
     try {
+      // First unset all defaults for this user
       await supabase
-        .from('user_payment_methods')
+        .from('saved_cards')
         .update({ is_default: false })
         .eq('user_id', profile.id)
-        .neq('id', id)
 
+      // Then set the selected card as default
       const { error } = await supabase
-        .from('user_payment_methods')
+        .from('saved_cards')
         .update({ is_default: true })
         .eq('id', id)
+        .eq('user_id', profile.id)
 
       if (error) throw error
 
-      setMethods((old) => old.map((x) => ({ ...x, is_default: x.id === id })))
+      setMethods((old) => old.map((m) =>
+        m.id === id ? { ...m, is_default: true } : { ...m, is_default: false }
+      ))
       toast.success('Default payment method updated')
+
     } catch (err: any) {
       toast.error(err?.message || 'Failed to set default')
     }
+  }
   }
 
   return (
@@ -233,11 +291,18 @@ export default function PaymentMethodManager({
                   </div>
                   <div>
                     <div className="font-medium text-white">
-                      {method.brand || 'Cash App'} •••• {method.last4 || '****'}
+                      {method.brand || 'Card'} •••• {method.last_4 || '****'}
                     </div>
-                    {method.is_default && (
-                      <span className="text-xs text-green-400">Default</span>
-                    )}
+                    <div className="text-xs text-gray-400">
+                      {method.square_customer_id && method.square_card_id && method.status === 'active' ? (
+                        <span className="text-green-400">✓ Active card-on-file</span>
+                      ) : (
+                        <span className="text-red-400">⚠ Inactive card</span>
+                      )}
+                      {method.is_default && (
+                        <span className="ml-2 text-blue-400">Default</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

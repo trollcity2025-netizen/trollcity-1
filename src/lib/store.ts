@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, UserProfile, UserRole, validateProfile, ensureSupabaseSession } from '../lib/supabase'
 import { handleConcurrentLogin, resetConcurrentLoginCheck } from './sessionUtils'
+import { generateUUID } from './uuid'
 
 // Module-level debounce tracking
 let lastProfileUpdateTime = 0
@@ -13,12 +14,13 @@ const REFRESH_PROFILE_DEBOUNCE_MS = 3000 // 3 seconds - prevents multiple full r
 interface AuthState {
   user: User | null
   session: Session | null
+  sessionId: string | null
   profile: UserProfile | null
   isLoading: boolean
   isAdmin: boolean | null
   showLegacySidebar: boolean
   isRefreshing: boolean
-  setAuth: (user: User | null, session: Session | null) => void
+  setAuth: (user: User | null, session: Session | null, sessionId?: string | null) => void
   setProfile: (profile: UserProfile | null) => void
 
   setLoading: (loading: boolean) => void
@@ -33,6 +35,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       session: null,
+      sessionId: null,
       profile: null,
       isLoading: false,
       isAdmin: null,
@@ -40,7 +43,7 @@ export const useAuthStore = create<AuthState>()(
       isRefreshing: false,
 
       // Called when Supabase auth changes
-      setAuth: (user, session) => {
+      setAuth: (user, session, sessionId = null) => {
         try {
           const prev = get()
           const sameUser = (!!prev.user && !!user && prev.user.id === user.id) || (!prev.user && !user)
@@ -56,7 +59,7 @@ export const useAuthStore = create<AuthState>()(
         if ((import.meta as any).env?.DEV) {
           console.log('Auth updated', { user: !!user });
         }
-        set({ user, session, isLoading: false, isAdmin: user ? null : null });
+        set({ user, session, sessionId, isLoading: false, isAdmin: user ? null : null });
       },
 
       // Sets profile AND applies admin overrides with production validation
@@ -310,7 +313,7 @@ export const useAuthStore = create<AuthState>()(
         }
          
         const userId = currentState.user?.id
-        const sessionId = (currentState.session as any)?.access_token
+        const sessionId = currentState.sessionId
          
         try {
           // Check if we have a valid session before attempting to sign out
@@ -437,21 +440,21 @@ export async function initAuthAndData() {
   } = await supabase.auth.getSession()
 
   if (session?.user) {
-    useAuthStore.getState().setAuth(session.user, session)
+      useAuthStore.getState().setAuth(session.user, session, generateUUID())
     
     // Setup realtime profile subscription for real-time balance updates
     setupProfileRealtime(session.user.id)
     
     // Check for concurrent login from other devices
-    const sessionId = (session as any)?.access_token
-    if (sessionId) {
+    const storedSessionId = useAuthStore.getState().sessionId
+    if (storedSessionId) {
       // Reset the check flag for fresh login
       resetConcurrentLoginCheck()
-      
+
       // Handle concurrent login - this will log out if fraud detected
       await handleConcurrentLogin(
         session.user.id,
-        sessionId,
+        storedSessionId,
         () => useAuthStore.getState().logout()
       )
     }
@@ -488,7 +491,7 @@ export async function initAuthAndData() {
     }
 
     if (session?.user) {
-      useAuthStore.getState().setAuth(session.user, session)
+    useAuthStore.getState().setAuth(session.user, session, generateUUID())
       
       // Setup realtime profile subscription for real-time balance updates
       setupProfileRealtime(session.user.id)

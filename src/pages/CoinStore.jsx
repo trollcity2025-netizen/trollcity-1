@@ -450,12 +450,82 @@ export default function CoinStore() {
       coin_amount: pkg.coin_amount || pkg.coins || 0
     };
 
-    if (!profile?.encrypted_card_data) {
-      toast.info('Please add a card first. Opening the Square card setup modal.')
+    // Check for valid saved card with Square card-on-file IDs
+    // First try to find a default card
+    let { data: paymentMethods } = await supabase
+      .from('user_payment_methods')
+      .select('id, square_customer_id, square_card_id')
+      .eq('user_id', user?.id)
+      .eq('is_default', true)
+      .limit(1)
+
+    console.log('CoinStore: Looking for default payment method for user', user?.id)
+    console.log('CoinStore: Found default methods:', paymentMethods)
+
+    // Additional debug: check ALL payment methods for this user
+    const { data: allMethods } = await supabase
+      .from('user_payment_methods')
+      .select('id, square_customer_id, square_card_id, is_default, brand, last4')
+      .eq('user_id', user?.id)
+
+    console.log('CoinStore: ALL payment methods for user:', allMethods)
+
+    // If no default card found, try to find any valid card and set it as default
+    if (!paymentMethods || paymentMethods.length === 0) {
+      console.log('CoinStore: No default card found, looking for any valid card')
+      const { data: anyValidCard } = await supabase
+        .from('user_payment_methods')
+        .select('id, square_customer_id, square_card_id, brand, last4')
+        .eq('user_id', user?.id)
+        .limit(1)
+
+      console.log('CoinStore: Found any valid card:', anyValidCard)
+
+      if (anyValidCard && anyValidCard.length > 0) {
+        console.log('CoinStore: Setting card as default:', anyValidCard[0])
+        // Set this card as default
+        await supabase
+          .from('user_payment_methods')
+          .update({ is_default: true })
+          .eq('id', anyValidCard[0].id)
+          .eq('user_id', user?.id)
+
+        await supabase
+          .from('saved_cards')
+          .update({ is_default: true })
+          .eq('id', anyValidCard[0].id)
+          .eq('user_id', user?.id)
+
+        paymentMethods = anyValidCard
+        toast.info(`Set ${anyValidCard[0].brand} •••• ${anyValidCard[0].last4} as your default payment method for purchases.`)
+      }
+    }
+
+    if (!paymentMethods || paymentMethods.length === 0) {
+      console.error('CoinStore: CRITICAL - No valid payment methods found!')
+      toast.error('No valid payment method found. Please add a card first.')
       setSelectedPackage(purchasePkg)
       setSquarePaymentModalOpen(true)
       return
     }
+
+    // Double-check that the payment method has required fields
+    const selectedMethod = paymentMethods[0]
+    if (!selectedMethod.square_customer_id || !selectedMethod.square_card_id) {
+      console.error('CoinStore: CRITICAL - Selected payment method missing Square IDs!', selectedMethod)
+      toast.error('Selected payment method is invalid. Please add a new card.')
+      setSelectedPackage(purchasePkg)
+      setSquarePaymentModalOpen(true)
+      return
+    }
+
+    console.log('CoinStore: Using payment method:', {
+      id: selectedMethod.id,
+      square_customer_id: selectedMethod.square_customer_id,
+      square_card_id: selectedMethod.square_card_id,
+      brand: selectedMethod.brand,
+      last4: selectedMethod.last4
+    })
 
     setLoadingPackage(pkg.id)
 
@@ -468,6 +538,7 @@ export default function CoinStore() {
           packageId: pkg.id,
           packageName: pkg.name || `${purchasePkg.coin_amount} Troll Coins`,
           purchaseType: 'coins',
+          paymentMethodId: paymentMethods[0].id,
         },
       })
 

@@ -156,6 +156,10 @@ export interface UserProfile {
   // Square Card on File
   square_customer_id?: string | null
   square_card_id?: string | null
+  card_brand?: string | null
+  card_last4?: string | null
+  card_exp_month?: number | null
+  card_exp_year?: number | null
 
   // TrollCity Saved Card (encrypted locally, hidden from everyone including admin)
   encrypted_card_data?: string | null

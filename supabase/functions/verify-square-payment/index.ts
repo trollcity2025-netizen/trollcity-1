@@ -119,6 +119,71 @@ Deno.serve(async (req) => {
 
     console.log(`[VerifySquarePayment ${requestId}] Payment verified: ${paymentAmount}, coins: ${coinAmount}`)
 
+    // After successful payment, sync payment methods from Square if user has a customer
+    if (userId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+      
+      // Get profile with customer ID
+      const profileRes = await fetch(`${supabaseUrl}/rest/v1/user_profiles?id=eq.${userId}&select=id,square_customer_id`, {
+        headers: { 'apikey': supabaseKey!, 'Authorization': `Bearer ${supabaseKey}` }
+      })
+      const profiles = await profileRes.json()
+      const profile = profiles?.[0]
+      const customerId = profile?.square_customer_id
+      
+      // If user has a Square customer, get their cards and save to user_payment_methods
+      if (customerId) {
+        try {
+          const cardsRes = await fetch(`${baseUrl}/v2/cards?customer_id=${customerId}`, {
+            headers: {
+              'Square-Version': '2024-01-18',
+              'Authorization': `Bearer ${SQUARE_ACCESS_TOKEN}`,
+            },
+          })
+          
+          if (cardsRes.ok) {
+            const cardsData = await cardsRes.json()
+            const cards = cardsData.cards || []
+            
+            for (const card of cards) {
+              // Check if already saved
+              const checkRes = await fetch(
+                `${supabaseUrl}/rest/v1/user_payment_methods?user_id=eq.${userId}&square_card_id=eq.${card.id}&limit=1`,
+                { headers: { 'apikey': supabaseKey!, 'Authorization': `Bearer ${supabaseKey}` } }
+              )
+              const existing = await checkRes.json()
+              
+              if (!existing || existing.length === 0) {
+                // Save new card
+                await fetch(`${supabaseUrl}/rest/v1/user_payment_methods`, {
+                  method: 'POST',
+                  headers: {
+                    'apikey': supabaseKey!,
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal',
+                  },
+                  body: JSON.stringify({
+                    user_id: userId,
+                    provider: 'square',
+                    square_customer_id: customerId,
+                    square_card_id: card.id,
+                    brand: card.card_brand || 'Card',
+                    last4: card.last4 || '****',
+                    is_default: cards.length === 1,
+                  }),
+                })
+                console.log(`[VerifySquarePayment ${requestId}] Saved card ${card.id} for user ${userId}`)
+              }
+            }
+          }
+        } catch (cardErr) {
+          console.error(`[VerifySquarePayment ${requestId}] Failed to sync cards:`, cardErr)
+        }
+      }
+    }
+
     // Credit coins to user account
     if (coinAmount > 0 && userId) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')

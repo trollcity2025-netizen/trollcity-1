@@ -45,6 +45,7 @@ export default function SquarePaymentModal({
 }: SquarePaymentModalProps) {
   const [step, setStep] = useState<'select' | 'processing' | 'success'>('select');
   const [useSavedCard, setUseSavedCard] = useState(false);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentResult, setPaymentResult] = useState<any>(null);
   
@@ -115,6 +116,8 @@ export default function SquarePaymentModal({
     if (isOpen) {
       setStep('select');
       setUseSavedCard(hasSavedCard && !saveOnly);
+      const defaultMethod = savedPaymentMethods.find(pm => pm.is_default) || savedPaymentMethods[0];
+      setSelectedPaymentMethodId(defaultMethod?.id || null);
       setCardNumber('');
       setCardExpiryMonth('');
       setCardExpiryYear('');
@@ -124,7 +127,7 @@ export default function SquarePaymentModal({
       setSaveCard(onSaveCard || requireCardOnFile || !hasSavedCard);
       setCardErrors({});
     }
-  }, [isOpen, hasSavedCard, saveOnly, onSaveCard, requireCardOnFile]);
+  }, [isOpen, hasSavedCard, saveOnly, onSaveCard, requireCardOnFile, savedPaymentMethods]);
 
   const validateCard = useCallback((): boolean => {
     const errors: typeof cardErrors = {};
@@ -196,22 +199,19 @@ export default function SquarePaymentModal({
 
       if (updateError) throw updateError;
 
-      // Also save to user_payment_methods table for troll bank integration
-      const { error: paymentMethodError } = await supabase
-        .from('user_payment_methods')
-        .insert({
-          user_id: userId,
-          provider: 'square',
-          token_id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          display_name: `${cardData.cardNumber.startsWith('4') ? 'Visa' : cardData.cardNumber.startsWith('5') ? 'Mastercard' : cardData.cardNumber.startsWith('3') ? 'Amex' : 'Card'} •••• ${cleanNumber.slice(-4)}`,
-          brand: cardData.cardNumber.startsWith('4') ? 'Visa' : 
-                 cardData.cardNumber.startsWith('5') ? 'Mastercard' : 
-                 cardData.cardNumber.startsWith('3') ? 'Amex' : 'Card',
-          last4: cleanNumber.slice(-4),
-          exp_month: parseInt(cardExpiryMonth),
-          exp_year: parseInt(cardExpiryYear) + 2000,
-          is_default: true,
-        });
+      // Save to user_payment_methods table using add-card Edge Function
+      const { data: saveResult, error: saveError } = await supabase.functions.invoke('add-card', {
+        body: {
+          userId,
+          cardNonce: cardNonce, // Should be set from Square Web Payments SDK
+          provider: 'square'
+        }
+      });
+
+      if (saveError || !saveResult?.success) {
+        console.error('Failed to save card to Square:', saveError || saveResult?.error);
+        // Continue without payment method for now, but card data is still encrypted locally
+      }
 
       if (paymentMethodError) {
         console.error('Failed to save payment method:', paymentMethodError);
@@ -243,6 +243,8 @@ export default function SquarePaymentModal({
       return;
     }
 
+    const selectedMethod = savedPaymentMethods.find(pm => pm.id === selectedPaymentMethodId) || savedPaymentMethods.find(pm => pm.is_default) || savedPaymentMethods[0];
+    
     setIsSubmitting(true);
     setStep('processing');
 
@@ -255,6 +257,7 @@ export default function SquarePaymentModal({
           packageId,
           packageName,
           purchaseType,
+          paymentMethodId: selectedMethod?.id,
         },
       });
 
@@ -445,28 +448,34 @@ export default function SquarePaymentModal({
                 {/* Saved Card Option */}
                 {savedPaymentMethods.length > 0 && (
                   <div className="space-y-2">
-                    {savedPaymentMethods.map((method) => (
-                      <div 
-                        key={method.id}
-                        className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                          useSavedCard 
-                            ? 'bg-purple-900/30 border-purple-500/50' 
-                            : 'bg-black/20 border-white/10 hover:border-purple-500/30'
-                        }`}
-                        onClick={() => setUseSavedCard(true)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <CreditCard className="w-5 h-5 text-purple-400" />
-                            <div>
-                              <div className="font-semibold text-sm">{method.brand || 'Card'} •••• {method.last4}</div>
-                              <div className="text-xs text-zinc-400">{method.provider === 'square' ? 'Cash App' : method.provider}</div>
+                    {savedPaymentMethods.map((method) => {
+                      const isSelected = selectedPaymentMethodId === method.id;
+                      return (
+                        <div
+                          key={method.id}
+                          className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-purple-900/30 border-purple-500/50'
+                              : 'bg-black/20 border-white/10 hover:border-purple-500/30'
+                          }`}
+                          onClick={() => {
+                            setUseSavedCard(true);
+                            setSelectedPaymentMethodId(method.id);
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <CreditCard className="w-5 h-5 text-purple-400" />
+                              <div>
+                                <div className="font-semibold text-sm">{method.brand || 'Card'} •••• {method.last4}</div>
+                                <div className="text-xs text-zinc-400">{method.provider === 'square' ? 'Cash App' : method.provider}</div>
+                              </div>
                             </div>
+                            <div className={`w-4 h-4 rounded-full border-2 ${isSelected ? 'bg-purple-500 border-purple-500' : 'border-zinc-500'}`} />
                           </div>
-                          <div className={`w-4 h-4 rounded-full border-2 ${useSavedCard ? 'bg-purple-500 border-purple-500' : 'border-zinc-500'}`} />
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 
