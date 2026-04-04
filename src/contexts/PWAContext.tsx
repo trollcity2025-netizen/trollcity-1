@@ -317,7 +317,7 @@ export function PWAProvider({ children }: PWAProviderProps) {
       }
       
       // Check connection quality
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const conn = (navigator as any).connection;
       if (conn) {
         setNetworkState({
@@ -337,7 +337,7 @@ export function PWAProvider({ children }: PWAProviderProps) {
     window.addEventListener('offline', updateNetworkState);
     
     // Listen for connection changes
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const conn = (navigator as any).connection;
     if (conn) {
       conn.addEventListener('change', updateNetworkState);
@@ -431,7 +431,7 @@ export function PWAProvider({ children }: PWAProviderProps) {
     
     // Register for background sync
     if ('sync' in swRegistrationRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       (swRegistrationRef.current as any).sync.register(queueName).catch(() => {
         // Sync registration failed, will retry when online
       });

@@ -11,6 +11,7 @@ import { TIERS } from "../config/coinConfig";
 interface CoinTx {
   id: string;
   coins: number;
+  amount: number;
   usd_amount: string | number;
   source: string;
   external_id: string | null;

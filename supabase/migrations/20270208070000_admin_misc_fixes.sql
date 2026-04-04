@@ -2,6 +2,11 @@
 -- Migration to support Admin Manual Orders, Support Tickets, and Applications via RPCs
 -- Replaces usage of Edge Functions and direct table updates with secure RPCs
 
+-- Ensure TCNN role columns exist on user_profiles
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS is_journalist BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS is_news_caster BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS is_chief_news_caster BOOLEAN DEFAULT FALSE;
+
 -- ============================================================================
 -- 1. Manual Coin Orders
 -- ============================================================================
@@ -310,6 +315,45 @@ BEGIN
     RETURN approve_officer_application(v_user_id);
   ELSIF v_type = 'lead_officer' THEN
     RETURN approve_lead_officer_application(p_app_id, p_reviewer_id);
+  ELSIF v_type = 'journalist' THEN
+    UPDATE applications 
+    SET status = 'approved', 
+        reviewed_by = p_reviewer_id, 
+        reviewed_at = NOW() 
+    WHERE id = p_app_id;
+    
+    UPDATE user_profiles SET is_journalist = TRUE, role = 'journalist', updated_at = NOW() WHERE id = v_user_id;
+    
+    INSERT INTO notifications (user_id, type, title, message)
+    VALUES (v_user_id, 'application_result', 'Application Approved', 'Your journalist application has been approved! You now have access to TCNN.');
+    
+    RETURN json_build_object('success', true);
+  ELSIF v_type = 'news_caster' THEN
+    UPDATE applications 
+    SET status = 'approved', 
+        reviewed_by = p_reviewer_id, 
+        reviewed_at = NOW() 
+    WHERE id = p_app_id;
+    
+    UPDATE user_profiles SET is_news_caster = TRUE, role = 'news_caster', updated_at = NOW() WHERE id = v_user_id;
+    
+    INSERT INTO notifications (user_id, type, title, message)
+    VALUES (v_user_id, 'application_result', 'Application Approved', 'Your News Caster application has been approved! You now have access to TCNN broadcasting.');
+    
+    RETURN json_build_object('success', true);
+  ELSIF v_type = 'chief_news_caster' THEN
+    UPDATE applications 
+    SET status = 'approved', 
+        reviewed_by = p_reviewer_id, 
+        reviewed_at = NOW() 
+    WHERE id = p_app_id;
+    
+    UPDATE user_profiles SET is_chief_news_caster = TRUE, role = 'chief_news_caster', updated_at = NOW() WHERE id = v_user_id;
+    
+    INSERT INTO notifications (user_id, type, title, message)
+    VALUES (v_user_id, 'application_result', 'Application Approved', 'Your Chief News Caster application has been approved! You now have full TCNN management access.');
+    
+    RETURN json_build_object('success', true);
   ELSE
     -- Generic approval
     UPDATE applications 

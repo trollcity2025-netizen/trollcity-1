@@ -49,8 +49,11 @@ import BroadcastAbilityEffects from '../../components/broadcast/BroadcastAbility
 import BroadcastTicker from '../../components/broadcast/BroadcastTicker'
 import TickerControlPanel from '../../components/broadcast/TickerControlPanel'
 import { useBroadcastTicker } from '../../hooks/useBroadcastTicker'
-import { useBroadcastDeckSync } from '../../hooks/useBroadcastDeckSync'
 import { useTickerStore } from '../../stores/tickerStore'
+import { useTrollToe } from '../../hooks/useTrollToe'
+import TrollToeController from '../../components/broadcast/TrollToeController'
+import TrollToeViewerUI from '../../components/broadcast/TrollToeViewerUI'
+import GamePicker from '../../components/broadcast/GamePicker'
 
 function BroadcastPage() {
   const params = useParams()
@@ -453,6 +456,49 @@ function BroadcastPage() {
   })
   const [isTickerPanelOpen, setIsTickerPanelOpen] = useState(false)
   const tickerSettings = useTickerStore((s) => s.settings)
+
+  // Troll Toe (Live Tic-Tac-Toe) game
+  const trollToe = useTrollToe({
+    streamId: streamId || '',
+    isHost,
+    enabled: !!streamId && !!(user || anonymousViewerIdRef.current),
+  })
+
+  // Game picker state
+  const [gamePickerOpen, setGamePickerOpen] = useState(false)
+  const [activeGame, setActiveGame] = useState<'troll_toe' | null>(null)
+
+  // getTrackForUser - maps userId to LiveKit video/audio tracks for Troll Toe board
+  const getTrackForUser = useCallback((userId: string) => {
+    const isLocal = userId === user?.id;
+    if (isLocal) {
+      return {
+        videoTrack: localTracks?.[1] || undefined,
+        audioTrack: localTracks?.[0] || undefined,
+        isLocal: true,
+        hasVideo: !!localTracks?.[1],
+        hasAudio: !!localTracks?.[0],
+      };
+    }
+    // Find remote participant by identity
+    const participant = Array.from(remoteParticipants.values()).find(
+      (p) => p.identity === userId || p.identity.substring(0, 8) === userId.replace(/-/g, '').substring(0, 8)
+    );
+    if (!participant) {
+      return { videoTrack: undefined, audioTrack: undefined, isLocal: false, hasVideo: false, hasAudio: false };
+    }
+    const videoPubs = Array.from((participant.videoTrackPublications as any)?.values() || []);
+    const audioPubs = Array.from((participant.audioTrackPublications as any)?.values() || []);
+    const videoPub = videoPubs.find((p: any) => p.track && p.isSubscribed) || videoPubs.find((p: any) => p.track);
+    const audioPub = audioPubs.find((p: any) => p.track && p.isSubscribed) || audioPubs.find((p: any) => p.track);
+    return {
+      videoTrack: videoPub?.track,
+      audioTrack: audioPub?.track,
+      isLocal: false,
+      hasVideo: !!videoPub?.track,
+      hasAudio: !!audioPub?.track,
+    };
+  }, [user?.id, localTracks, remoteParticipants])
 
   // Set broadcast mode to disable TrollEngine when broadcasting
   useEffect(() => {
@@ -1370,13 +1416,21 @@ function BroadcastPage() {
         if (status === 'SUBSCRIBED') {
           channelRef.current = channel;
           
-          channel.track({
-            user_id: user?.id || 'viewer',
-            username: profile?.username || user?.email || 'Viewer',
-            is_host: isHost,
-            online_at: new Date().toISOString(),
-            avatar_url: profile?.avatar_url || ''
-          }).catch(console.error);
+          supabase
+            .from('user_profiles')
+            .select('active_entrance_effect')
+            .eq('id', user?.id)
+            .maybeSingle()
+            .then(({ data: effectData }) => {
+              channel.track({
+                user_id: user?.id || 'viewer',
+                username: profile?.username || user?.email || 'Viewer',
+                is_host: isHost,
+                online_at: new Date().toISOString(),
+                avatar_url: profile?.avatar_url || '',
+                entrance_effect: effectData?.active_entrance_effect || null
+              }).catch(console.error);
+            });
         }
       });
 
@@ -2572,15 +2626,6 @@ function BroadcastPage() {
     navigate(`/broadcast/summary/${stream?.id}`);
   };
 
-  // Sync broadcast data to Deck device
-  useBroadcastDeckSync({
-    streamId: streamId || undefined,
-    isHost,
-    stream,
-    roomRef,
-    onStreamEnd: handleStreamEnd,
-  });
-
   const swipeNavigateLockRef = useRef(false);
 
   // Check if there are adjacent streams to swipe to
@@ -2857,6 +2902,9 @@ function BroadcastPage() {
                 onToggleRgb={isHost ? toggleStreamRgb : undefined}
                 hasRgbEffect={stream.has_rgb_effect}
                 canEditBoxes={isHost}
+                trollToeMatch={trollToe.match}
+                onTrollToeFog={!isHost && trollToe.match?.fogEnabled && trollToe.match?.phase === 'live' ? trollToe.useFog : undefined}
+                canTrollToeFog={!isHost && trollToe.match?.fogEnabled && trollToe.match?.phase === 'live' && trollToe.canUseFog(user?.id || anonymousViewerIdRef.current)}
               />
             </>
             {/* 5v5 Battle Overlay - inside video slot so chat stays visible */}
@@ -2880,6 +2928,8 @@ function BroadcastPage() {
                 teamBName={effectiveBattleState.teamBName || 'Team B'}
               />
             )}
+
+            {/* Troll Toe game lives on the broadcast grid tiles - no separate overlay needed */}
           </div>
         }
 
@@ -2909,6 +2959,8 @@ function BroadcastPage() {
             onFiveVFiveBattle={isHost && stream.status === 'live' && fiveVFiveIsGeneralChat ? fiveVFiveFindMatch : undefined}
             fiveVFiveBattleActive={effectiveBattleState.active}
             isLive={stream.status === 'live'}
+            onTrollToeController={isHost && stream.status === 'live' ? () => setGamePickerOpen(!gamePickerOpen) : undefined}
+            trollToeActive={gamePickerOpen || trollToe.isControllerOpen}
           />
         }
         
@@ -2936,6 +2988,66 @@ function BroadcastPage() {
             {!isHost && pinnedProducts.length > 0 && (
               <PinnedProductOverlay pinnedProducts={pinnedProducts} />
             )}
+
+            {/* Troll Toe Controller Panel (host only) */}
+            <AnimatePresence>
+              {isHost && trollToe.isControllerOpen && activeGame === 'troll_toe' && (
+                <div className="absolute top-16 right-3 z-[60] pointer-events-auto">
+                  <TrollToeController
+                    match={trollToe.match}
+                    config={trollToe.config}
+                    onCreateGame={trollToe.createGame}
+                    onStartGame={trollToe.startGame}
+                    onPauseGame={trollToe.pauseGame}
+                    onResumeGame={trollToe.resumeGame}
+                    onEndGame={trollToe.endGame}
+                    onResetBoard={trollToe.resetGame}
+                    onOpenSideSelection={trollToe.openSideSelection}
+                    onCloseSideSelection={trollToe.closeSideSelection}
+                    onToggleFog={trollToe.toggleFog}
+                    onSetFogCost={trollToe.setFogCost}
+                    onSetRewardAmount={trollToe.setRewardAmount}
+                    onAssignPlayers={trollToe.assignQueuedPlayers}
+                    onClose={() => { trollToe.setControllerOpen(false); setActiveGame(null); }}
+                  />
+                </div>
+              )}
+            </AnimatePresence>
+
+            {/* Game Picker Dropdown */}
+            <AnimatePresence>
+              {isHost && gamePickerOpen && (
+                <div className="absolute top-16 right-3 z-[65] pointer-events-auto">
+                  <GamePicker
+                    activeGame={activeGame}
+                    onSelectGame={(game) => {
+                      setActiveGame(game)
+                      setGamePickerOpen(false)
+                      if (game === 'troll_toe') {
+                        trollToe.setControllerOpen(true)
+                      }
+                    }}
+                    onClose={() => setGamePickerOpen(false)}
+                  />
+                </div>
+              )}
+            </AnimatePresence>
+
+            {/* Troll Toe Viewer UI */}
+            <AnimatePresence>
+              {!isHost && trollToe.match && trollToe.match.phase !== 'waiting' && (
+                <TrollToeViewerUI
+                  match={trollToe.match}
+                  viewerStatus={trollToe.viewerStatus}
+                  viewerTeam={trollToe.viewerTeam}
+                  currentUserId={user?.id || anonymousViewerIdRef.current}
+                  trollCoins={profile?.troll_coins || 0}
+                  onJoinSide={trollToe.joinSide}
+                  onUseFog={trollToe.useFog}
+                  canUseFog={trollToe.canUseFog(user?.id || anonymousViewerIdRef.current)}
+                />
+              )}
+            </AnimatePresence>
 
             {/* Broadcast Global Ticker */}
             {tickerSettings.is_enabled && (
@@ -3095,8 +3207,9 @@ function BroadcastPage() {
                   const allRecipients = [stream.user_id, ...activeUserIds];
                   allRecipients.forEach((recipientId, index) => {
                     setTimeout(() => {
+                      const localGiftId = `local-${Date.now()}-${index}-${giftData.id}`;
                       const newGift: BroadcastGift = {
-                        id: `local-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+                        id: localGiftId,
                         gift_id: giftData.id,
                         gift_name: giftData.name,
                         gift_icon: giftData.icon || '🎁',
@@ -3107,7 +3220,12 @@ function BroadcastPage() {
                         receiver_id: recipientId,
                         created_at: new Date().toISOString(),
                       };
-                      setRecentGifts(prev => [...prev, newGift]);
+                      setRecentGifts(prev => {
+                        if (prev.some(g => g.gift_id === giftData.id && g.receiver_id === recipientId && g.sender_id === user?.id)) {
+                          return prev;
+                        }
+                        return [...prev, newGift];
+                      });
                       
                       // Dispatch balance update event for each recipient
                       window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
@@ -3122,8 +3240,9 @@ function BroadcastPage() {
                   });
                 } else {
                   const recipientId = target.userId || giftRecipientId || stream?.user_id || '';
+                  const localGiftId = `local-${Date.now()}-${giftData.id}`;
                   const newGift: BroadcastGift = {
-                    id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    id: localGiftId,
                     gift_id: giftData.id,
                     gift_name: giftData.name,
                     gift_icon: giftData.icon || '🎁',
@@ -3134,7 +3253,12 @@ function BroadcastPage() {
                     receiver_id: recipientId,
                     created_at: new Date().toISOString(),
                   };
-                  setRecentGifts(prev => [...prev, newGift]);
+                  setRecentGifts(prev => {
+                    if (prev.some(g => g.gift_id === giftData.id && g.receiver_id === recipientId && g.sender_id === user?.id)) {
+                      return prev;
+                    }
+                    return [...prev, newGift];
+                  });
                   
                   // Dispatch balance update event for the recipient
                   window.dispatchEvent(new CustomEvent('broadcast-balance-update', {

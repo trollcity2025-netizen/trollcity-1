@@ -269,9 +269,10 @@ BEGIN
         RETURN;
     END IF;
     v_shares := p_coins / v_current_price;
-    SELECT COALESCE(SUM(up.shares), 0), s.market_cap INTO v_total_shares, v_market_cap
+    SELECT COALESCE(SUM(up.shares), 0) INTO v_total_shares
     FROM user_portfolio up JOIN stocks s ON s.id = up.stock_id
     WHERE up.user_id = p_user_id AND s.stock_symbol = p_stock_symbol;
+    SELECT market_cap INTO v_market_cap FROM stocks WHERE stock_symbol = p_stock_symbol;
     IF v_market_cap > 0 AND v_current_price > 0 THEN
         v_ownership_pct := (v_total_shares / (v_market_cap / v_current_price)) * 100;
         IF v_ownership_pct >= 10 THEN

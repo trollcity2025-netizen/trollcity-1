@@ -1,17 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { 
   Package, Truck, Check, Search, 
-  ExternalLink, Coins, MapPin, Calendar,
+  Coins, MapPin, Calendar,
   ChevronDown, ChevronUp
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { ShopOrder, OrderStatus, ShippingCarrier } from '../types/liveCommerce';
 
+type OrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'refunded';
 type FilterStatus = 'all' | OrderStatus;
+type ShippingCarrier = 'usps' | 'ups' | 'fedex' | 'dhl' | 'other';
+
+interface PurchaseOrder {
+  id: string;
+  buyer_id: string;
+  seller_id: string;
+  item_id: string;
+  price_paid: number;
+  purchased_at: string;
+  status: OrderStatus;
+  shipping_carrier: string | null;
+  tracking_number: string | null;
+  tracking_url: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  shipping_name: string | null;
+  shipping_address: string | null;
+  shipping_city: string | null;
+  shipping_state: string | null;
+  shipping_zip: string | null;
+  item_name?: string;
+  item_image?: string;
+  buyer_name?: string;
+}
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string }> = {
   pending: { label: 'Pending', color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
@@ -35,31 +59,59 @@ const CARRIERS: { id: ShippingCarrier; name: string }[] = [
 export default function SellerOrders() {
   const { user } = useAuthStore();
 
-  
-  const [orders, setOrders] = useState<ShopOrder[]>([]);
+  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   
-  // Shipping modal state
   const [showShippingModal, setShowShippingModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<ShopOrder | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [carrier, setCarrier] = useState<ShippingCarrier>('usps');
   const [isShipping, setIsShipping] = useState(false);
 
-  // Fetch orders
   const fetchOrders = useCallback(async () => {
+    if (!user) return;
     try {
       const { data, error } = await supabase
-        .from('shop_orders')
-        .select('*, items(*, product(*))')
-        .eq('seller_id', user!.id)
-        .order('created_at', { ascending: false });
+        .from('marketplace_purchases')
+        .select('*')
+        .eq('seller_id', user.id)
+        .order('purchased_at', { ascending: false });
 
       if (error) throw error;
-      setOrders(data || []);
+
+      const enriched = await Promise.all((data || []).map(async (order: any) => {
+        let item_name = 'Item';
+        let item_image = '';
+        let buyer_name = 'Buyer';
+
+        if (order.item_id) {
+          const { data: item } = await supabase
+            .from('marketplace_items')
+            .select('name, image_url')
+            .eq('id', order.item_id)
+            .maybeSingle();
+          if (item) {
+            item_name = item.name;
+            item_image = item.image_url || '';
+          }
+        }
+
+        if (order.buyer_id) {
+          const { data: buyer } = await supabase
+            .from('user_profiles')
+            .select('username')
+            .eq('id', order.buyer_id)
+            .maybeSingle();
+          if (buyer) buyer_name = buyer.username;
+        }
+
+        return { ...order, item_name, item_image, buyer_name };
+      }));
+
+      setOrders(enriched);
     } catch (err) {
       console.error('Error fetching orders:', err);
       toast.error('Failed to load orders');
@@ -78,12 +130,16 @@ export default function SellerOrders() {
 
     setIsShipping(true);
     try {
-      const { error } = await supabase.rpc('ship_order', {
-        p_order_id: selectedOrder.id,
-        p_tracking_number: trackingNumber,
-        p_carrier: carrier,
-        p_seller_id: user!.id,
-      });
+      const { error } = await supabase
+        .from('marketplace_purchases')
+        .update({
+          status: 'shipped',
+          shipping_carrier: carrier,
+          tracking_number: trackingNumber,
+          shipped_at: new Date().toISOString(),
+        })
+        .eq('id', selectedOrder.id)
+        .eq('seller_id', user!.id);
 
       if (error) throw error;
 
@@ -100,7 +156,7 @@ export default function SellerOrders() {
     }
   };
 
-  const openShippingModal = (order: ShopOrder) => {
+  const openShippingModal = (order: PurchaseOrder) => {
     setSelectedOrder(order);
     setShowShippingModal(true);
   };
@@ -108,27 +164,20 @@ export default function SellerOrders() {
   const filteredOrders = orders.filter((order) => {
     const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
     const matchesSearch = 
-      order.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.shipping_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.shipping_city?.toLowerCase().includes(searchQuery.toLowerCase());
+      (order.item_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.buyer_name || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
-  const getOrderStats = () => {
-    const stats = {
-      total: orders.length,
-      pending: orders.filter(o => o.status === 'paid').length,
-      shipped: orders.filter(o => o.status === 'shipped').length,
-      completed: orders.filter(o => o.status === 'completed').length,
-    };
-    return stats;
+  const stats = {
+    total: orders.length,
+    pending: orders.filter(o => o.status === 'paid').length,
+    shipped: orders.filter(o => o.status === 'shipped').length,
+    completed: orders.filter(o => o.status === 'completed').length,
   };
-
-  const stats = getOrderStats();
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold flex items-center gap-3">
@@ -140,14 +189,13 @@ export default function SellerOrders() {
       </div>
 
       <div className="max-w-6xl mx-auto p-6">
-        {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-gray-800 rounded-xl p-4">
-            <div className="text-gray-400 text-sm">Total Orders</div>
+            <div className="text-gray-400 text-sm">Total Sales</div>
             <div className="text-2xl font-bold">{stats.total}</div>
           </div>
           <div className="bg-gray-800 rounded-xl p-4">
-            <div className="text-yellow-400 text-sm">Pending</div>
+            <div className="text-yellow-400 text-sm">Pending Ship</div>
             <div className="text-2xl font-bold text-yellow-400">{stats.pending}</div>
           </div>
           <div className="bg-gray-800 rounded-xl p-4">
@@ -160,7 +208,6 @@ export default function SellerOrders() {
           </div>
         </div>
 
-        {/* Filters */}
         <div className="flex flex-col md:flex-row gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -169,7 +216,7 @@ export default function SellerOrders() {
               placeholder="Search orders..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl pl10 pr4 py-3 text-white placeholder-gray-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-500"
             />
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -190,7 +237,6 @@ export default function SellerOrders() {
           </div>
         </div>
 
-        {/* Orders List */}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin" />
@@ -209,7 +255,6 @@ export default function SellerOrders() {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden"
               >
-                {/* Order Header */}
                 <div 
                   className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-750"
                   onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
@@ -219,10 +264,10 @@ export default function SellerOrders() {
                       {STATUS_CONFIG[order.status]?.label}
                     </div>
                     <div>
-                      <div className="font-mono text-sm text-gray-300">{order.order_number}</div>
+                      <div className="font-medium text-white">{order.item_name}</div>
                       <div className="text-gray-500 text-xs flex items-center gap-2">
                         <Calendar className="w-3 h-3" />
-                        {new Date(order.created_at).toLocaleDateString()}
+                        {new Date(order.purchased_at).toLocaleDateString()} - Buyer: {order.buyer_name}
                       </div>
                     </div>
                   </div>
@@ -231,11 +276,8 @@ export default function SellerOrders() {
                     <div className="text-right">
                       <div className="flex items-center gap-1 text-yellow-400 font-bold">
                         <Coins className="w-4 h-4" />
-                        {order.total_coins}
+                        {order.price_paid}
                       </div>
-                      {order.escrow_status === 'held' && (
-                        <span className="text-xs text-yellow-400/70">Escrow held</span>
-                      )}
                     </div>
                     {expandedOrder === order.id ? (
                       <ChevronUp className="w-5 h-5 text-gray-400" />
@@ -245,84 +287,52 @@ export default function SellerOrders() {
                   </div>
                 </div>
 
-                {/* Expanded Details */}
                 {expandedOrder === order.id && (
                   <div className="border-t border-gray-700 p-4 bg-gray-850">
-                    {/* Shipping Address */}
                     <div className="mb-4">
-                      <h4 className="text-gray-400 text-sm mb-2 flex items-center gap-2">
-                        <MapPin className="w-4 h-4" />
-                        Shipping Address
-                      </h4>
-                      <div className="bg-gray-800 rounded-lg p-3">
-                        <p className="text-white">{order.shipping_name}</p>
-                        <p className="text-gray-400 text-sm">
-                          {order.shipping_address}, {order.shipping_city}, {order.shipping_state} {order.shipping_zip}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Order Items */}
-                    <div className="mb-4">
-                      <h4 className="text-gray-400 text-sm mb-2 flex items-center gap-2">
-                        <Package className="w-4 h-4" />
-                        Items
-                      </h4>
-                      <div className="bg-gray-800 rounded-lg p-3 space-y-2">
-                        {order.items?.map((item: any) => (
-                          <div key={item.id} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              {item.product?.image_url ? (
-                                <img src={item.product.image_url} alt="" className="w-10 h-10 rounded object-cover" />
-                              ) : (
-                                <div className="w-10 h-10 bg-gray-700 rounded flex items-center justify-center">
-                                  <Package className="w-5 h-5 text-gray-500" />
-                                </div>
-                              )}
-                              <div>
-                                <p className="text-white text-sm">{item.product?.name || 'Product'}</p>
-                                <p className="text-gray-500 text-xs">Qty: {item.quantity}</p>
-                              </div>
-                            </div>
-                            <div className="text-yellow-400 font-medium">
-                              {item.total_price} coins
-                            </div>
+                      <div className="flex items-center gap-3 bg-gray-800 rounded-lg p-3">
+                        {order.item_image ? (
+                          <img src={order.item_image} alt="" className="w-12 h-12 rounded object-cover" />
+                        ) : (
+                          <div className="w-12 h-12 bg-gray-700 rounded flex items-center justify-center">
+                            <Package className="w-6 h-6 text-gray-500" />
                           </div>
-                        ))}
+                        )}
+                        <div>
+                          <p className="text-white font-medium">{order.item_name}</p>
+                          <p className="text-gray-400 text-sm">{order.price_paid} TC - Buyer: {order.buyer_name}</p>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Tracking Info */}
+                    {(order.shipping_name || order.shipping_address) && (
+                      <div className="mb-4">
+                        <h4 className="text-gray-400 text-sm mb-2 flex items-center gap-2">
+                          <MapPin className="w-4 h-4" />
+                          Shipping Address
+                        </h4>
+                        <div className="bg-gray-800 rounded-lg p-3">
+                          <p className="text-white">{order.shipping_name}</p>
+                          <p className="text-gray-400 text-sm">
+                            {[order.shipping_address, order.shipping_city, order.shipping_state, order.shipping_zip].filter(Boolean).join(', ')}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {order.tracking_number && (
                       <div className="mb-4">
                         <h4 className="text-gray-400 text-sm mb-2 flex items-center gap-2">
                           <Truck className="w-4 h-4" />
                           Tracking
                         </h4>
-                        <div className="bg-gray-800 rounded-lg p-3 flex items-center justify-between">
-                          <div>
-                            <p className="text-white text-sm">{order.carrier?.toUpperCase()}: {order.tracking_number}</p>
-                            {order.tracking_url && (
-                              <a 
-                                href={order.tracking_url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-purple-400 text-xs flex items-center gap-1 hover:underline"
-                              >
-                                Track Package <ExternalLink className="w-3 h-3" />
-                              </a>
-                            )}
-                          </div>
-                          {order.shipped_at && (
-                            <span className="text-gray-500 text-xs">
-                              Shipped {new Date(order.shipped_at).toLocaleDateString()}
-                            </span>
-                          )}
+                        <div className="bg-gray-800 rounded-lg p-3">
+                          <p className="text-white text-sm">{order.shipping_carrier?.toUpperCase()}: {order.tracking_number}</p>
+                          {order.shipped_at && <p className="text-gray-500 text-xs mt-1">Shipped {new Date(order.shipped_at).toLocaleDateString()}</p>}
                         </div>
                       </div>
                     )}
 
-                    {/* Actions */}
                     {order.status === 'paid' && (
                       <div className="flex justify-end">
                         <button
@@ -342,7 +352,6 @@ export default function SellerOrders() {
         )}
       </div>
 
-      {/* Shipping Modal */}
       {showShippingModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-md border border-gray-700">
@@ -357,7 +366,7 @@ export default function SellerOrders() {
                 <select
                   value={carrier}
                   onChange={(e) => setCarrier(e.target.value as ShippingCarrier)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px4 py3 text-white"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white"
                 >
                   {CARRIERS.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
@@ -372,7 +381,7 @@ export default function SellerOrders() {
                   value={trackingNumber}
                   onChange={(e) => setTrackingNumber(e.target.value)}
                   placeholder="Enter tracking number"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px4 py3 text-white placeholder-gray-500"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500"
                 />
               </div>
             </div>

@@ -154,7 +154,7 @@ export default function MobileBroadcastLayout({
         minHeight: '100dvh'
       }}
     >
-      {/* 1. Top HUD - Sticky Header */}
+      {/* 1. Top HUD - Compact Sticky Header */}
       <div 
         className="absolute top-0 left-0 right-0 z-50"
         style={{ 
@@ -170,48 +170,77 @@ export default function MobileBroadcastLayout({
         />
       </div>
 
-      {/* 2. Stage Area - Main Video Content */}
+      {/* 2. Stage Area - Responsive Grid Layout */}
       <div 
-        className="relative z-10 w-full"
+        className="relative z-10 w-full flex flex-col sm:flex-row gap-1.5 px-1 pt-1"
         style={{ 
           height: stageHeight,
           marginTop: headerHeight,
+          overflow: 'hidden'
         }}
       >
-        {/* Video Layer */}
-        <div className="absolute inset-0">
-          {children}
-        </div>
-        
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/20 via-transparent to-black/40" />
+        {/* Main Video - Responsive */}
+        <div className="relative flex-1 min-w-0 min-h-0 rounded-lg overflow-hidden bg-black/40">
+          {/* Video Layer */}
+          <div className="absolute inset-0">
+            {children}
+          </div>
+          
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/20 via-transparent to-black/40" />
 
-        {/* Participant Strip (Guests) */}
-        <div className="absolute top-4 left-0 right-0 z-20">
-          <ParticipantStrip 
-            seats={seats} 
-            onJoinRequest={onJoinSeat}
-          />
+          {/* Participant Strip (Guests) */}
+          <div className="absolute top-2 left-0 right-0 z-20">
+            <ParticipantStrip 
+              seats={seats} 
+              onJoinRequest={onJoinSeat}
+            />
+          </div>
         </div>
-      </div>
 
-      {/* 3. Chat - Toggleable Overlay */}
-      {isChatOpen && (
-        <div className="absolute inset-0 z-40 bg-black/60" onClick={() => setIsChatOpen(false)}>
-          <div 
-            className="absolute right-0 top-0 bottom-0 bg-zinc-900 animate-slide-in-right w-80"
-            onClick={(e) => e.stopPropagation()}
-          >
+        {/* Right Panel - Chat (Hidden on Small Mobile) */}
+        {isChatOpen && (
+          <div className="hidden sm:flex flex-col w-64 min-h-0 bg-zinc-900/80 backdrop-blur border border-white/10 rounded-lg overflow-hidden">
             <ChatBottomSheet
               messages={messages}
               onSendMessage={onSendMessage}
               className="h-full"
             />
+            <button
+              onClick={() => setIsChatOpen(false)}
+              className="absolute top-2 right-2 z-10 w-5 h-5 rounded bg-black/60 flex items-center justify-center text-white/40 hover:text-white text-[10px]"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Chat - Full Modal on Small Screens */}
+      {isChatOpen && (
+        <div className="sm:hidden absolute inset-0 z-40 bg-black/60 flex flex-col" onClick={() => setIsChatOpen(false)}>
+          <div 
+            className="flex-1 bg-zinc-900 overflow-hidden flex flex-col min-h-0 mt-16"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-3 border-b border-white/10">
+              <span className="text-sm font-bold">Chat</span>
+              <button onClick={() => setIsChatOpen(false)} className="text-white/60 hover:text-white">
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <ChatBottomSheet
+                messages={messages}
+                onSendMessage={onSendMessage}
+                className="h-full"
+              />
+            </div>
           </div>
         </div>
       )}
 
-      {/* 4. Bottom Dock - Controls */}
+      {/* 4. Bottom Dock - Compact Controls */}
       <div 
         className={cn(
           "absolute bottom-0 left-0 right-0 z-30",
@@ -220,21 +249,20 @@ export default function MobileBroadcastLayout({
         style={{ paddingBottom: safeArea.bottom }}
       >
         {isMinimized ? (
-          // Minimized state - just show toggle button
+          // Minimized state - compact pill button
           <button
             onClick={() => setIsMinimized(false)}
-            className="w-full py-3 bg-zinc-900/90 backdrop-blur-xl border-t border-white/10 flex items-center justify-center gap-2"
+            className="w-full py-2 mx-1 mb-1 bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-full flex items-center justify-center gap-2"
           >
-            <span className="text-xs text-white/60">Controls</span>
-            <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-white/80">Tap to expand</span>
+            <span className="text-[10px] text-white/60">Controls</span>
           </button>
         ) : (
-          // Full controls
-          <div className="bg-gradient-to-t from-black/95 via-black/90 to-transparent pt-4 pb-2">
-            {/* Gift Tray Overlay */}
+          // Full controls - more compact
+          <div className="bg-gradient-to-t from-black/98 via-black/90 to-transparent pt-2 pb-1 px-1">
+            {/* Gift Tray Modal */}
             {isGiftOpen && (
-              <div className="absolute bottom-full left-0 right-0 pb-2" onClick={() => setIsGiftOpen(false)}>
-                <div onClick={(e) => e.stopPropagation()}>
+              <div className="fixed inset-0 z-50 bg-black/60 flex items-end" onClick={() => setIsGiftOpen(false)}>
+                <div className="w-full" onClick={(e) => e.stopPropagation()}>
                   <GiftTray
                     recipientId={stream.user_id}
                     streamId={stream.id}
@@ -244,73 +272,88 @@ export default function MobileBroadcastLayout({
               </div>
             )}
 
-            {/* Bottom Action Buttons Row */}
-            <div className="flex items-end justify-between px-4">
-              {/* Left: Chat Toggle */}
+            {/* Compact Control Grid */}
+            <div className="flex items-center justify-between gap-2 px-2">
+              {/* Left: Chat Toggle - Compact */}
               <button
                 onClick={() => setIsChatOpen(true)}
-                className="relative w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:bg-white/10 transition-colors"
+                className="relative w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:bg-white/10 transition-colors flex-shrink-0"
+                title="Chat"
               >
-                <MessageSquare size={20} />
+                <MessageSquare size={16} />
                 {unreadMessages > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-[10px] font-bold flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[8px] font-bold flex items-center justify-center text-white">
                     {unreadMessages > 9 ? '9+' : unreadMessages}
                   </span>
                 )}
               </button>
 
-              {/* Center: Floating Actions */}
-              <FloatingActionCluster
-                isHost={isHost}
-                onLike={() => {}}
-                onGift={handleGift}
-                onShare={onShare}
-                onMenu={() => setIsDrawerOpen(true)}
-              />
+              {/* Center: Mic & Camera - Compact Row */}
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={handleToggleMic}
+                  className={cn(
+                    "w-10 h-10 rounded-full flex items-center justify-center transition-all text-sm font-bold",
+                    !isMicEnabled 
+                      ? "bg-red-500/20 text-red-500 border border-red-500/30" 
+                      : "bg-white/10 text-white border border-white/10 hover:bg-white/20"
+                  )}
+                  title={isMicEnabled ? 'Mute' : 'Unmute'}
+                >
+                  {!isMicEnabled ? '🔇' : '🎤'}
+                </button>
+                
+                <button
+                  onClick={handleToggleCamera}
+                  className={cn(
+                    "w-10 h-10 rounded-full flex items-center justify-center transition-all text-sm font-bold",
+                    !isCamEnabled 
+                      ? "bg-red-500/20 text-red-500 border border-red-500/30" 
+                      : "bg-white/10 text-white border border-white/10 hover:bg-white/20"
+                  }
+                  title={isCamEnabled ? 'Camera Off' : 'Camera On'}
+                >
+                  {!isCamEnabled ? '📷' : '📹'}
+                </button>
+              </div>
 
-              {/* Right: Minimize Button */}
+              {/* Right: Gift & Menu & Leave */}
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={handleGift}
+                  className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:bg-white/10 transition-colors flex-shrink-0 text-sm font-bold"
+                  title="Send Gift"
+                >
+                  🎁
+                </button>
+
+                <button
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/80 hover:bg-white/10 transition-colors flex-shrink-0 text-sm"
+                  title="More Options"
+                >
+                  ⋯
+                </button>
+
+                {isHost && (
+                  <button
+                    onClick={handleLeave}
+                    className="w-10 h-10 rounded-full bg-red-600/80 flex items-center justify-center text-white hover:bg-red-700 transition-colors flex-shrink-0 text-sm font-bold"
+                    title="End Stream"
+                  >
+                    ⏹
+                  </button>
+                )}
+              </div>
+
+              {/* Minimize */}
               <button
                 onClick={() => setIsMinimized(true)}
-                className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors flex-shrink-0 text-sm font-bold ml-auto"
+                title="Minimize"
               >
-                <span className="text-xs font-bold">−</span>
+                −
               </button>
-            </div>
-
-            {/* Primary Controls Row */}
-            <div className="flex items-center justify-center gap-4 mt-4 pb-2">
-              <button
-                onClick={handleToggleMic}
-                className={cn(
-                  "w-14 h-14 rounded-full flex items-center justify-center transition-all",
-                  !isMicEnabled 
-                    ? "bg-red-500/20 text-red-500 border border-red-500/30" 
-                    : "bg-white/10 text-white border border-white/10 hover:bg-white/20"
-                )}
-              >
-                {!isMicEnabled ? <span className="text-xl">🔇</span> : <span className="text-xl">🎤</span>}
-              </button>
-              
-              <button
-                onClick={handleToggleCamera}
-                className={cn(
-                  "w-14 h-14 rounded-full flex items-center justify-center transition-all",
-                  !isCamEnabled 
-                    ? "bg-red-500/20 text-red-500 border border-red-500/30" 
-                    : "bg-white/10 text-white border border-white/10 hover:bg-white/20"
-                )}
-              >
-                {!isCamEnabled ? <span className="text-xl">📷</span> : <span className="text-xl">📹</span>}
-              </button>
-
-              {isHost && (
-                <button
-                  onClick={handleLeave}
-                  className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center text-white shadow-lg hover:bg-red-700 transition-colors"
-                >
-                  <span className="text-xl">📴</span>
-                </button>
-              )}
             </div>
           </div>
         )}

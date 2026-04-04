@@ -9,6 +9,7 @@ import './styles/leaflet.css'
 import { AuthProvider } from './contexts/AuthProvider'
 import { GlobalAppProvider } from './contexts/GlobalAppContext'
 import AprilFoolsProvider from './components/april-fools/AprilFoolsProvider'
+import { EasterEggHuntProvider } from './contexts/EasterEggHuntContext'
 import { supabase } from './lib/supabase'
 import { initTelemetry } from './lib/telemetry'
 import { initMobilePlatform, isMobilePlatform } from './lib/mobilePlatform'
@@ -302,7 +303,9 @@ createRoot(rootElement).render(
         <AuthProvider>
           <GlobalAppProvider>
             <AprilFoolsProvider>
-              <App />
+              <EasterEggHuntProvider>
+                <App />
+              </EasterEggHuntProvider>
             </AprilFoolsProvider>
           </GlobalAppProvider>
         </AuthProvider>

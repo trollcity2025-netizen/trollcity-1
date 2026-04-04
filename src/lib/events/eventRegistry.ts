@@ -195,35 +195,38 @@ export const prideEvent = createYearlyEvent(
 );
 
 // ============================================================================
-// Easter (Varies - using April 16 for 2026)
+// Easter (May 5-7)
 // ============================================================================
 
 export const easterEvent = createYearlyEvent(
   'easter',
   'Easter',
-  'Find golden eggs and enjoy springtime bonuses!',
-  4, 5, 4, 19,
+  'Find hidden eggs across Troll City and earn springtime rewards!',
+  5, 5, 5, 7,
   {
+    priority: 8,
     theme: {
-      primaryColor: '#FFD700',
-      secondaryColor: '#98FB98',
-      backgroundAccent: 'bg-amber-500/10',
-      textHighlight: 'text-amber-400',
-      borderAccent: 'border-amber-500/30',
-      buttonClass: 'bg-gradient-to-r from-amber-400 to-yellow-500',
-      badgeBackground: 'bg-amber-500/20',
-      particleEffect: 'leaves',
+      primaryColor: '#FF69B4',
+      secondaryColor: '#87CEEB',
+      backgroundAccent: 'bg-pink-500/10',
+      textHighlight: 'text-pink-400',
+      borderAccent: 'border-pink-500/30',
+      buttonClass: 'bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400',
+      badgeBackground: 'bg-pink-500/20',
+      particleEffect: 'confetti',
       cssVariables: {
-        '--event-primary': '#FFD700',
-        '--event-secondary': '#98FB98',
+        '--event-primary': '#FF69B4',
+        '--event-secondary': '#87CEEB',
+        '--event-accent': '#DDA0DD',
+        '--event-green': '#98FB98',
       },
     },
     giftPacks: [
       {
         id: 'easter_egg',
-        name: 'Golden Egg',
-        description: 'A rare golden Easter egg!',
-        coinPrice: 500,
+        name: 'Easter Egg',
+        description: 'A colorful Easter egg surprise!',
+        coinPrice: 10,
         emoji: '🥚',
         animation: 'glow',
         category: 'exclusive',
@@ -232,7 +235,7 @@ export const easterEvent = createYearlyEvent(
         id: 'easter_bunny',
         name: 'Easter Bunny',
         description: 'Cute bunny companion animation',
-        coinPrice: 200,
+        coinPrice: 10,
         emoji: '🐰',
         animation: 'bounce',
         category: 'limited',

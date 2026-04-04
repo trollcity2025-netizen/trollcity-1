@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stream } from '../../types/broadcast';
 import { supabase } from '../../lib/supabase';
-import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords, Star, GripVertical, X, MoreHorizontal, Sliders, Shield } from 'lucide-react';
+import { Plus, Minus, LayoutGrid, Settings2, Coins, Lock, Unlock, Mic, MicOff, Video, VideoOff, MessageSquare, MessageSquareOff, Heart, Eye, Power, Sparkles, Palette, Gift, UserX, ImageIcon, LogOut, ChevronDown, ChevronUp, Share2, Package, Swords, Star, GripVertical, X, MoreHorizontal, Sliders, Shield, Gamepad2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 import { getCategoryConfig } from '../../config/broadcastCategories';
@@ -44,6 +44,8 @@ interface BroadcastControlsProps {
   onFiveVFiveBattle?: () => void;
   fiveVFiveBattleActive?: boolean;
   isLive?: boolean;
+  onTrollToeController?: () => void;
+  trollToeActive?: boolean;
 }
 
 export default function BroadcastControls({
@@ -75,6 +77,8 @@ export default function BroadcastControls({
   onFiveVFiveBattle,
   fiveVFiveBattleActive = false,
   isLive = false,
+  onTrollToeController,
+  trollToeActive = false,
 }: BroadcastControlsProps) {
   const navigate = useNavigate();
   const [audioTrack, videoTrack] = localTracks || [];
@@ -366,6 +370,9 @@ export default function BroadcastControls({
   const handleEndStream = () => {
     if (onStreamEnd) {
       onStreamEnd();
+    } else if (isHost && onLeave) {
+      // Fallback to leaving if no dedicated end handler
+      onLeave();
     }
   };
 
@@ -487,6 +494,18 @@ export default function BroadcastControls({
             size="sm"
           />
         )}
+
+        {/* Games Controller - Coming Soon */}
+        <OrbBtn
+          active={false}
+          onClick={() => toast.info("Games feature coming soon!")}
+          icon={Gamepad2}
+          label="Games"
+          glow={undefined}
+          size="sm"
+          disabled={true}
+          tooltip="Coming Soon"
+        />
 
         {/* End Stream (host) - center large orb */}
         {isHost && (
@@ -662,10 +681,10 @@ export default function BroadcastControls({
 
 // ─── ORB COMPONENTS ───
 
-function OrbBtn({ active, onClick, icon: Icon, label, glow, size, disabled }: any) {
+function OrbBtn({ active, onClick, icon: Icon, label, glow, size, disabled, tooltip }: any) {
   const isLg = size === 'lg';
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-1" title={tooltip}>
       <button
         onClick={onClick}
         disabled={disabled}

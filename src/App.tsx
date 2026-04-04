@@ -75,6 +75,7 @@ const HomepageBackgroundShowcase = lazyWithRetry(() => import("./pages/dev/Homep
 const GiftAnimationShowcase = lazyWithRetry(() => import("./pages/dev/GiftAnimationShowcase"));
 const GiftAnimationPreview = lazyWithRetry(() => import("./pages/dev/GiftAnimationPreview"));
 const XPSimulatorPage = lazyWithRetry(() => import("./pages/dev/XPSimulatorPage"));
+const EasterThemePreview = lazyWithRetry(() => import("./pages/dev/EasterThemePreview"));
 const StreamControlPreview = lazyWithRetry(() => import("./pages/dev/StreamControlPreview"));
 const BroadcastLayoutPreview = lazyWithRetry(() => import("./pages/dev/BroadcastLayoutPreview"));
 const SetupPreview = lazyWithRetry(() => import("./pages/dev/SetupPreview"));
@@ -89,6 +90,7 @@ const AudioSettings = lazyWithRetry(() => import("./pages/live/AudioSettings"));
 const TCPS = lazyWithRetry(() => import("./pages/TCPS"));
 const MatchPage = lazyWithRetry(() => import("./pages/MatchPage"));
 const TMFamilyInviteHandler = lazyWithRetry(() => import("./components/trollmatch/TMFamilyInviteHandler"));
+const EasterEggGlobalOverlay = lazyWithRetry(() => import("./components/easter/EasterEggGlobalOverlay"));
 const TrollPodsListing = lazyWithRetry(() => import("./pages/pods/TrollPodsListing"));
 const TrollPodRoom = lazyWithRetry(() => import("./pages/pods/TrollPodRoom"));
 const PodSummary = lazyWithRetry(() => import("./pages/pods/PodSummary"));
@@ -246,10 +248,6 @@ const TCNNInternalDashboard = lazyWithRetry(() => import("./pages/tcnn/TCNNInter
 const ArticleReader = lazyWithRetry(() => import("./pages/tcnn/ArticleReader"));
 const TCNNBroadcasterPage = lazyWithRetry(() => import("./pages/tcnn/TCNNBroadcasterPage"));
 const TCNNViewerPage = lazyWithRetry(() => import("./pages/tcnn/TCNNViewerPage"));
-
-// Troll City Deck - Broadcast Control Companion
-const DeckAuth = lazyWithRetry(() => import("./pages/deck/DeckAuth"));
-const DeckDashboard = lazyWithRetry(() => import("./pages/deck/DeckDashboard"));
 
 const ShopView = lazyWithRetry(() => import("./pages/ShopView"));
 const CourtRoom = lazyWithRetry(() => import("./pages/CourtRoom"));
@@ -1137,11 +1135,6 @@ function AppContent() {
                 <Route path="/dev/broadcast-layout" element={<BroadcastLayoutPreview />} />
                 <Route path="/dev/setup-preview" element={<SetupPreview />} />
 
-                {/* 📡 Troll Deck - Broadcast Control Companion (separate auth) */}
-                <Route path="/deck" element={<DeckDashboard />} />
-                <Route path="/deck/auth" element={<DeckAuth />} />
-                <Route path="/deck/*" element={<DeckDashboard />} />
-
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
                   <Route path="/" element={<LandingHome />} />
@@ -1235,6 +1228,7 @@ function AppContent() {
                   <Route path="/dev/homepage-bg-showcase" element={<HomepageBackgroundShowcase />} />
                    <Route path="/dev/gift-animation-showcase" element={<GiftAnimationShowcase />} />
                    <Route path="/dev/gift-animations" element={<GiftAnimationPreview />} />
+                   <Route path="/dev/easter-theme-preview" element={<EasterThemePreview />} />
 
 
                    {/* 📺 Live Streaming System */}
@@ -1965,6 +1959,10 @@ function App() {
   return (
     <TrollProvider>
       <AppContent />
+      {/* Easter Egg Global Overlay - eggs on all pages during hunt */}
+      <Suspense fallback={null}>
+        <EasterEggGlobalOverlay />
+      </Suspense>
       {/* TM Family Invite Handler - shows pending invites as notifications */}
       <TMFamilyInviteHandler />
     </TrollProvider>

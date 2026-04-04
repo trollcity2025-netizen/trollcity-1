@@ -23,7 +23,7 @@ export default function StreamStackIndicator({
   
   // Calculate visible dot range
   let startIndex = Math.max(0, currentIndex - Math.floor(maxVisibleDots / 2));
-  let endIndex = Math.min(totalStreams, startIndex + maxVisibleDots);
+  const endIndex = Math.min(totalStreams, startIndex + maxVisibleDots);
   
   // Adjust if we're near the end
   if (endIndex - startIndex < maxVisibleDots) {

@@ -26,9 +26,9 @@ interface QAResult {
 
 const qaResults: QAResult[] = [];
 const visitedRoutes = new Set<string>();
-let consoleErrorsGlobal: string[] = [];
-let networkFailuresGlobal: string[] = [];
-let supabaseErrorsGlobal: string[] = [];
+const consoleErrorsGlobal: string[] = [];
+const networkFailuresGlobal: string[] = [];
+const supabaseErrorsGlobal: string[] = [];
 let actionsClicked = 0;
 let formsSubmitted = 0;
 

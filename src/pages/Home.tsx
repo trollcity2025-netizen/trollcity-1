@@ -8,6 +8,8 @@ import EventCountdown from '@/components/EventCountdown'
 import TrollWallFeed from '@/components/home/TrollWallFeed'
 import { supabase } from '@/lib/supabase'
 import { Radio, Mic, Users, Play, Eye, X, ChevronRight } from 'lucide-react'
+import EasterEggOverlay from '@/components/easter/EasterEggOverlay'
+import EasterHuntBanner from '@/components/easter/EasterHuntBanner'
 
 const PWAInstallPrompt = lazy(() => import('../components/PWAInstallPrompt'))
 const TCNNPopupWidget = lazy(() => import('@/components/tcnn/TCNNPopupWidget'))
@@ -38,6 +40,7 @@ const AnimatedGradient = React.memo(() => {
     </div>
   );
 });
+AnimatedGradient.displayName = 'AnimatedGradient'
 
 
 
@@ -178,6 +181,9 @@ export default function Home() {
       {/* Event Countdown Banner */}
       <EventCountdown />
 
+      {/* Easter Hunt Banner */}
+      <EasterHuntBanner />
+
       {/* Animated Background */}
       <AnimatedGradient />
 
@@ -188,6 +194,9 @@ export default function Home() {
 
       {/* Content */}
         <div className="relative z-10 flex flex-col flex-1 min-h-0 px-3 md:px-5 pt-2 pb-1 safe-top">
+        {/* Easter Egg Overlay */}
+        <EasterEggOverlay pageId="home" />
+
         <div className="max-w-7xl mx-auto flex flex-col flex-1 min-h-0 w-full">
           {/* Header with Tabs */}
           <section className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-2 flex-shrink-0`}>

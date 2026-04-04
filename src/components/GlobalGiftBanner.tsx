@@ -55,24 +55,16 @@ export default function GlobalGiftBanner() {
           setCurrentEvent(eventData);
           setIsVisible(true);
           
-          // Trigger the new animation system
-          // Map gift name to gift type
-          const giftType = mapGiftNameToType(eventData.giftName);
-          playGiftAnimation({
-            type: giftType,
-            senderName: eventData.senderName || 'Someone',
-            senderAvatar: undefined,
-            receiverName: eventData.receiverName || 'Someone',
-            amount: eventData.amount,
-          });
+          // Gift animations are handled by GiftAnimationOverlay in broadcast pages
+          // No need to trigger additional animations here
           
-          // Also trigger coin explosion for large gifts
-          if (eventData.amount >= 1000) {
-            playCoinExplosion({
-              amount: eventData.amount,
-              position: { x: 50, y: 50 },
-            });
-          }
+          // Coin explosions are handled elsewhere if needed
+          // if (eventData.amount >= 1000) {
+          //   playCoinExplosion({
+          //     amount: eventData.amount,
+          //     position: { x: 50, y: 50 },
+          //   });
+          // }
         }
       )
       .subscribe();

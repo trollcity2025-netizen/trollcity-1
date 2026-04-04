@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useInRouterContext } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
@@ -7,7 +7,7 @@ import { useXPStore } from '../stores/useXPStore';
 import CreditScoreBadge from '../components/CreditScoreBadge';
 import BadgesGrid from '../components/badges/BadgesGrid';     
 import UserBadge from '../components/UserBadge';
-import { useCreditScore as _useCreditScore } from '../lib/hooks/useCreditScore';
+import { useCreditScore } from '../lib/hooks/useCreditScore';
 import { useProfileViewPayment as _useProfileViewPayment } from '../hooks/useProfileViewPayment';
 import { getLevelName } from '../lib/xp';
 import { ENTRANCE_EFFECTS_MAP, EntranceEffect } from '../lib/entranceEffects';
@@ -65,8 +65,8 @@ function ProfileInner() {
   const tabDropdownRef = useRef<HTMLDivElement | null>(null);
 
   // DISABLED - These hooks were causing multiple API calls and re-renders on load
-  // const memoizedProfileId = useMemo(() => profile?.id, [profile?.id]);
-  // const { data: creditData, loading: creditLoading } = useCreditScore(memoizedProfileId);
+  const memoizedProfileId = useMemo(() => profile?.id, [profile?.id]);
+  const { data: creditData, loading: creditLoading } = useCreditScore(memoizedProfileId);
 
   // Profile Costs State
   const [messageCost, setMessageCost] = useState(0);
@@ -76,9 +76,6 @@ function ProfileInner() {
     refreshProfile();
   }, [refreshProfile]);
 
-  // Disabled hooks - were causing multiple API calls and re-renders on load
-  const creditData = null;
-  const creditLoading = false;
   const paymentChecking = false;
   const canView = true;
 
@@ -698,6 +695,12 @@ function ProfileInner() {
   const handleFollow = async () => {
     if (!currentUser) {
       toast.error('Please login to follow users');
+      return;
+    }
+    
+    // Prevent following yourself
+    if (currentUser.id === profile.id) {
+      toast.error('You cannot follow yourself');
       return;
     }
     

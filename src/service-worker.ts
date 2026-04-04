@@ -95,7 +95,7 @@ async function clearPersistedQueue(queueName: string) {
 }
 
 // ===== PRECACHE MANIFEST (injected by Workbox) =====
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const PRECACHE_MANIFEST: any[] = (self as unknown as { __WB_MANIFEST: any[] }).__WB_MANIFEST || [];
 
 // ===== INSTALL EVENT =====
@@ -273,7 +273,7 @@ self.addEventListener('sync', (event) => {
 self.addEventListener('push', (event) => {
   console.log('[SW] Push notification received');
   
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   let notificationData: Record<string, any> = {};
   
   if (event.data) {
@@ -287,7 +287,7 @@ self.addEventListener('push', (event) => {
   const title = notificationData.title || 'Troll City';
   
   // Build notification options with extended typing for PWA features
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const notificationOptions: any = {
     body: notificationData.body || 'New update from Troll City!',
     icon: notificationData.icon || '/icons/icon-192.png',
@@ -374,7 +374,7 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const notificationData = (event.notification as any).data || {};
   const action = event.action;
   const url = notificationData.url || '/';
@@ -427,7 +427,7 @@ self.addEventListener('notificationclick', (event) => {
 
 // ===== MESSAGE HANDLER =====
 self.addEventListener('message', (event) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const { type, payload } = event.data || {};
   
   switch (type) {
@@ -645,7 +645,7 @@ async function handleBackgroundSync(request: Request): Promise<Response> {
     
     // Register for sync when online
     if ('sync' in self.registration) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       await (self.registration as any).sync.register(queueName);
     }
     
@@ -660,7 +660,7 @@ async function handleBackgroundSync(request: Request): Promise<Response> {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function queueForSync(queueName: string, data: any) {
   if (!SYNC_QUEUES[queueName]) {
     SYNC_QUEUES[queueName] = [];
@@ -732,7 +732,7 @@ async function processSyncQueue(queueName: string) {
 
 // ===== CACHE HELPERS =====
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 async function cacheStreamData(streamId: string, data: unknown) {
   try {
     const cache = await caches.open(STREAM_CACHE);
@@ -748,7 +748,7 @@ async function cacheStreamData(streamId: string, data: unknown) {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 async function cacheUserProfile(userId: string, data: unknown) {
   try {
     const cache = await caches.open(STATIC_CACHE);
@@ -786,14 +786,14 @@ async function prefetchStreamData(streamId: string) {
 
 // ===== PERIODIC SYNC =====
 self.addEventListener('periodicsync', (event: Event) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const tag = (event as any).tag;
   
   if (tag === 'preload-streams') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (event as any).waitUntil(preloadUpcomingStreams());
   } else if (tag === 'refresh-cache') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (event as any).waitUntil(refreshCache());
   }
 });

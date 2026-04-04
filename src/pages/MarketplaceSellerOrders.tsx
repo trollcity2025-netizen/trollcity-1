@@ -184,7 +184,7 @@ export default function MarketplaceSellerOrders() {
 
   const handleContactBuyer = (order: MarketplacePurchase) => {
     if (!order.buyer_id || !order.marketplace_item) return;
-    navigate(`/tcps?userId=${order.buyer_id}&itemId=${order.item_id}&itemTitle=${encodeURIComponent(order.marketplace_item.title)}`);
+    navigate(`/tcps?user=${order.buyer_id}&itemId=${order.item_id}&itemTitle=${encodeURIComponent(order.marketplace_item.title)}`);
   };
 
   const filteredOrders = orders.filter((order) => {

@@ -33,7 +33,6 @@ export default function AppLayout({
   const { isCollapsed } = useSidebarStore()
   useChatStore()
   const isAuthPage = location.pathname.startsWith('/auth');
-  const isDeckPage = location.pathname.startsWith('/deck');
   const isLivePage = location.pathname.startsWith('/live/') || (location.pathname.startsWith('/broadcast/') && !location.pathname.startsWith('/broadcast/setup')) || location.pathname.startsWith('/stream/') || location.pathname === '/live-swipe';
   const isKeyboardVisible = false;
 
@@ -62,15 +61,15 @@ export default function AppLayout({
     if (typeof window === 'undefined') return;
   }, []);
 
-  const effectiveShowSidebar = showSidebar && showLegacySidebar && !isAuthPage && !isLivePage && !isDeckPage;
-  const effectiveShowHeader = showHeader && !isAuthPage && !isLivePage && !isDeckPage;
-  const effectiveShowBottomNav = showBottomNav && !isAuthPage && !isLivePage && !isDeckPage;
-  const mainOverflowClass = (isLivePage || isDeckPage) ? 'overflow-hidden' : 'overflow-x-hidden overflow-y-auto scrollbar-thin scrollbar-thumb-purple-900/30 scrollbar-track-transparent';
-  const mainPaddingClass = effectiveShowBottomNav && !isLivePage && !isDeckPage ? 'pb-[calc(var(--bottom-nav-height,64px)+env(safe-area-inset-bottom,0px))]' : '';
+  const effectiveShowSidebar = showSidebar && showLegacySidebar && !isAuthPage && !isLivePage;
+  const effectiveShowHeader = showHeader && !isAuthPage && !isLivePage;
+  const effectiveShowBottomNav = showBottomNav && !isAuthPage && !isLivePage;
+  const mainOverflowClass = isLivePage ? 'overflow-hidden' : 'overflow-x-hidden overflow-y-auto scrollbar-thin scrollbar-thumb-purple-900/30 scrollbar-track-transparent';
+  const mainPaddingClass = effectiveShowBottomNav && !isLivePage ? 'pb-[calc(var(--bottom-nav-height,64px)+env(safe-area-inset-bottom,0px))]' : '';
 
   return (
     <div className="app-viewport w-screen h-screen overflow-hidden text-white flex relative">
-      {!isDeckPage && <PurchaseRequiredModal />}
+      {!isAuthPage && <PurchaseRequiredModal />}
       {/* Desktop Sidebar - Hidden on Mobile */}
       {effectiveShowSidebar && (
         <div className={`hidden md:block h-full shrink-0 z-20 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-64'}`}>
@@ -87,7 +86,7 @@ export default function AppLayout({
         )}
 
         {/* User Compliance Prompt */}
-        {!isAuthPage && !isDeckPage && <UserCompliancePrompt />}
+        {!isAuthPage && <UserCompliancePrompt />}
 
         {/* Main Content Area */}
         <main className={`flex-1 w-full h-full relative ${mainOverflowClass} ${mainPaddingClass}`}>
@@ -100,7 +99,7 @@ export default function AppLayout({
         )}
 
         {/* Global Chat Bubble */}
-        {!isDeckPage && <ChatBubble />}
+        {!isAuthPage && <ChatBubble />}
       </div>
     </div>
   )

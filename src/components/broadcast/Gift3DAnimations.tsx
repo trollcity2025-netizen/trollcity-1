@@ -610,8 +610,8 @@ export function Gift3DOverlay({ giftName, giftIcon, giftValue, duration, onCompl
 
   return createPortal(
     <div className={`gift-3d-overlay g3d-${phase}`}>
+      {/* 3D particle effects layer */}
       <Canvas camera={{ position: [0, 0, 5], fov: 45 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}>
-        <color attach="background" args={['#080c14']} />
         <ambientLight intensity={0.3} />
         <directionalLight position={[5, 5, 5]} intensity={1} />
         <Environment preset="city" />
@@ -622,15 +622,21 @@ export function Gift3DOverlay({ giftName, giftIcon, giftValue, duration, onCompl
         </Suspense>
       </Canvas>
 
-      {/* Gift info overlay */}
+      {/* Gift emoji centered */}
+      <div className="g3d-emoji-center">
+        <span className="g3d-emoji" style={{ filter: `drop-shadow(0 0 20px ${tierColor}) drop-shadow(0 0 40px ${tierColor}40)` }}>
+          {giftIcon}
+        </span>
+      </div>
+
+      {/* Gift info */}
       <div className="g3d-info">
         <div className="g3d-name" style={{ textShadow: `0 0 20px ${tierColor}` }}>
-          {giftIcon} {giftName.replace(/_/g, ' ')}
+          {giftName.replace(/_/g, ' ')}
         </div>
         <div className="g3d-cost" style={{ color: tierColor }}>
-          {giftValue.toLocaleString()} coins • {duration}s
+          {giftValue.toLocaleString()} coins
         </div>
-        <div className="g3d-scene">{sceneType}</div>
       </div>
 
       {/* Progress bar */}

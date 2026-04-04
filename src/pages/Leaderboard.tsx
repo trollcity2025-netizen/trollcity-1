@@ -50,18 +50,17 @@ export default function Leaderboard() {
           created_at: s.user_profiles?.created_at
         }));
 
-        // Filter out fake/test accounts
+        // Filter out fake/test accounts (less aggressive - only exact test patterns)
         const realUsers = users.filter(user => {
           const username = (user.username || '').toLowerCase();
-          // Exclude test/demo/mock accounts
-          const isRealUser = !username.includes('test') &&
-                            !username.includes('demo') &&
-                            !username.includes('mock') &&
-                            !username.includes('fake') &&
-                            !username.includes('sample') &&
-                            !username.includes('user') &&
-                            user.total_earned_coins > 0; // Must have earned something
-          return isRealUser;
+          // Exclude only obvious test/demo/mock accounts
+          const isTestAccount = username.startsWith('test') ||
+                            username.startsWith('demo') ||
+                            username.startsWith('mock') ||
+                            username.startsWith('fake') ||
+                            username === 'sample' ||
+                            username === 'user';
+          return !isTestAccount && user.total_earned_coins > 0; // Must have earned something
         });
 
         setTopUsers(realUsers.slice(0, 20)) // Take top 20 real users
@@ -69,15 +68,14 @@ export default function Leaderboard() {
         // Filter out streams from fake/test accounts
         const realStreams = streams.filter((stream: any) => {
           const username = (stream.user_profiles?.username || '').toLowerCase();
-          // Exclude test/demo/mock accounts
-          const isRealUser = !username.includes('test') &&
-                            !username.includes('demo') &&
-                            !username.includes('mock') &&
-                            !username.includes('fake') &&
-                            !username.includes('sample') &&
-                            !username.includes('user') &&
-                            (stream.total_gifts_coins || 0) > 0; // Must have received gifts
-          return isRealUser;
+          // Exclude only obvious test/demo/mock accounts
+          const isTestAccount = username.startsWith('test') ||
+                            username.startsWith('demo') ||
+                            username.startsWith('mock') ||
+                            username.startsWith('fake') ||
+                            username === 'sample' ||
+                            username === 'user';
+          return !isTestAccount && (stream.total_gifts_coins || 0) > 0; // Must have received gifts
         });
 
         setTopStreams(realStreams.slice(0, 20)) // Take top 20 real streams

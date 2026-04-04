@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
@@ -9,7 +9,31 @@ import {
   ChevronDown, ChevronUp, CheckCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { ShopOrder, OrderStatus } from '../types/liveCommerce';
+
+type OrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'refunded';
+
+interface PurchaseOrder {
+  id: string;
+  buyer_id: string;
+  seller_id: string;
+  item_id: string;
+  price_paid: number;
+  purchased_at: string;
+  status: OrderStatus;
+  shipping_carrier: string | null;
+  tracking_number: string | null;
+  tracking_url: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  shipping_name: string | null;
+  shipping_address: string | null;
+  shipping_city: string | null;
+  shipping_state: string | null;
+  shipping_zip: string | null;
+  item_name?: string;
+  item_image?: string;
+  seller_name?: string;
+}
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string }> = {
   pending: { label: 'Pending', color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
@@ -25,23 +49,56 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: str
 export default function MyOrders() {
   const { user } = useAuthStore();
   
-  const [orders, setOrders] = useState<ShopOrder[]>([]);
+  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [confirmingDelivery, setConfirmingDelivery] = useState<string | null>(null);
 
-  // Fetch orders
   const fetchOrders = useCallback(async () => {
+    if (!user) return;
     try {
       const { data, error } = await supabase
-        .from('shop_orders')
-        .select('*, items(*, product(*))')
-        .eq('buyer_id', user!.id)
-        .order('created_at', { ascending: false });
+        .from('marketplace_purchases')
+        .select('*')
+        .eq('buyer_id', user.id)
+        .order('purchased_at', { ascending: false });
 
       if (error) throw error;
-      setOrders(data || []);
+
+      // Enrich with item and seller data
+      const enriched = await Promise.all((data || []).map(async (order: any) => {
+        let item_name = 'Item';
+        let item_image = '';
+        let seller_name = 'Seller';
+
+        // Fetch item details
+        if (order.item_id) {
+          const { data: item } = await supabase
+            .from('marketplace_items')
+            .select('name, image_url')
+            .eq('id', order.item_id)
+            .maybeSingle();
+          if (item) {
+            item_name = item.name;
+            item_image = item.image_url || '';
+          }
+        }
+
+        // Fetch seller name
+        if (order.seller_id) {
+          const { data: seller } = await supabase
+            .from('user_profiles')
+            .select('username')
+            .eq('id', order.seller_id)
+            .maybeSingle();
+          if (seller) seller_name = seller.username;
+        }
+
+        return { ...order, item_name, item_image, seller_name };
+      }));
+
+      setOrders(enriched);
     } catch (err) {
       console.error('Error fetching orders:', err);
       toast.error('Failed to load orders');
@@ -58,14 +115,14 @@ export default function MyOrders() {
   const handleConfirmDelivery = async (orderId: string) => {
     setConfirmingDelivery(orderId);
     try {
-      const { error } = await supabase.rpc('confirm_delivery', {
-        p_order_id: orderId,
-        p_user_id: user!.id,
-      });
+      const { error } = await supabase
+        .from('marketplace_purchases')
+        .update({ status: 'completed', delivered_at: new Date().toISOString() })
+        .eq('id', orderId)
+        .eq('buyer_id', user!.id);
 
       if (error) throw error;
-
-      toast.success('Delivery confirmed! Coins released to seller.');
+      toast.success('Delivery confirmed!');
       fetchOrders();
     } catch (err: any) {
       console.error('Error confirming delivery:', err);
@@ -76,24 +133,19 @@ export default function MyOrders() {
   };
 
   const filteredOrders = orders.filter((order) => {
-    return order.order_number.toLowerCase().includes(searchQuery.toLowerCase());
+    return (order.item_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.seller_name || '').toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const getOrderStats = () => {
-    const stats = {
-      total: orders.length,
-      shipped: orders.filter(o => o.status === 'shipped').length,
-      completed: orders.filter(o => o.status === 'completed').length,
-      awaitingConfirmation: orders.filter(o => o.status === 'shipped').length,
-    };
-    return stats;
+  const stats = {
+    total: orders.length,
+    shipped: orders.filter(o => o.status === 'shipped').length,
+    completed: orders.filter(o => o.status === 'completed').length,
+    awaitingConfirmation: orders.filter(o => o.status === 'shipped').length,
   };
-
-  const stats = getOrderStats();
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      {/* Header */}
       <div className="bg-gradient-to-r from-green-600 to-teal-600 p-6">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold flex items-center gap-3">
@@ -105,7 +157,6 @@ export default function MyOrders() {
       </div>
 
       <div className="max-w-6xl mx-auto p-6">
-        {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-gray-800 rounded-xl p-4">
             <div className="text-gray-400 text-sm">Total Orders</div>
@@ -125,21 +176,19 @@ export default function MyOrders() {
           </div>
         </div>
 
-        {/* Search */}
         <div className="mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search orders by number..."
+              placeholder="Search orders..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl pl10 pr4 py-3 text-white placeholder-gray-500"
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-gray-500"
             />
           </div>
         </div>
 
-        {/* Orders List */}
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-3 border-green-600 border-t-transparent rounded-full animate-spin" />
@@ -148,7 +197,7 @@ export default function MyOrders() {
           <div className="text-center py-12 bg-gray-800 rounded-xl">
             <Package className="w-12 h-12 text-gray-600 mx-auto mb-4" />
             <p className="text-gray-400">No orders yet</p>
-            <p className="text-gray-500 text-sm mt-2">Purchase items during live streams to see them here</p>
+            <p className="text-gray-500 text-sm mt-2">Purchase items from the marketplace to see them here</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -159,7 +208,6 @@ export default function MyOrders() {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden"
               >
-                {/* Order Header */}
                 <div 
                   className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-750"
                   onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
@@ -169,10 +217,10 @@ export default function MyOrders() {
                       {STATUS_CONFIG[order.status]?.label}
                     </div>
                     <div>
-                      <div className="font-mono text-sm text-gray-300">{order.order_number}</div>
+                      <div className="font-medium text-white">{order.item_name}</div>
                       <div className="text-gray-500 text-xs flex items-center gap-2">
                         <Calendar className="w-3 h-3" />
-                        {new Date(order.created_at).toLocaleDateString()}
+                        {new Date(order.purchased_at).toLocaleDateString()} - Seller: {order.seller_name}
                       </div>
                     </div>
                   </div>
@@ -181,11 +229,8 @@ export default function MyOrders() {
                     <div className="text-right">
                       <div className="flex items-center gap-1 text-yellow-400 font-bold">
                         <Coins className="w-4 h-4" />
-                        {order.total_coins}
+                        {order.price_paid}
                       </div>
-                      <span className="text-xs text-gray-500">
-                        {order.items?.length || 0} item(s)
-                      </span>
                     </div>
                     {expandedOrder === order.id ? (
                       <ChevronUp className="w-5 h-5 text-gray-400" />
@@ -195,103 +240,46 @@ export default function MyOrders() {
                   </div>
                 </div>
 
-                {/* Expanded Details */}
                 {expandedOrder === order.id && (
                   <div className="border-t border-gray-700 p-4 bg-gray-850">
-                    {/* Order Items */}
                     <div className="mb-4">
-                      <h4 className="text-gray-400 text-sm mb-2 flex items-center gap-2">
-                        <Package className="w-4 h-4" />
-                        Items Ordered
-                      </h4>
-                      <div className="bg-gray-800 rounded-lg p-3 space-y-2">
-                        {order.items?.map((item: any) => (
-                          <div key={item.id} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              {item.product?.image_url ? (
-                                <img src={item.product.image_url} alt="" className="w-10 h-10 rounded object-cover" />
-                              ) : (
-                                <div className="w-10 h-10 bg-gray-700 rounded flex items-center justify-center">
-                                  <Package className="w-5 h-5 text-gray-500" />
-                                </div>
-                              )}
-                              <div>
-                                <p className="text-white text-sm">{item.product?.name || 'Product'}</p>
-                                <p className="text-gray-500 text-xs">Qty: {item.quantity}</p>
-                              </div>
-                            </div>
-                            <div className="text-yellow-400 font-medium">
-                              {item.total_price} coins
-                            </div>
+                      <div className="flex items-center gap-3 bg-gray-800 rounded-lg p-3">
+                        {order.item_image ? (
+                          <img src={order.item_image} alt="" className="w-12 h-12 rounded object-cover" />
+                        ) : (
+                          <div className="w-12 h-12 bg-gray-700 rounded flex items-center justify-center">
+                            <Package className="w-6 h-6 text-gray-500" />
                           </div>
-                        ))}
+                        )}
+                        <div>
+                          <p className="text-white font-medium">{order.item_name}</p>
+                          <p className="text-gray-400 text-sm">{order.price_paid} TC - Sold by {order.seller_name}</p>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Shipping Address */}
-                    <div className="mb-4">
-                      <h4 className="text-gray-400 text-sm mb-2 flex items-center gap-2">
-                        <MapPin className="w-4 h-4" />
-                        Shipping To
-                      </h4>
-                      <div className="bg-gray-800 rounded-lg p-3">
-                        <p className="text-white">{order.shipping_name}</p>
-                        <p className="text-gray-400 text-sm">
-                          {order.shipping_address}, {order.shipping_city}, {order.shipping_state} {order.shipping_zip}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Tracking Info */}
                     {order.tracking_number && (
                       <div className="mb-4">
                         <h4 className="text-gray-400 text-sm mb-2 flex items-center gap-2">
                           <Truck className="w-4 h-4" />
-                          Tracking Information
+                          Tracking
                         </h4>
                         <div className="bg-gray-800 rounded-lg p-3">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-white text-sm">{order.carrier?.toUpperCase()}: {order.tracking_number}</p>
-                              {order.tracking_url && (
-                                <a 
-                                  href={order.tracking_url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-green-400 text-xs flex items-center gap-1 hover:underline"
-                                >
-                                  Track Package <ExternalLink className="w-3 h-3" />
-                                </a>
-                              )}
-                            </div>
-                            {order.shipped_at && (
-                              <div className="text-right">
-                                <span className="text-gray-500 text-xs">
-                                  Shipped {new Date(order.shipped_at).toLocaleDateString()}
-                                </span>
-                                {order.estimated_delivery && (
-                                  <p className="text-purple-400 text-xs">
-                                    Est. delivery: {new Date(order.estimated_delivery).toLocaleDateString()}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                          <p className="text-white text-sm">{order.shipping_carrier?.toUpperCase()}: {order.tracking_number}</p>
+                          {order.shipped_at && <p className="text-gray-500 text-xs mt-1">Shipped {new Date(order.shipped_at).toLocaleDateString()}</p>}
                         </div>
                       </div>
                     )}
 
-                    {/* Auto-confirm notice */}
                     {order.status === 'shipped' && (
                       <div className="bg-yellow-400/10 border border-yellow-400/30 rounded-lg p-3 mb-4">
                         <p className="text-yellow-400 text-sm">
                           <Clock className="w-4 h-4 inline mr-2" />
-                          Your order will be automatically confirmed after 7 days if you don&apos;t confirm manually.
+                          Your order will auto-confirm after 7 days if you don&apos;t confirm manually.
                         </p>
                       </div>
                     )}
 
-                    {/* Confirm Delivery Button */}
                     {order.status === 'shipped' && (
                       <div className="flex justify-end">
                         <button
@@ -314,12 +302,11 @@ export default function MyOrders() {
                       </div>
                     )}
 
-                    {/* Completed notice */}
                     {order.status === 'completed' && (
                       <div className="bg-green-400/10 border border-green-400/30 rounded-lg p-3">
                         <p className="text-green-400 text-sm flex items-center gap-2">
                           <CheckCircle className="w-4 h-4" />
-                          Order completed! Coins have been released to the seller.
+                          Order completed! Coins released to seller.
                         </p>
                       </div>
                     )}

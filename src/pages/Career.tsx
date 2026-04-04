@@ -601,6 +601,20 @@ export default function Career() {
         )}
 
         {(activeTab === 'my_applications' || activeTab === 'all_applications') && (
+          <div className="space-y-4">
+            {/* Approved application congratulations banner */}
+            {activeTab === 'my_applications' && applications.some(a => a.status === 'approved') && (
+              <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <CheckCircle className="w-6 h-6 text-emerald-400" />
+                  <h3 className="text-xl font-bold text-emerald-300">Application Approved!</h3>
+                </div>
+                <p className="text-emerald-200/80">
+                  Congratulations! Your career application has been approved. Welcome to the Troll City team.
+                  Check your notifications for next steps and any role-specific instructions.
+                </p>
+              </div>
+            )}
           <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] overflow-hidden">
             {applications.length === 0 ? (
               <div className="p-12 text-center">
@@ -670,16 +684,9 @@ export default function Career() {
                             onClick={() => {
                               // Find the interview session for this application
                               const interview = interviews.find(i => i.application_id === app.id)
-                              // Note: 'interviews' state is only populated for admins/leads in this component
-                              // For regular users, we might need to fetch their specific interview or just route them
                               if (interview) {
                                 navigate(`/interview/${interview.id}`)
                               } else if (!isAdminOrLead) {
-                                // Fallback for regular users who don't have the full interviews list loaded
-                                // We should probably fetch it or just try to navigate if we had the ID.
-                                // But we don't have the interview ID on the application object here.
-                                // We can rely on the user checking their email or we could fetch the interview for this app.
-                                // For now, let's just show a toast if we can't find it.
                                 toast.error('Interview details not found. Please contact support.')
                               }
                             }}
@@ -689,6 +696,14 @@ export default function Career() {
                             Join
                           </button>
                         )}
+
+                        {/* Approved application - show congratulations */}
+                        {app.status === 'approved' && activeTab === 'my_applications' && (
+                          <span className="px-4 py-2 bg-emerald-600/20 text-emerald-400 rounded-lg text-sm font-medium flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4" />
+                            Congratulations!
+                          </span>
+                        )}
                       </div>
                     </div>
                   )
@@ -696,9 +711,10 @@ export default function Career() {
               </div>
             )}
           </div>
+          </div>
         )}
 
-{/* 
+{/*
         {activeTab === 'my_applications' && ( // Disabled old block
           <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] overflow-hidden">
              

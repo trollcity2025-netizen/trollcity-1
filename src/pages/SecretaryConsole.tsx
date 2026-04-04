@@ -25,7 +25,7 @@ import CriticalAlertsList from './admin/components/shared/CriticalAlertsList'
 import ExecutiveReportsList from './admin/components/shared/ExecutiveReportsList'
 import ManualCoinOrdersList from './admin/components/shared/ManualCoinOrdersList'
 
-type TabId = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'troll_town' | 'shifts' | 'manual_payments' | 'appeals'
+type TabId = 'intake' | 'cashouts' | 'giftcards' | 'alerts' | 'reports' | 'troll_town' | 'shifts' | 'manual_payments' | 'coin_sales' | 'appeals'
 
 export default function SecretaryConsole() {
   const { user, profile } = useAuthStore()
@@ -37,7 +37,8 @@ export default function SecretaryConsole() {
     intake: 0,
     cashouts: 0,
     alerts: 0,
-    manual_orders: 0
+    manual_orders: 0,
+    coin_sales: 0,
   })
 
   const fetchCounts = useCallback(async () => {
@@ -46,14 +47,16 @@ export default function SecretaryConsole() {
             supabase.from('executive_intake').select('id', { count: 'exact', head: true }).eq('status', 'new'),
             supabase.from('cashout_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
             supabase.from('critical_alerts').select('id', { count: 'exact', head: true }).eq('resolved', false),
-            supabase.from('manual_coin_orders').select('id', { count: 'exact', head: true }).eq('status', 'pending')
+            supabase.from('manual_coin_orders').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+            supabase.from('coin_transactions').select('id', { count: 'exact', head: true }).eq('type', 'store_purchase')
         ])
         
         setCounts({
             intake: intakeRes.count || 0,
             cashouts: cashoutRes.count || 0,
             alerts: alertsRes.count || 0,
-            manual_orders: manualRes.count || 0
+            manual_orders: manualRes.count || 0,
+            coin_sales: coinSalesRes.count || 0,
         })
     } catch (e) {
         console.error("Error fetching counts", e)
@@ -162,6 +165,14 @@ export default function SecretaryConsole() {
             alert={counts.manual_orders > 0}
             count={counts.manual_orders}
           />
+          <NavButton
+            active={activeTab === 'coin_sales'}
+            onClick={() => setActiveTab('coin_sales')}
+            icon={<DollarSign className="w-5 h-5" />}
+            label="Coin Sales"
+            alert={counts.coin_sales > 0}
+            count={counts.coin_sales}
+          />
           <NavButton 
             active={activeTab === 'giftcards'} 
             onClick={() => setActiveTab('giftcards')}
@@ -236,6 +247,7 @@ export default function SecretaryConsole() {
             {activeTab === 'intake' && <ExecutiveIntakeList viewMode="secretary" />}
             {activeTab === 'cashouts' && <CashoutRequestsList viewMode="secretary" />}
             {activeTab === 'manual_payments' && <ManualCoinOrdersList />}
+            {activeTab === 'coin_sales' && <SecretaryCoinSalesList />}
             {activeTab === 'giftcards' && <GiftCardFulfillmentList viewMode="secretary" />}
             {activeTab === 'alerts' && <CriticalAlertsList viewMode="secretary" />}
             {activeTab === 'reports' && <ExecutiveReportsList viewMode="secretary" />}
@@ -259,6 +271,108 @@ type DeedTransferView = {
   created_at: string
   seller_username?: string
   buyer_username?: string
+}
+
+const SecretaryCoinSalesList: React.FC = () => {
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [loadingSales, setLoadingSales] = useState(true)
+  const [statusFilter, setStatusFilter] = useState<'all'|'completed'|'pending'|'failed'>('all')
+
+  const loadSales = async () => {
+    setLoadingSales(true)
+    try {
+      const { data, error } = await supabase
+        .from('coin_transactions')
+        .select('id,user_id,amount,metadata,status,created_at,user_profiles:user_id(username,square_card_id)')
+        .eq('type', 'store_purchase')
+        .order('created_at', { ascending: false })
+        .limit(500)
+
+      if (error) {
+        throw error
+      }
+
+      setTransactions((data || []).map((tx: any) => ({
+        ...tx,
+        username: tx.user_profiles?.username || 'Unknown',
+        card_last4: tx.user_profiles?.square_card_id ? `•••• ${String(tx.user_profiles.square_card_id).slice(-4)}` : 'N/A'
+      })))
+    } catch (err: any) {
+      console.error('Failed to load coin sales:', err)
+      toast.error(err?.message || 'Failed to load coin sales')
+    } finally {
+      setLoadingSales(false)
+    }
+  }
+
+  useEffect(() => {
+    loadSales()
+  }, [])
+
+  const filtered = transactions.filter((tx) => {
+    if (statusFilter !== 'all' && tx.status !== statusFilter) return false
+    return true
+  })
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Coin Pack Sales</h2>
+          <p className="text-sm text-slate-400">Showing payments for coin store purchases.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            className="bg-slate-800 border border-slate-700 text-white px-3 py-1 rounded"
+          >
+            <option value="all">All</option>
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
+          <button onClick={loadSales} className="text-sm px-3 py-1 bg-indigo-600 rounded">Refresh</button>
+        </div>
+      </div>
+      {loadingSales ? (
+        <div className="text-sm text-slate-400">Loading coin sales...</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-sm text-slate-400">No coin sales found.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead>
+              <tr className="text-slate-500 uppercase text-xs">
+                <th className="px-2 py-2">Date</th>
+                <th className="px-2 py-2">User</th>
+                <th className="px-2 py-2">Coins</th>
+                <th className="px-2 py-2">Amount</th>
+                <th className="px-2 py-2">Card</th>
+                <th className="px-2 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((tx) => (
+                <tr key={tx.id} className="border-t border-slate-800">
+                  <td className="px-2 py-2 text-slate-200">{new Date(tx.created_at).toLocaleString()}</td>
+                  <td className="px-2 py-2 text-slate-200">{tx.username}</td>
+                  <td className="px-2 py-2 text-slate-200">{tx.amount}</td>
+                  <td className="px-2 py-2 text-slate-200">${tx.metadata?.amount_usd || '0.00'}</td>
+                  <td className="px-2 py-2 text-slate-200">{tx.card_last4}</td>
+                  <td className="px-2 py-2">
+                    <span className={`px-2 py-1 rounded text-xs ${tx.status === 'completed' ? 'bg-green-500/20 text-green-300' : tx.status === 'failed' ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
+                      {tx.status || 'unknown'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
 }
 
 const SecretaryTrollTownDeeds: React.FC = () => {

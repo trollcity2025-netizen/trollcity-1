@@ -2,8 +2,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime';
 import { OFFICIAL_GIFTS } from '../../lib/giftConstants';
-import { RemotionGiftPlayer } from '../remotion/RemotionGiftPlayer';
-import { getDuration, getDisplayMode, type DisplayMode } from '../../remotion/config';
+import { Gift3DOverlay } from './Gift3DAnimations';
+import { getGiftDuration } from '../../lib/giftAnimationRegistry';
 
 interface GiftAnimationOverlayProps {
   gifts?: BroadcastGift[];
@@ -34,44 +34,14 @@ const getGiftDetails = (gift: BroadcastGift): { id: string; name: string; icon: 
   return {
     id: gift.gift_id || gift.gift_slug || 'unknown',
     name: gift.gift_name || 'Gift',
-    icon: gift.gift_icon || '\uD83C\uDF81',
+    icon: gift.gift_icon || '🎁',
     cost: gift.amount || 0,
   };
 };
 
-function resolveDisplayMode(
-  receiverPosition: { top: number; left: number; width: number; height: number } | undefined,
-  participantCount: number
-): { mode: DisplayMode; style: React.CSSProperties } {
-  const hasTargetBox = !!receiverPosition && participantCount > 1;
-  if (hasTargetBox) {
-    return {
-      mode: 'target',
-      style: {
-        position: 'absolute',
-        top: `${receiverPosition!.top}px`,
-        left: `${receiverPosition!.left}px`,
-        width: `${receiverPosition!.width}px`,
-        height: `${receiverPosition!.height}px`,
-      },
-    };
-  }
-  return {
-    mode: 'fullscreen',
-    style: {
-      position: 'fixed',
-      inset: 0,
-    },
-  };
-}
-
 export default function GiftAnimationOverlay({
   gifts = [],
   onAnimationComplete,
-  userPositions,
-  getUserPositions,
-  participantNames = {},
-  participantCount = 1,
 }: GiftAnimationOverlayProps) {
   const [visibleGifts, setVisibleGifts] = useState<BroadcastGift[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -101,7 +71,7 @@ export default function GiftAnimationOverlay({
     visibleGifts.forEach(gift => {
       if (timersRef.current.has(gift.id)) return;
       const details = getGiftDetails(gift);
-      const dur = getDuration(details.cost);
+      const dur = getGiftDuration(details.cost, details.name);
       const timer = setTimeout(() => {
         timersRef.current.delete(gift.id);
         setVisibleGifts(prev => {
@@ -147,21 +117,16 @@ export default function GiftAnimationOverlay({
     <>
       {visibleGifts.map(gift => {
         const details = getGiftDetails(gift);
-        const freshPositions = getUserPositions ? getUserPositions() : {};
-        const mergedPositions = { ...userPositions, ...freshPositions };
-        const receiverPosition = gift.receiver_id ? mergedPositions[gift.receiver_id] : undefined;
-        const { mode, style } = resolveDisplayMode(receiverPosition, participantCount);
+        const dur = getGiftDuration(details.cost, details.name);
 
         return (
-          <RemotionGiftPlayer
+          <Gift3DOverlay
             key={gift.id}
-            giftId={details.id}
             giftName={details.name}
-            giftEmoji={details.icon}
-            giftCost={details.cost}
+            giftIcon={details.icon}
+            giftValue={details.cost}
+            duration={dur}
             onComplete={() => dismissGift(gift.id)}
-            displayMode={mode}
-            containerStyle={style}
           />
         );
       })}

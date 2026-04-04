@@ -492,14 +492,38 @@ export default function TrollCourt() {
 
       const date = new Date();
       date.setDate(date.getDate() + days);
+      const dateStr = date.toISOString().split('T')[0];
       
-      const { error } = await supabase
+      try {
+        // Find or create a docket for the new date
+        let { data: docket } = await supabase
+          .from('court_dockets')
+          .select('id')
+          .eq('court_date', dateStr)
+          .maybeSingle();
+
+        if (!docket) {
+          const { data: newDocket, error: docketErr } = await supabase
+            .from('court_dockets')
+            .insert({ court_date: dateStr, max_cases: 20 })
+            .select('id')
+            .single();
+          if (docketErr) throw docketErr;
+          docket = newDocket;
+        }
+
+        // Update the case to the new docket
+        const { error } = await supabase
           .from('court_cases')
-          .update({ scheduled_for: date.toISOString() })
+          .update({ docket_id: docket.id, status: 'scheduled', updated_at: new Date().toISOString() })
           .eq('id', id);
 
-      if (error) toast.error('Failed to extend case (Field scheduled_for may not exist)');
-      else toast.success('Case extended');
+        if (error) throw error;
+        toast.success(`Case extended to ${dateStr}`);
+        fetchDockets();
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to extend case');
+      }
   }
 
   const handleEditCase = async (c: any) => {

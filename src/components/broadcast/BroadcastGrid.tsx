@@ -2,7 +2,7 @@ import { useMemo, useState, useRef, useEffect, useCallback, memo, type CSSProper
 import { motion } from 'framer-motion';
 import { LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
 import { Stream } from '../../types/broadcast';
-import { User, Coins, Plus, Minus, MicOff, VideoOff, Gift, Gem, Crown, Swords, Shield, Palette } from 'lucide-react';
+import { User, Coins, Plus, Minus, MicOff, VideoOff, Gift, Gem, Crown, Swords, Shield, Palette, X, Circle, Cloud } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import UserActionModal from './UserActionModal';
 import { supabase } from '../../lib/supabase';
@@ -13,6 +13,7 @@ import { getGlowingTextStyle } from '../../lib/perkEffects';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 import { useAuthStore } from '../../lib/store';
 import { getAllPersistentGifts, type PersistentGift } from '../../lib/persistentGiftStore';
+import type { TrollToeMatch } from '../../types/trollToe';
 
 interface BattleState {
   active: boolean;
@@ -76,6 +77,10 @@ interface BroadcastGridProps {
   onToggleRgb?: () => void;
   hasRgbEffect?: boolean;
   canEditBoxes?: boolean;
+  // Troll Toe game overlays
+  trollToeMatch?: TrollToeMatch | null;
+  onTrollToeFog?: (boxIndex: number) => void;
+  canTrollToeFog?: boolean;
 }
 
 function LiveKitVideoPlayer({
@@ -337,6 +342,9 @@ export default function BroadcastGrid({
   onToggleRgb,
   hasRgbEffect = false,
   canEditBoxes = false,
+  trollToeMatch = null,
+  onTrollToeFog,
+  canTrollToeFog = false,
 }: BroadcastGridProps) {
   const { profile } = useAuthStore();
   
@@ -642,7 +650,7 @@ export default function BroadcastGrid({
   
   const baseCount = totalRequiredBoxes;
 
-  const HARD_CAP = 6;
+  const HARD_CAP = 9; // 9 boxes for Troll Toe (3x3 grid)
 
   // Only apply maxItems if it won't hide requiredBoxes
   const maxCap = typeof maxItems === 'number' ? Math.min(maxItems, HARD_CAP) : HARD_CAP;
@@ -718,6 +726,19 @@ export default function BroadcastGrid({
     touchCurrentYRef.current = null;
   }, [enableStreamSwipe, canSwipe, onSwipeDown, onSwipeUp]);
 
+  // Troll Toe winning line calculation (must be at top level, not inside .map())
+  const trollToeWinningBoxes = useMemo(() => {
+    if (!trollToeMatch || trollToeMatch.phase !== 'ended') return null;
+    const patterns = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    for (const p of patterns) {
+      const [a,b,c] = p;
+      if (trollToeMatch.boxes[a].player && trollToeMatch.boxes[b].player && trollToeMatch.boxes[c].player &&
+        trollToeMatch.boxes[a].player!.team === trollToeMatch.boxes[b].player!.team &&
+        trollToeMatch.boxes[b].player!.team === trollToeMatch.boxes[c].player!.team) return p;
+    }
+    return null;
+  }, [trollToeMatch?.phase, trollToeMatch?.boxes]);
+
   return (
     <div
       className={cn(
@@ -728,7 +749,10 @@ export default function BroadcastGrid({
         effectiveBoxCount === 3 && 'grid-cols-2 grid-rows-2',
         effectiveBoxCount === 4 && 'grid-cols-2 grid-rows-2',
         effectiveBoxCount === 5 && 'grid-cols-3 grid-rows-2',
-        effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2'
+        effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2',
+        effectiveBoxCount === 7 && 'grid-cols-3 grid-rows-3',
+        effectiveBoxCount === 8 && 'grid-cols-3 grid-rows-3',
+        effectiveBoxCount === 9 && 'grid-cols-3 grid-rows-3'
       )}
       style={enableStreamSwipe && canSwipe ? { touchAction: 'none' } : undefined}
       onTouchStart={handleTouchStart}
@@ -808,6 +832,9 @@ export default function BroadcastGrid({
           // Use real-time attributes if available
           const userAttrs = userId ? attributes[userId] : null;
 
+          // Troll Toe box state for this seat
+          const trollToeBox = trollToeMatch ? trollToeMatch.boxes[seatIndex] : null;
+
           const baseBoxClass = 'relative bg-black/50 rounded-xl overflow-hidden border border-white/10 transition-all duration-300 min-w-0 h-full';
 
           const hasGold =
@@ -832,7 +859,12 @@ export default function BroadcastGrid({
             // Battle mode: Broadcaster=RED, Challenger=BLUE
             battleState?.active && isBroadcasterSide && 'border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]',
             battleState?.active && isChallengerSide && 'border-2 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]',
-            battleState?.suddenDeath && 'animate-pulse'
+            battleState?.suddenDeath && 'animate-pulse',
+            // Troll Toe game team highlighting
+            trollToeMatch && trollToeMatch.phase !== 'waiting' && trollToeMatch.phase !== 'ended' && trollToeBox?.player?.team === 'broadcaster' && 'border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]',
+            trollToeMatch && trollToeMatch.phase !== 'waiting' && trollToeMatch.phase !== 'ended' && trollToeBox?.player?.team === 'challenger' && 'border-2 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.4)]',
+            trollToeMatch && trollToeBox?.state === 'broken' && 'border-2 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.4)]',
+            trollToeMatch && trollToeMatch.phase === 'ended' && trollToeWinningBoxes?.includes(seatIndex) && 'ring-4 ring-yellow-400 animate-pulse'
           );
 
           // Get received gifts for this user
@@ -999,6 +1031,98 @@ export default function BroadcastGrid({
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* ─── TROLL TOE GAME OVERLAYS ─── */}
+              {trollToeMatch && trollToeMatch.phase !== 'waiting' && trollToeBox && (
+                <>
+                  {/* Broken / Fogged State */}
+                  {trollToeBox.state === 'broken' && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-orange-900/50 backdrop-blur-sm">
+                      <Cloud size={28} className="text-orange-400 mb-1" />
+                      <span className="text-[10px] font-bold text-orange-300 uppercase tracking-wider">FOGGED</span>
+                      {trollToeBox.brokenCooldownEnds && (
+                        <span className="text-[9px] text-orange-300 mt-0.5 font-mono">
+                          {Math.max(0, Math.ceil((new Date(trollToeBox.brokenCooldownEnds).getTime() - Date.now()) / 1000))}s
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Troll Toe Symbol Badge (X/O) - top-left of tile */}
+                  {trollToeBox.player && trollToeBox.symbol && (
+                    <div className="absolute top-2 left-2 z-25 pointer-events-none">
+                      <div className={cn(
+                        'w-7 h-7 rounded-full flex items-center justify-center font-black text-sm border shadow-lg',
+                        trollToeBox.symbol === 'X' ? 'bg-red-600/90 border-red-400 text-white' : 'bg-blue-600/90 border-blue-400 text-white'
+                      )}>
+                        {trollToeBox.symbol === 'X' ? <X size={14} /> : <Circle size={14} />}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Troll Toe Team Badge - top-right of tile */}
+                  {trollToeBox.player && (
+                    <div className="absolute top-2 right-2 z-25 pointer-events-none">
+                      <div className={cn(
+                        'px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider shadow',
+                        trollToeBox.player.team === 'broadcaster' ? 'bg-red-600/90 text-white' : 'bg-blue-600/90 text-white'
+                      )}>
+                        {trollToeBox.player.team === 'broadcaster' ? 'BC' : 'CH'}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fog Button for non-playing viewers */}
+                  {trollToeBox.state === 'occupied' && trollToeBox.player && onTrollToeFog && canTrollToeFog && !trollToeMatch.broadcasterTeam.some(p => p.userId === userId) && !trollToeMatch.challengerTeam.some(p => p.userId === userId) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onTrollToeFog(seatIndex); }}
+                      className="absolute bottom-10 right-2 z-30 bg-orange-600/90 hover:bg-orange-500 text-white px-2 py-1 rounded-lg text-[9px] font-bold flex items-center gap-1 transition-colors shadow-lg"
+                      title={`Fog - ${trollToeMatch.fogCost} Troll Coins`}
+                    >
+                      <Cloud size={10} /> FOG · {trollToeMatch.fogCost}
+                      <Coins size={9} className="text-amber-300" />
+                    </button>
+                  )}
+
+                  {/* Spawn Protection Indicator */}
+                  {trollToeBox.player?.spawnProtectedUntil && new Date(trollToeBox.player.spawnProtectedUntil) > new Date() && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none">
+                      <Shield size={16} className="text-green-400 animate-pulse" />
+                    </div>
+                  )}
+
+                  {/* Troll Toe Timer (shown on host box 0) */}
+                  {seatIndex === 0 && (trollToeMatch.phase === 'live' || trollToeMatch.phase === 'paused') && (
+                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-25 pointer-events-none">
+                      <div className={cn(
+                        'px-4 py-1.5 rounded-full font-black text-sm font-mono tracking-wider border shadow-lg',
+                        trollToeMatch.remainingSeconds <= 30 ? 'bg-red-600/90 border-red-400 text-white animate-pulse'
+                          : trollToeMatch.remainingSeconds <= 60 ? 'bg-yellow-600/90 border-yellow-400 text-white'
+                          : 'bg-zinc-900/90 border-white/20 text-white'
+                      )}>
+                        {Math.floor(trollToeMatch.remainingSeconds / 60)}:{(trollToeMatch.remainingSeconds % 60).toString().padStart(2, '0')}
+                        {trollToeMatch.phase === 'paused' && ' PAUSED'}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Match Ended Result (shown on host box 0) */}
+                  {seatIndex === 0 && trollToeMatch.phase === 'ended' && (
+                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-25 pointer-events-none">
+                      <div className={cn(
+                        'px-4 py-2 rounded-xl font-black text-sm border shadow-lg',
+                        trollToeMatch.winnerTeam === 'broadcaster' ? 'bg-red-600/90 border-red-400 text-white'
+                          : trollToeMatch.winnerTeam === 'challenger' ? 'bg-blue-600/90 border-blue-400 text-white'
+                          : 'bg-zinc-800/90 border-zinc-500 text-white'
+                      )}>
+                        <Crown size={14} className="inline mr-1" />
+                        {trollToeMatch.winnerTeam ? `${trollToeMatch.winnerTeam === 'broadcaster' ? 'BC' : 'CH'} WINS!` : 'DRAW!'}
+                        {trollToeMatch.winnerTeam && ` +${trollToeMatch.rewardAmount} coins`}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Metadata Overlay (Bubble Style) - Moved to Top Left to avoid controls */}

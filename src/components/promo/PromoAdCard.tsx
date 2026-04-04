@@ -17,6 +17,7 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
   const navigate = useNavigate();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [showLightbox, setShowLightbox] = useState(false);
 
   const isSidebar = variant === 'sidebar';
   const isFeatured = variant === 'featured';
@@ -42,15 +43,7 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
       }
     }
 
-    // Navigate if CTA link exists
-    if (ad.cta_link) {
-      if (isInternalLink(ad.cta_link)) {
-        navigate(ad.cta_link);
-      } else {
-        window.open(ad.cta_link, '_blank', 'noopener,noreferrer');
-      }
-    }
-    
+    setShowLightbox(true);
     onClick?.();
   };
 
@@ -181,6 +174,39 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
       {/* Glow effect on hover */}
       {isHovered && (
         <div className="absolute inset-0 rounded-xl border-2 border-purple-500/50 pointer-events-none" />
+      )}
+
+      {/* Lightbox overlay */}
+      {showLightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setShowLightbox(false)}
+        >
+          <div
+            className="relative max-w-[95vw] max-h-[95vh] overflow-hidden rounded-xl bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="absolute top-2 right-2 z-20 rounded-full bg-slate-800/90 p-2 text-white hover:bg-slate-700"
+              onClick={() => setShowLightbox(false)}
+              aria-label="Close image preview"
+            >
+              ✕
+            </button>
+
+            <img
+              src={ad.image_url}
+              alt={ad.title}
+              className="max-h-[90vh] w-auto object-contain"
+              loading="lazy"
+            />
+            {ad.title && (
+              <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-3 text-white text-sm">
+                {ad.title}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -84,7 +84,7 @@ export const checkBalance = async (
         currentBalance = profile.total_earned_coins || 0
         break
       case 'either':
-        currentBalance = (profile.troll_coins || 0) + (profile.troll_coins || 0)
+        currentBalance = (profile.troll_coins || 0) + (profile.total_earned_coins || 0)
         break
     }
 
@@ -310,7 +310,12 @@ export const getTransactionHistory = async (
       return { transactions: [], error: error.message }
     }
 
-    return { transactions: data || [], error: null }
+    // Normalize: map 'amount'/'coin_delta' to 'coins' for display compatibility
+    const normalized = (data || []).map((tx: any) => ({
+      ...tx,
+      coins: tx.coins ?? tx.amount ?? tx.coin_delta ?? 0,
+    }))
+    return { transactions: normalized, error: null }
   } catch (error: any) {
     console.error('Transaction history exception:', error)
     return { transactions: [], error: error.message }

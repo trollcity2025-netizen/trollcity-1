@@ -9,24 +9,43 @@ export function useAllCreditScores(currentUserId) {
     async function fetchScores() {
       setLoading(true);
       try {
-        // Fetch all profiles with credit_score from user_profiles table
-        const { data: profiles, error } = await supabase
+        // Fetch all profiles
+        const { data: profiles, error: profilesError } = await supabase
           .from('user_profiles')
-          .select('id, username, avatar_url, credit_score')
-          .order('credit_score', { ascending: false });
+          .select('id, username, avatar_url');
 
-        if (error) throw error;
+        if (profilesError) throw profilesError;
 
-        // Map and format
-        const allScores = (profiles || []).map(p => ({
-          user_id: p.id,
-          score: p.credit_score ?? 400,
-          updated_at: new Date().toISOString(),
-          users: {
-            username: p.username || 'Unknown',
-            avatar_url: p.avatar_url
-          }
-        }));
+        // Fetch all credit scores from user_credit (single source of truth)
+        const { data: creditData, error: creditError } = await supabase
+          .from('user_credit')
+          .select('user_id, score, tier, trend_7d, updated_at');
+
+        if (creditError) throw creditError;
+
+        // Build a map of user_id -> credit data
+        const creditMap = new Map(
+          (creditData || []).map(d => [d.user_id, d])
+        );
+
+        // Only show users that have a profile (skip orphaned credit entries)
+        const allScores = (profiles || []).map(profile => {
+          const credit = creditMap.get(profile.id);
+          return {
+            user_id: profile.id,
+            score: credit?.score ?? 400,
+            tier: credit?.tier ?? 'Building',
+            trend_7d: credit?.trend_7d ?? 0,
+            updated_at: credit?.updated_at ?? new Date().toISOString(),
+            users: {
+              username: profile.username || 'Unknown',
+              avatar_url: profile.avatar_url
+            }
+          };
+        });
+
+        // Sort by score descending
+        allScores.sort((a, b) => b.score - a.score);
 
         // Move current user to top
         const mine = allScores.find((row) => row.user_id === currentUserId);

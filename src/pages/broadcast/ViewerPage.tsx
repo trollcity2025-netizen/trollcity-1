@@ -662,15 +662,23 @@ function ViewerPage() {
           
           channelRef.current = channel;
           
-          // Track presence as viewer
-          channel.track({
-            user_id: user?.id || 'viewer',
-            username: profile?.username || user?.email || 'Viewer',
-            is_host: false,
-            is_viewer: true,
-            online_at: new Date().toISOString(),
-            avatar_url: profile?.avatar_url || ''
-          }).catch(console.error);
+          // Track presence as viewer with entrance effect
+          supabase
+            .from('user_profiles')
+            .select('active_entrance_effect')
+            .eq('id', user?.id)
+            .maybeSingle()
+            .then(({ data: effectData }) => {
+              channel.track({
+                user_id: user?.id || 'viewer',
+                username: profile?.username || user?.email || 'Viewer',
+                is_host: false,
+                is_viewer: true,
+                online_at: new Date().toISOString(),
+                avatar_url: profile?.avatar_url || '',
+                entrance_effect: effectData?.active_entrance_effect || null
+              }).catch(console.error);
+            });
         } else if (status === 'CHANNEL_ERROR') {
           console.error('[ViewerPage] ❌ Subscription FAILED');
         }

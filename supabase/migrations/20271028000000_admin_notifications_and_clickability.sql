@@ -28,6 +28,23 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- Skip user-only transactional/personal notifications that admins should NOT receive
+  IF NEW.type IN (
+    'application_approved', 'application_result',
+    'coin_received', 'coin_gifted',
+    'item_purchased', 'gift_received',
+    'badge_unlocked', 'payout_status', 'payout_update',
+    'join_approved', 'role_update',
+    'referral_signup', 'referral_qualified', 'referred_bonus',
+    'seller_tier_upgraded', 'seller_tier_downgraded',
+    'new_review_received', 'appeal_decision',
+    'vehicle_auction', 'support_reply',
+    'stream_live', 'pod_live',
+    'battle_result'
+  ) THEN
+    RETURN NEW;
+  END IF;
+
   -- Insert a copy for each admin
   FOR v_admin_id IN
     SELECT id FROM public.user_profiles

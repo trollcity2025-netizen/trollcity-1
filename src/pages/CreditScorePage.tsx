@@ -209,6 +209,7 @@ export default function CreditScorePage() {
                       </div>
 
                       <div className="flex items-center gap-4">
+                        <span className="text-white font-bold text-lg">{user.score}</span>
                         <div className={`px-3 py-1 rounded-full border ${getTierColor(user.tier)}`}>
                           <p className="text-sm font-semibold">{user.tier}</p>
                         </div>

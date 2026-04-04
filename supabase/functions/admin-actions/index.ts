@@ -1458,6 +1458,12 @@ Deno.serve(async (req) => {
                     can_moderate: true,
                     assigned_by: user.id
                   });
+            } else if (appType === "journalist") {
+                  await supabaseAdmin.from('user_profiles').update({ is_journalist: true, role: 'journalist' }).eq('id', appUserId);
+            } else if (appType === "news_caster") {
+                  await supabaseAdmin.from('user_profiles').update({ is_news_caster: true, role: 'news_caster' }).eq('id', appUserId);
+            } else if (appType === "chief_news_caster") {
+                  await supabaseAdmin.from('user_profiles').update({ is_chief_news_caster: true, role: 'chief_news_caster' }).eq('id', appUserId);
             }
 
             // 3. Notification

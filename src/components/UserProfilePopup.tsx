@@ -80,6 +80,13 @@ export default function UserProfilePopup({ userId, username, onClose, onOpenChat
       navigate('/auth?mode=signup')
       return
     }
+    
+    // Prevent following yourself
+    if (user.id === userId) {
+      toast.error('You cannot follow yourself')
+      return
+    }
+    
     setActionLoading(true)
     try {
       if (isFollowing) {

@@ -1,143 +1,227 @@
-import React, { useState, useCallback, useRef } from 'react';
-import Cropper, { Area } from 'react-easy-crop';
-import { X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 
-interface CoverPhotoEditorProps {
-  image: string;
-  onSave: (croppedAreaPixels: Area) => void;
-  onCancel: () => void;
+interface AutoCoverPhotoUploadProps {
+  onSave: (result: {
+    file: File;
+    blob: Blob;
+    previewUrl: string;
+  }) => void | Promise<void>;
   isSaving?: boolean;
+  currentImage?: string;
+  targetWidth?: number;
+  targetHeight?: number;
+  outputQuality?: number;
 }
 
-export default function CoverPhotoEditor({ 
-  image, 
-  onSave, 
-  onCancel, 
-  isSaving = false 
-}: CoverPhotoEditorProps) {
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
-  const croppedAreaRef = useRef<Area | null>(null);
+// Recommended for your wide banner (matches the screenshot better)
+const DEFAULT_WIDTH = 1800;
+const DEFAULT_HEIGHT = 320;
+const DEFAULT_QUALITY = 0.92;
+const OUTPUT_TYPE = 'image/jpeg';
 
-  const aspectRatio = 3 / 1; // 3:1 aspect ratio for cover photos
+function createImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = src;
+  });
+}
 
-  const onCropComplete = useCallback((_croppedArea: Area, croppedAreaPixels: Area) => {
-    croppedAreaRef.current = croppedAreaPixels;
+async function autoCropCover(
+  file: File,
+  targetWidth: number = DEFAULT_WIDTH,
+  targetHeight: number = DEFAULT_HEIGHT,
+  quality: number = DEFAULT_QUALITY
+): Promise<{
+  blob: Blob;
+  file: File;
+  previewUrl: string;
+}> {
+  const imageUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await createImage(imageUrl);
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) throw new Error('Could not get canvas context');
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const targetAspect = targetWidth / targetHeight;
+    const imageAspect = image.width / image.height;
+
+    let sx = 0;
+    let sy = 0;
+    let sWidth = image.width;
+    let sHeight = image.height;
+
+    // === FIXED & IMPROVED CENTER CROP TO FILL ===
+    if (imageAspect > targetAspect) {
+      // Uploaded image is wider than target → crop left & right
+      sHeight = image.height;
+      sWidth = Math.round(image.height * targetAspect);
+      sx = Math.round((image.width - sWidth) / 2);
+    } else {
+      // Uploaded image is taller/narrower than target → crop top & bottom
+      sWidth = image.width;
+      sHeight = Math.round(image.width / targetAspect);
+      sy = Math.round((image.height - sHeight) / 2);
+    }
+
+    // Draw the cropped portion to exactly fill the canvas
+    ctx.drawImage(
+      image,
+      sx, sy, sWidth, sHeight,   // source rectangle (cropped)
+      0, 0, targetWidth, targetHeight  // destination (full target size)
+    );
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (!result) {
+            reject(new Error('Failed to create image blob'));
+            return;
+          }
+          resolve(result);
+        },
+        OUTPUT_TYPE,
+        quality
+      );
+    });
+
+    const outputFile = new File([blob], `cover-${Date.now()}.jpg`, {
+      type: OUTPUT_TYPE,
+    });
+
+    const previewUrl = URL.createObjectURL(blob);
+
+    return { blob, file: outputFile, previewUrl };
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
+
+export default function AutoCoverPhotoUpload({
+  onSave,
+  isSaving = false,
+  currentImage = '',
+  targetWidth = DEFAULT_WIDTH,
+  targetHeight = DEFAULT_HEIGHT,
+  outputQuality = DEFAULT_QUALITY,
+}: AutoCoverPhotoUploadProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string>(currentImage);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string>('');
+
+  // Cleanup old blob URLs
+  useEffect(() => {
+    return () => {
+      if (preview && preview.startsWith('blob:')) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
+
+  useEffect(() => {
+    if (currentImage && currentImage !== preview) {
+      setPreview(currentImage);
+    }
+  }, [currentImage]);
+
+  const handleChooseFile = useCallback(() => {
+    inputRef.current?.click();
   }, []);
 
-  const handleSave = () => {
-    if (croppedAreaRef.current) {
-      onSave(croppedAreaRef.current);
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (!selectedFile) return;
+
+    if (!selectedFile.type.startsWith('image/')) {
+      setError('Please select a valid image file.');
+      return;
+    }
+
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setError('Image size should be less than 10MB.');
+      return;
+    }
+
+    try {
+      setError('');
+      setIsProcessing(true);
+
+      const result = await autoCropCover(selectedFile, targetWidth, targetHeight, outputQuality);
+
+      setPreview((oldPreview) => {
+        if (oldPreview && oldPreview.startsWith('blob:')) {
+          URL.revokeObjectURL(oldPreview);
+        }
+        return result.previewUrl;
+      });
+
+      await onSave(result);
+    } catch (err) {
+      console.error('Cover photo processing error:', err);
+      setError('Failed to process the cover photo. Please try again.');
+    } finally {
+      setIsProcessing(false);
+      event.target.value = '';
     }
   };
 
-  const handleZoomIn = () => {
-    setZoom(prev => Math.min(prev + 0.1, 1.5));
-  };
-
-  const handleZoomOut = () => {
-    setZoom(prev => Math.max(prev - 0.1, 1));
-  };
-
-  const handleReset = () => {
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setRotation(0);
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md">
-      <div className="bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 rounded-3xl border-2 border-purple-400/50 shadow-2xl shadow-purple-500/20 w-full max-w-4xl mx-4 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-purple-500/20 bg-black/30">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300 bg-clip-text text-transparent">
-            ✨ Edit Cover Photo
-          </h2>
-          <button
-            onClick={onCancel}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-          >
-            <X size={20} className="text-gray-400" />
-          </button>
-        </div>
-
-        {/* Cropper Container */}
-        <div className="relative h-[450px] bg-gradient-to-b from-black to-slate-900">
-          <Cropper
-            image={image}
-            crop={crop}
-            zoom={1} // Always 1 - cover photos auto-crop to fill
-            rotation={rotation}
-            aspect={aspectRatio}
-            onCropChange={setCrop}
-            onZoomChange={() => {}} // Disable zoom changes
-            onCropComplete={onCropComplete}
-            showGrid={true}
-            cropShape="rect"
-            style={{
-              containerStyle: {
-                backgroundColor: '#0f0f0f',
-              },
-              cropAreaStyle: {
-                border: '2px solid rgba(168, 85, 247, 0.5)',
-                boxShadow: '0 0 20px rgba(168, 85, 247, 0.3)',
-              },
-            }}
+    <div className="w-full">
+      {/* Cover Preview - Updated to match real banner aspect ratio */}
+      <div 
+        className="relative w-full overflow-hidden rounded-2xl border border-purple-500/20 bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-900"
+        style={{ aspectRatio: `${targetWidth} / ${targetHeight}` }}
+      >
+        {preview ? (
+          <img
+            src={preview}
+            alt="Cover photo preview"
+            className="h-full w-full object-cover"
+            onError={() => setPreview('')}
           />
-        </div>
-
-        {/* Controls */}
-        <div className="p-5 bg-black/40 border-t border-purple-500/20">
-          <div className="flex items-center justify-between gap-4">
-            {/* Info */}
-            <div className="text-sm text-purple-200/70 flex items-center gap-2">
-              <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></span>
-              Drag to reposition • Cover auto-fills area
-            </div>
-
-            {/* Reset Button */}
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 transition-all text-purple-200"
-            >
-              <RotateCcw size={16} />
-              <span className="text-sm font-medium">Reset</span>
-            </button>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-sm text-white/70">
+            No cover photo selected
           </div>
-        </div>
+        )}
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-3 p-5 border-t border-purple-500/20 bg-black/30">
+        <div className="absolute inset-0 bg-black/20" />
+
+        <div className="absolute bottom-4 right-4">
           <button
-            onClick={onCancel}
-            disabled={isSaving}
-            className="px-6 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-600 transition-all text-gray-200 font-medium disabled:opacity-50"
+            type="button"
+            onClick={handleChooseFile}
+            disabled={isSaving || isProcessing}
+            className="rounded-xl border border-white/15 bg-black/60 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-md transition-all hover:bg-black/80 disabled:opacity-50"
           >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className={cn(
-              "px-8 py-2.5 rounded-xl font-bold transition-all transform hover:scale-105",
-              "bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 hover:from-pink-400 hover:to-pink-400",
-              "text-white shadow-lg shadow-pink-500/30 hover:shadow-pink-500/50",
-              "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-            )}
-          >
-            {isSaving ? (
-              <span className="flex items-center gap-2">
-                <span className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
-                Saving...
-              </span>
-            ) : (
-              '💾 Save Cover Photo'
-            )}
+            {isProcessing ? 'Processing...' : isSaving ? 'Saving...' : '✏️ Edit Cover'}
           </button>
         </div>
       </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
+      {error && (
+        <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

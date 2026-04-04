@@ -65,22 +65,24 @@ export function corsHeaders(origin?: string | null): Record<string, string> {
   return headers;
 }
 
-export function handleCorsPreflight() {
+export function handleCorsPreflight(req?: Request) {
+  const origin = req?.headers.get('origin');
   return new Response("ok", {
     status: 200,
     headers: {
-      ...corsHeaders(),
+      ...corsHeaders(origin),
       "Content-Type": "text/plain",
       "Cache-Control": "max-age=0, s-maxage=0, no-cache, no-store, must-revalidate",
     },
   });
 }
 
-export function withCors(body: unknown, status = 200) {
+export function withCors(body: unknown, status = 200, req?: Request) {
+  const origin = req?.headers.get('origin');
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders(),
+      ...corsHeaders(origin),
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
     },

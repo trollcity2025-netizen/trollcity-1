@@ -12,12 +12,11 @@ dist
 dist-ssr
 *.local
 
-# Environment variables
+# Environment variables (DO NOT commit secrets)
 .env.local
 .env.production
 .env.*
 *.env
-!/.env
 vite-env.d.ts
 src/vite-env.d.ts
 gixnow

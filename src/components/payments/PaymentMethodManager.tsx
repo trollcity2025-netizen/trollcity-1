@@ -1,29 +1,10 @@
-import React from 'react'
-import { CreditCard } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { CreditCard, Loader2, CheckCircle, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/lib/store'
 
-// Stripe toggle: verification flow stays intact; buttons are disabled when Stripe is turned off.
-// const STRIPE_ENABLED = import.meta.env.VITE_STRIPE_ENABLED !== 'false'
-// const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
-// const stripePaymentBase = '/stripe-payment-methods'
-
-// const CASH_APP_PROVIDER = 'square'
-
-export type PaymentMethodManagerProps = {
-  title?: string
-  description?: string
-}
-
-/*
-type Method = {
-  id: string
-  provider: string
-  display_name: string
-  is_default: boolean
-  brand?: string
-  last4?: string
-  exp_month?: number
-  exp_year?: number
-}
+const PROVIDER_SQUARE = 'square'
 
 type SquarePayments = {
   cashAppPay: (options: any) => Promise<any>
@@ -34,146 +15,57 @@ declare global {
     Square?: { payments: (appId: string, locationId: string) => SquarePayments }
   }
 }
-*/
 
 export default function PaymentMethodManager({
   title = 'Payment Methods',
   description = 'Manage your saved payment methods for faster checkout.'
 }: PaymentMethodManagerProps) {
-  // const { profile } = useAuthStore()
+  const { profile } = useAuthStore()
 
-  // const [methods, setMethods] = useState<Method[]>([])
-  // const [loading, setLoading] = useState(true)
-  // const [linking, setLinking] = useState(false)
-  // const [setupLoading, setSetupLoading] = useState(false)
-  // const [squareLoading, setSquareLoading] = useState(false)
-  // const [activeProvider, setActiveProvider] = useState<'stripe' | 'square'>('stripe')
-  // const [setupCounter, setSetupCounter] = useState(0)
+  const [methods, setMethods] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [linking, setLinking] = useState(false)
+  const [squareLoading, setSquareLoading] = useState(false)
+  const [squareAttached, setSquareAttached] = useState(false)
+  const [setupCounter, setSetupCounter] = useState(0)
 
-  // const stripeRef = useRef<Stripe | null>(null)
-  // const elementsRef = useRef<StripeElements | null>(null)
-  // const paymentElementRef = useRef<StripePaymentElement | null>(null)
-  // const attachedRef = useRef(false)
+  const cashAppPayRef = useRef<any>(null)
 
-  // const squarePaymentsRef = useRef<SquarePayments | null>(null)
-  // const squareAttachedRef = useRef(false)
-  // const cashAppPayRef = useRef<any>(null)
-
-  /*
   const loadMethods = useCallback(async () => {
     if (!profile?.id) return
     setLoading(true)
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('Not authenticated')
+      const { data, error } = await supabase
+        .from('user_payment_methods')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('is_default', { ascending: false })
 
-      const res = await fetch(stripePaymentBase, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ action: 'list-payment-methods' })
-      })
-
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text || 'Failed to load payment methods')
-      }
-
-      const json = await res.json().catch(() => null)
-      if (!json || !Array.isArray(json.methods)) {
-        throw new Error('Invalid payment methods response')
-      }
-
-      setMethods(json.methods)
+      if (error) throw error
+      setMethods(data || [])
     } catch (err: any) {
       console.error('Load methods failed', err)
-      toast.error(err?.message || 'Unable to load payment methods')
     } finally {
       setLoading(false)
     }
   }, [profile?.id])
 
   useEffect(() => {
-    const initStripe = async () => {
-      if (!STRIPE_ENABLED) return
-      if (!profile?.id) return
-      if (activeProvider !== 'stripe') return
-      if (attachedRef.current) return
-      if (!STRIPE_PUBLISHABLE_KEY) {
-        toast.error('Stripe publishable key is missing')
-        return
-      }
+    loadMethods()
+  }, [loadMethods])
 
-      setSetupLoading(true)
-      try {
-        if (!stripeRef.current) {
-          stripeRef.current = await loadStripe(STRIPE_PUBLISHABLE_KEY)
-        }
-
-        const { data: { session } } = await supabase.auth.getSession()
-        const token = session?.access_token
-        if (!token) throw new Error('No auth token')
-
-        const setupRes = await fetch(stripePaymentBase, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ action: 'create-setup-intent' })
-        })
-
-        if (!setupRes.ok) {
-          const text = await setupRes.text()
-          throw new Error(text || 'Failed to create setup intent')
-        }
-
-        const { clientSecret } = await setupRes.json()
-        if (!clientSecret) throw new Error('Missing client secret')
-
-        const stripe = stripeRef.current
-        if (!stripe) throw new Error('Stripe failed to initialize')
-
-        const elements = stripe.elements({
-          clientSecret,
-          appearance: {
-            theme: 'night',
-            variables: {
-              colorText: '#E5E7EB',
-              colorBackground: '#0B0B0F'
-            }
-          }
-        })
-
-        const paymentElement = elements.create('payment')
-        paymentElement.mount('#stripe-payment-element')
-
-        elementsRef.current = elements
-        paymentElementRef.current = paymentElement
-        attachedRef.current = true
-      } catch (err: any) {
-        console.error('Stripe setup error:', err)
-        toast.error(err?.message || 'Stripe setup failed')
-      } finally {
-        setSetupLoading(false)
-      }
-    }
-
+  useEffect(() => {
     const initSquare = async () => {
       if (!profile?.id) return
-      if (squareAttachedRef.current) return
-      if (activeProvider !== 'square') return
+      if (squareAttached) return
 
       const appId = import.meta.env.VITE_SQUARE_APPLICATION_ID
       const locationId = import.meta.env.VITE_SQUARE_LOCATION_ID
       const env = import.meta.env.VITE_SQUARE_ENVIRONMENT || 'sandbox'
 
       if (!appId || !locationId) {
-        toast.error('Square Cash App not configured')
+        console.warn('Square not configured')
         return
       }
 
@@ -195,7 +87,6 @@ export default function PaymentMethodManager({
 
         const payments = window.Square?.payments?.(appId, locationId)
         if (!payments) throw new Error('Square failed to initialize')
-        squarePaymentsRef.current = payments
 
         const cashAppPay = await payments.cashAppPay({
           redirectURL: window.location.href,
@@ -218,12 +109,17 @@ export default function PaymentMethodManager({
 
           setLinking(true)
           try {
-            const res = await api.post('/payments', {
-              userId: profile.id,
-              nonce: token
+            const { data, error } = await supabase.functions.invoke('add-card', {
+              body: {
+                userId: profile.id,
+                cardNonce: token,
+                provider: PROVIDER_SQUARE
+              }
             })
 
-            if (!res.success) throw new Error(res.error || 'Failed to save account')
+            if (error) throw error
+            if (!data?.success) throw new Error(data?.error || 'Failed to save card')
+
             toast.success('Cash App connected successfully!')
             await loadMethods()
             setSetupCounter((c) => c + 1)
@@ -235,127 +131,42 @@ export default function PaymentMethodManager({
         })
 
         cashAppPayRef.current = cashAppPay
-        squareAttachedRef.current = true
+        setSquareAttached(true)
       } catch (err: any) {
         console.error('Square setup error:', err)
-        toast.error(err?.message || 'Failed to initialize Cash App')
       } finally {
         setSquareLoading(false)
       }
     }
 
-    if (activeProvider === 'stripe') {
-      initStripe()
-    } else {
-      initSquare()
-    }
+    initSquare()
 
     return () => {
-      if (paymentElementRef.current) {
-        try {
-          paymentElementRef.current.destroy()
-        } catch {}
-        paymentElementRef.current = null
-      }
-      attachedRef.current = false
-
       if (cashAppPayRef.current) {
         try {
           cashAppPayRef.current.destroy()
         } catch {}
         cashAppPayRef.current = null
       }
-      squareAttachedRef.current = false
+      setSquareAttached(false)
     }
-  }, [profile?.id, setupCounter, activeProvider, loadMethods])
-
-  useEffect(() => {
-    loadMethods()
-  }, [loadMethods])
-
-  const handleLinkCard = async () => {
-    if (linking) return
-    if (!profile?.id || !stripeRef.current || !elementsRef.current) {
-      return toast.error('Please sign in.')
-    }
-
-    try {
-      setLinking(true)
-
-      const { error, setupIntent } = await stripeRef.current.confirmSetup({
-        elements: elementsRef.current,
-        confirmParams: { return_url: window.location.href },
-        redirect: 'if_required'
-      })
-
-      if (error) throw new Error(error.message || 'Setup failed')
-
-      const paymentMethodId = setupIntent?.payment_method
-      if (!paymentMethodId || typeof paymentMethodId !== 'string') {
-        throw new Error('Missing payment method')
-      }
-
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('No auth token')
-
-      const res = await fetch(stripePaymentBase, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ action: 'save-payment-method', paymentMethodId })
-      })
-
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text || 'Failed to save payment method')
-      }
-
-      toast.success('Payment method linked and set as default!')
-      await loadMethods()
-      attachedRef.current = false
-      setSetupCounter((count) => count + 1)
-    } catch (err: any) {
-      toast.error(err?.message || 'Card link failed')
-    } finally {
-      setLinking(false)
-    }
-  }
+  }, [profile?.id, setupCounter, loadMethods])
 
   const remove = async (id: string) => {
     if (!profile) return
-    const method = methods.find((m) => m.id === id)
-    if (!method) return
 
     const backup = methods
     setMethods((old) => old.filter((m) => m.id !== id))
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('No auth token')
+      const { error } = await supabase
+        .from('user_payment_methods')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', profile.id)
 
-      const isSquare = method.provider === CASH_APP_PROVIDER
-      const endpoint = isSquare ? '/payments' : stripePaymentBase
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ action: 'delete-payment-method', id })
-      })
-
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok || !j.success) {
-        setMethods(backup)
-        return toast.error(j?.error || 'Remove failed')
-      }
+      if (error) throw error
       toast.success('Payment method removed')
-      await loadMethods()
     } catch (err: any) {
       setMethods(backup)
       toast.error(err?.message || 'Remove failed')
@@ -364,30 +175,20 @@ export default function PaymentMethodManager({
 
   const setDefault = async (id: string) => {
     if (!profile) return
-    const method = methods.find((m) => m.id === id)
-    if (!method) return
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('No auth token')
+      await supabase
+        .from('user_payment_methods')
+        .update({ is_default: false })
+        .eq('user_id', profile.id)
+        .neq('id', id)
 
-      const isSquare = method.provider === CASH_APP_PROVIDER
-      const endpoint = isSquare ? '/payments' : stripePaymentBase
+      const { error } = await supabase
+        .from('user_payment_methods')
+        .update({ is_default: true })
+        .eq('id', id)
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ action: 'set-default-payment-method', id })
-      })
-
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok || !j.success) {
-        return toast.error(j?.error || 'Failed to set default')
-      }
+      if (error) throw error
 
       setMethods((old) => old.map((x) => ({ ...x, is_default: x.id === id })))
       toast.success('Default payment method updated')
@@ -395,29 +196,91 @@ export default function PaymentMethodManager({
       toast.error(err?.message || 'Failed to set default')
     }
   }
-  */
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold">{title}</h2>
         <p className="text-sm text-gray-400">{description}</p>
       </div>
 
-      <div className="p-6 bg-[#121212] rounded-lg border border-[#2C2C2C] text-center">
-        <div className="flex flex-col items-center justify-center py-8">
-          <CreditCard className="w-12 h-12 text-gray-600 mb-4" />
-          <h3 className="text-lg font-bold text-gray-300 mb-2">Payment Methods Disabled</h3>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">
-            External payment methods (Stripe, Square) are currently disabled as we transition to the internal Troll Bank economy.
-          </p>
-          <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg max-w-md w-full">
-            <h4 className="text-blue-400 font-bold mb-1">Did you know?</h4>
-            <p className="text-xs text-blue-300">
-              You can apply for loans directly from the Troll Bank to get coins!
-            </p>
+      {/* Saved Payment Methods */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium text-gray-400">Saved Methods</h3>
+        {loading ? (
+          <div className="flex items-center gap-2 text-gray-500">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Loading...
           </div>
+        ) : methods.length === 0 ? (
+          <p className="text-sm text-gray-500">No saved payment methods</p>
+        ) : (
+          <div className="space-y-2">
+            {methods.map((method) => (
+              <div
+                key={method.id}
+                className="flex items-center justify-between p-4 bg-[#121212] rounded-lg border border-[#2C2C2C]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    method.provider === PROVIDER_SQUARE ? 'bg-black' : 'bg-blue-600'
+                  }`}>
+                    {method.provider === PROVIDER_SQUARE ? (
+                      <span className="text-white text-lg">💲</span>
+                    ) : (
+                      <CreditCard className="w-5 h-5 text-white" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium text-white">
+                      {method.brand || 'Cash App'} •••• {method.last4 || '****'}
+                    </div>
+                    {method.is_default && (
+                      <span className="text-xs text-green-400">Default</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!method.is_default && (
+                    <button
+                      onClick={() => setDefault(method.id)}
+                      className="text-xs text-gray-400 hover:text-white"
+                    >
+                      Set Default
+                    </button>
+                  )}
+                  <button
+                    onClick={() => remove(method.id)}
+                    className="p-2 text-gray-400 hover:text-red-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add New Payment Method */}
+      <div className="p-6 bg-[#121212] rounded-lg border border-[#2C2C2C]">
+        <h3 className="text-lg font-bold text-white mb-4">Add Payment Method</h3>
+        
+        <div id="cash-app-pay-element" className="min-h-[100px]">
+          {squareLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+              <span className="ml-2 text-gray-400">Loading payment options...</span>
+            </div>
+          )}
         </div>
+
+        {linking && (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="w-5 h-5 animate-spin text-green-400" />
+            <span className="ml-2 text-green-400">Connecting your account...</span>
+          </div>
+        )}
       </div>
     </div>
   )

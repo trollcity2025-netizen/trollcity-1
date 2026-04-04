@@ -45,6 +45,7 @@ export default function MyEarnings() {
     created_at: string
     processed_at?: string | null
   }>>([])
+  const [savedCard, setSavedCard] = useState<{brand: string, last4: string} | null>(null)
   
   const payoutsOnHold = false;
 
@@ -153,6 +154,26 @@ export default function MyEarnings() {
       console.warn('Error loading monthly earnings (non-critical):', err)
       setMonthlyEarnings([])
     }
+
+    try {
+      const { data: savedMethods, error: savedMethodError } = await supabase
+        .from('user_payment_methods')
+        .select('brand,last4,is_default')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false })
+        .limit(1)
+
+      if (!savedMethodError && savedMethods && savedMethods.length > 0) {
+        setSavedCard({
+          brand: savedMethods[0].brand || 'Card',
+          last4: savedMethods[0].last4 || '****'
+        })
+      }
+    } catch (err) {
+      console.warn('Failed to load card methods:', err)
+      setSavedCard(null)
+    }
+
       try {
         const { data, error } = await supabase
           .from('payout_history_view')
@@ -265,6 +286,15 @@ export default function MyEarnings() {
               <span className="font-semibold text-purple-400">Automated Payouts:</span> Every Friday
             </div>
           </div>
+        </div>
+
+        <div className="bg-[#141B2F] border border-blue-500/20 rounded-2xl p-4 mb-4">
+          <h3 className="text-sm font-medium text-blue-300">Saved payment method</h3>
+          {savedCard ? (
+            <p className="text-white font-semibold mt-1">{savedCard.brand} •••• {savedCard.last4}</p>
+          ) : (
+            <p className="text-yellow-300 mt-1">No saved card. Go to Payment Settings to add a card for Coin Store purchases.</p>
+          )}
         </div>
 
         {payoutsOnHold && (

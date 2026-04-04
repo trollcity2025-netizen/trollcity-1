@@ -28,6 +28,7 @@ interface UserActionModalProps {
   createdAt?: string; // Target user's account creation date
   isHost: boolean;
   isModerator: boolean;
+  isOfficer?: boolean; // Whether current user is an officer on duty
   onClose: () => void;
   onGift: () => void;
   onGiftAll?: () => void;
@@ -42,6 +43,7 @@ export default function UserActionModal({
   createdAt,
   isHost, 
   isModerator, 
+  isOfficer = false,
   onClose, 
   onGift,
   onGiftAll,
@@ -116,7 +118,7 @@ export default function UserActionModal({
   const displayCreatedAt = createdAt || fetchedCreatedAt || undefined;
   const isTargetStaff = targetRole === 'admin' || targetRole === 'moderator' || targetRole === 'staff';
   const navigate = useNavigate();
-  const hasModActions = isHost || isModerator;
+  const hasModActions = isHost || isModerator || isOfficer;
 
   const handleKick = async () => {
     if (isTargetStaff) {
@@ -254,14 +256,17 @@ export default function UserActionModal({
         .eq('id', userId)
         .single();
 
-      // Insert report into database
-      const { error: reportError } = await supabase.from('user_reports').insert({
+      // Insert report into moderation_reports table so officers can see it
+      const { error: reportError } = await supabase.from('moderation_reports').insert({
         reporter_id: currentUser.id,
-        reported_user_id: userId,
+        target_id: userId,
         reason: selectedReason,
         description: reportDescription || null,
         stream_id: streamId || null,
-        status: 'pending'
+        status: 'pending',
+        reporter_username: reporterProfile?.username || 'Unknown',
+        target_username: reportedProfile?.username || 'Unknown',
+        created_at: new Date().toISOString()
       });
 
       if (reportError) {
@@ -424,6 +429,7 @@ export default function UserActionModal({
         <div className="p-4 space-y-3">
           
           {/* Primary Action: Gift */}
+          {!isOfficer && (
           <div className="grid grid-cols-2 gap-2">
             <button 
                 onClick={onGift}
@@ -443,6 +449,13 @@ export default function UserActionModal({
                 </button>
             )}
           </div>
+          )}
+
+          {isOfficer && (
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 text-center">
+              <p className="text-yellow-400 text-xs font-medium">Gifting disabled while on duty</p>
+            </div>
+          )}
 
           {onKickStage && (isHost || isModerator) && (
             <button 

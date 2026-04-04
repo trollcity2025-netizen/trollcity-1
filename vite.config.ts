@@ -96,7 +96,7 @@ export default defineConfig(({ mode: _mode }) => ({
   base: '/',
   server: {
     host: true, // Enable LAN access
-    https: false, // Using HTTP for LAN access
+    https: false, // HTTP for local dev, HTTPS required for WebRTC in production
     port: 5178,
     strictPort: false,
     hmr: disableHmr ? false : { overlay: false },
