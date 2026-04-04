@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
-import { CreditCard, Loader2, CheckCircle, Lock } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
+import { CreditCard, Loader2, CheckCircle, Lock } from 'lucide-react'
 import { 
   encryptCardData, 
   decryptCardData, 
@@ -14,7 +14,7 @@ import {
   validateExpiry, 
   validateCVV,
   CardData 
-} from '@/lib/cardEncryption';
+} from '@/lib/cardEncryption'
 
 interface SquarePaymentModalProps {
   isOpen: boolean;
@@ -72,8 +72,35 @@ export default function SquarePaymentModal({
   const packageId = pkg?.id || 'coins';
   const purchaseType = pkg?.purchaseType || 'coins';
 
+  // Check for locally saved card OR from user_payment_methods table
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const fetchPaymentMethods = async () => {
+      if (!userId) return;
+      try {
+        const { data, error } = await supabase
+          .from('user_payment_methods')
+          .select('*')
+          .eq('user_id', userId)
+          .order('is_default', { ascending: false })
+          .limit(5);
+        
+        if (!error && data) {
+          setSavedPaymentMethods(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch payment methods:', err);
+      }
+    };
+    
+    if (userId) {
+      fetchPaymentMethods();
+    }
+  }, [userId]);
+
   // Check for locally saved card
-  const hasSavedCard = Boolean(profile?.encrypted_card_data);
+  const hasSavedCard = Boolean(profile?.encrypted_card_data) || savedPaymentMethods.length > 0;
   const [decryptedCard, setDecryptedCard] = useState<CardData | null>(null);
 
   // Load and decrypt saved card on mount
@@ -252,20 +279,6 @@ export default function SquarePaymentModal({
       return;
     }
 
-    // Check if user has saved Square card and wants to use it
-    const hasSquareCard = profile?.square_card_id && profile?.square_customer_id;
-    
-    if (useSavedCard && hasSquareCard) {
-      // Use stored Square card for direct charge
-      await processStoredCardPayment();
-      return;
-    }
-
-    if (!validateCard()) {
-      toast.error('Please correct the errors before continuing');
-      return;
-    }
-
     setIsSubmitting(true);
     setStep('processing');
 
@@ -273,7 +286,7 @@ export default function SquarePaymentModal({
       // If saving card, encrypt and store
       let encryptedCardData: string | undefined;
       
-      if (saveCard) {
+      if (saveCard && !useSavedCard) {
         const cleanNumber = cardNumber.replace(/\s/g, '');
         const cardData: CardData = {
           cardNumber: cleanNumber,
@@ -286,7 +299,7 @@ export default function SquarePaymentModal({
         encryptedCardData = await encryptCardData(cardData);
       }
 
-      // Create Square checkout
+      // Create Square checkout (works with or without stored card)
       const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-square-checkout', {
         body: {
           userId,
@@ -390,7 +403,7 @@ export default function SquarePaymentModal({
   };
 
   // Derive hasSavedCard from profile
-  const hasExistingCard = Boolean(profile?.encrypted_card_data);
+  const hasExistingCard = Boolean(profile?.encrypted_card_data) || savedPaymentMethods.length > 0;
 
   if (!pkg) return null;
 
@@ -430,27 +443,57 @@ export default function SquarePaymentModal({
                 </div>
 
                 {/* Saved Card Option */}
-                <div 
-                  className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                    useSavedCard 
-                      ? 'bg-purple-900/30 border-purple-500/50' 
-                      : 'bg-black/20 border-white/10 hover:border-purple-500/30'
-                  }`}
-                  onClick={() => setUseSavedCard(true)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <CreditCard className="w-5 h-5 text-purple-400" />
-                      <div>
-                        <div className="font-semibold text-sm">Use Saved Card</div>
-                        <div className="text-xs text-zinc-400">
-                          {decryptedCard ? maskCardNumber(decryptedCard.cardNumber) : '•••• •••• •••• ••••'}
+                {savedPaymentMethods.length > 0 && (
+                  <div className="space-y-2">
+                    {savedPaymentMethods.map((method) => (
+                      <div 
+                        key={method.id}
+                        className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                          useSavedCard 
+                            ? 'bg-purple-900/30 border-purple-500/50' 
+                            : 'bg-black/20 border-white/10 hover:border-purple-500/30'
+                        }`}
+                        onClick={() => setUseSavedCard(true)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <CreditCard className="w-5 h-5 text-purple-400" />
+                            <div>
+                              <div className="font-semibold text-sm">{method.brand || 'Card'} •••• {method.last4}</div>
+                              <div className="text-xs text-zinc-400">{method.provider === 'square' ? 'Cash App' : method.provider}</div>
+                            </div>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border-2 ${useSavedCard ? 'bg-purple-500 border-purple-500' : 'border-zinc-500'}`} />
                         </div>
                       </div>
-                    </div>
-                    <div className={`w-4 h-4 rounded-full border-2 ${useSavedCard ? 'bg-purple-500 border-purple-500' : 'border-zinc-500'}`} />
+                    ))}
                   </div>
-                </div>
+                )}
+                
+                {/* Legacy encrypted card display */}
+                {savedPaymentMethods.length === 0 && decryptedCard && (
+                  <div 
+                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                      useSavedCard 
+                        ? 'bg-purple-900/30 border-purple-500/50' 
+                        : 'bg-black/20 border-white/10 hover:border-purple-500/30'
+                    }`}
+                    onClick={() => setUseSavedCard(true)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <CreditCard className="w-5 h-5 text-purple-400" />
+                        <div>
+                          <div className="font-semibold text-sm">Use Saved Card</div>
+                          <div className="text-xs text-zinc-400">
+                            {maskCardNumber(decryptedCard.cardNumber)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border-2 ${useSavedCard ? 'bg-purple-500 border-purple-500' : 'border-zinc-500'}`} />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
