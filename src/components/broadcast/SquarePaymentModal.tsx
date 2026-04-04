@@ -175,14 +175,22 @@ export default function SquarePaymentModal({
         .insert({
           user_id: userId,
           provider: 'square',
+          token_id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          display_name: `${cardData.cardNumber.startsWith('4') ? 'Visa' : cardData.cardNumber.startsWith('5') ? 'Mastercard' : cardData.cardNumber.startsWith('3') ? 'Amex' : 'Card'} •••• ${cleanNumber.slice(-4)}`,
           brand: cardData.cardNumber.startsWith('4') ? 'Visa' : 
                  cardData.cardNumber.startsWith('5') ? 'Mastercard' : 
                  cardData.cardNumber.startsWith('3') ? 'Amex' : 'Card',
           last4: cleanNumber.slice(-4),
+          exp_month: parseInt(cardExpiryMonth),
+          exp_year: parseInt(cardExpiryYear) + 2000,
           is_default: true,
         });
 
-      // Ignore if payment method insert fails - we still saved encrypted data
+      if (paymentMethodError) {
+        console.error('Failed to save payment method:', paymentMethodError);
+      } else {
+        console.log('Payment method saved successfully');
+      }
 
       const updatedProfile = { 
         ...profile, 
