@@ -205,36 +205,30 @@ export default function ShopView() {
 
       if (inventoryError) throw inventoryError
 
-      // Add coins to seller after purchase (subtract platform fee)
+      // Create payout hold instead of immediately crediting seller
+      // Coins are held in escrow until carrier confirms delivery
       const platformFee = Math.floor(item.price * 0.1) // 10% platform fee
       const sellerEarnings = item.price - platformFee
       
-      const addCoinsResult = await addCoins({
-        userId: shop.owner_id,
-        amount: sellerEarnings,
-        type: 'marketplace_sale',
-        description: `Sale: ${item.name}`,
-        metadata: {
-          buyer_id: user.id,
-          item_id: item.id,
-          price: item.price,
-          platform_fee: platformFee
-        }
+      // Create payout hold in escrow
+      const { data: holdData, error: holdError } = await supabase.rpc('create_marketplace_payout_hold', {
+        p_order_id: purchaseData.id,
+        p_amount: sellerEarnings
       })
       
-      if (!addCoinsResult.success) {
-        console.error('Error adding coins to seller:', addCoinsResult.error)
-        // Don't fail purchase, but log the error
+      if (holdError) {
+        console.error('Error creating payout hold:', holdError)
+        // Don't fail purchase but log - handle manually if needed
       }
 
-      // Send notification to seller
+      // Send notification to seller about new order (but payout is held)
       const { error: notifError } = await supabase
         .from('notifications')
         .insert({
           user_id: shop.owner_id,
           type: 'marketplace_sale',
-          title: 'New Sale!',
-          message: `You sold ${item.name} for ${item.price} coins!`,
+          title: 'New Order! 📦',
+          message: `You received an order for ${item.name} (${item.price} coins). Payout will be released when delivery is confirmed.`,
           link: '/marketplace/sales'
         })
       

@@ -11,6 +11,7 @@ export default function Leaderboard() {
 
   useEffect(() => {
     const load = async () => {
+      console.log('Loading leaderboard...')
       setLoading(true)
       try {
         // Optimized: Use broadcaster_stats (O(1)) instead of user_profiles scan
@@ -60,7 +61,7 @@ export default function Leaderboard() {
                             username.startsWith('fake') ||
                             username === 'sample' ||
                             username === 'user';
-          return !isTestAccount && user.total_earned_coins > 0; // Must have earned something
+          return !isTestAccount && user.total_earned_coins >= 0; // Must have earned something
         });
 
         setTopUsers(realUsers.slice(0, 20)) // Take top 20 real users
@@ -79,11 +80,13 @@ export default function Leaderboard() {
         });
 
         setTopStreams(realStreams.slice(0, 20)) // Take top 20 real streams
-      } catch {
-        setTopUsers([]); setTopStreams([])
-      } finally {
-        setLoading(false)
-      }
+} catch (error) {
+  console.error('Failed to load leaderboard:', error);
+  setTopUsers([]); setTopStreams([])
+} finally {
+  console.log('Leaderboard loading complete')
+  setLoading(false)
+}
     }
     load()
   }, [])

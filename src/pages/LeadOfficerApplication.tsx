@@ -71,7 +71,7 @@ export default function LeadOfficerApplication() {
         throw error
       }
       
-      toast.success('Lead Officer application submitted successfully! We will review your application and contact you within 3-5 business days.')
+      toast.success('Lead Officer application submitted! Once approved, you will have access to Lead HQ dashboard.')
       navigate('/')
     } catch (error: any) {
       console.error('Application submission error:', error)

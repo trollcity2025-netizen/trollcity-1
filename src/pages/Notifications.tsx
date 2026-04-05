@@ -67,11 +67,36 @@ export default function Notifications() {
         .order('created_at', { ascending: false })
         .limit(MAX_NOTIFICATIONS)
 
+      // Also fetch jail notifications
+      const { data: jailNotifs } = await supabase
+        .from('jail_notifications')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      // Transform jail notifications to match notification format
+      const transformedJailNotifs = (jailNotifs || []).map((j: any) => ({
+        id: j.id,
+        user_id: j.user_id,
+        type: j.notification_type,
+        title: j.title,
+        message: j.message,
+        data: j.data,
+        is_read: j.is_read,
+        is_dismissed: false,
+        created_at: j.created_at
+      }));
+
+      // Combine regular and jail notifications, sorted by date
+      const combined = [...(data || []), ...transformedJailNotifs].sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
       if (error) {
         setNotifications([])
       } else {
-        // Data from DB already has is_read, so we can cast directly if consistent
-        setNotifications((data || []) as Notification[])
+        setNotifications(combined as Notification[])
       }
     } catch {
       setNotifications([])
@@ -116,7 +141,37 @@ export default function Notifications() {
         (payload) => setNotifications((prev) => prev.filter((n) => n.id !== (payload.old as any).id))
       )
       .subscribe()
-    return () => { void supabase.removeChannel(channel) }
+
+    // Also subscribe to jail notifications
+    const jailChannel = supabase
+      .channel(`jail_notifications_${profile.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'jail_notifications', filter: `user_id=eq.${profile.id}` },
+        (payload) => {
+          const newJailNotif = payload.new as any;
+          setNotifications((prev) => {
+            const formatted = {
+              id: newJailNotif.id,
+              user_id: newJailNotif.user_id,
+              type: newJailNotif.notification_type,
+              title: newJailNotif.title,
+              message: newJailNotif.message,
+              data: newJailNotif.data,
+              is_read: newJailNotif.is_read,
+              is_dismissed: false,
+              created_at: newJailNotif.created_at
+            } as Notification;
+            return [formatted, ...prev].slice(0, MAX_NOTIFICATIONS);
+          });
+        }
+      )
+      .subscribe()
+
+    return () => { 
+      void supabase.removeChannel(channel)
+      void supabase.removeChannel(jailChannel)
+    }
   }, [profile])
 
   const markAllAsRead = async () => {
@@ -275,6 +330,22 @@ export default function Notifications() {
       case 'stream.kick':
       case 'stream.ban':
       case 'security.alert':
+      case 'arrest':
+      case 'sentencing':
+        return '/jail'
+      case 'release':
+        return '/'
+      case 'bond_posted':
+      case 'bond_request':
+        return '/jail'
+      case 'message_received':
+        return '/tcps'
+      case 'appeal_result':
+        return '/jail/appeal'
+      case 'moderation_action':
+      case 'stream.kick':
+      case 'stream.ban':
+      case 'security.alert':
         return metadata?.user_id
           ? `/admin/moderation?user=${metadata.user_id}`
           : metadata?.report_id
@@ -328,8 +399,13 @@ export default function Notifications() {
 
       // Court / Jail
       case 'jail_sentence':
+      case 'bond_request':
+      case 'bond_posted':
+        return '/jail'
       case 'court_summon':
-        return '/troll-court'
+      case 'attorney_hired':
+      case 'court_date':
+        return '/attorney' // Goes to attorney dashboard to hire/manage attorney
 
       // Trollg / gifts / orders
       case 'trollg_application':

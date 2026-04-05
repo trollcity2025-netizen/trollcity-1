@@ -26,24 +26,86 @@ export default function ApplicationsHub({
 }: ApplicationsHubProps) {
   const [activeTab, setActiveTab] = useState<string>('officer')
   const [applications, setApplications] = useState<any[]>([])
+  const [attorneyApps, setAttorneyApps] = useState<any[]>([])
+  const [prosecutorApps, setProsecutorApps] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchApplications = async () => {
     setLoading(true)
     try {
+      // Fetch regular applications
       const { data, error } = await supabase
         .from('applications')
         .select(`
           *,
-          user_profiles!user_id (
+          user_profiles!applications_user_id_fkey (
             username,
             email
           )
         `)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) console.warn('Regular apps error:', error)
       setApplications(data || [])
+
+      // Fetch attorney applications - first get all then fetch user info separately
+      const { data: attorneyData, error: attorneyError } = await supabase
+        .from('attorney_applications')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (attorneyError) console.warn('Attorney apps error:', attorneyError)
+      
+      // Fetch user info for attorneys
+      if (attorneyData && attorneyData.length > 0) {
+        const attorneyUserIds = attorneyData.map((a: any) => a.user_id).filter(Boolean)
+        if (attorneyUserIds.length > 0) {
+          const { data: attorneyUsers } = await supabase
+            .from('user_profiles')
+            .select('id, username, email')
+            .in('id', attorneyUserIds)
+          
+          const attorneyWithUsers = attorneyData.map((app: any) => ({
+            ...app,
+            user_profiles: attorneyUsers?.find((u: any) => u.id === app.user_id) || null
+          }))
+          setAttorneyApps(attorneyWithUsers)
+        } else {
+          setAttorneyApps(attorneyData || [])
+        }
+      } else {
+        setAttorneyApps([])
+      }
+
+      // Fetch prosecutor applications - first get all then fetch user info separately
+      const { data: prosecutorData, error: prosecutorError } = await supabase
+        .from('prosecutor_applications')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (prosecutorError) console.warn('Prosecutor apps error:', prosecutorError)
+      
+      // Fetch user info for prosecutors
+      if (prosecutorData && prosecutorData.length > 0) {
+        const prosecutorUserIds = prosecutorData.map((p: any) => p.user_id).filter(Boolean)
+        if (prosecutorUserIds.length > 0) {
+          const { data: prosecutorUsers } = await supabase
+            .from('user_profiles')
+            .select('id, username, email')
+            .in('id', prosecutorUserIds)
+          
+          const prosecutorWithUsers = prosecutorData.map((app: any) => ({
+            ...app,
+            user_profiles: prosecutorUsers?.find((u: any) => u.id === app.user_id) || null
+          }))
+          setProsecutorApps(prosecutorWithUsers)
+        } else {
+          setProsecutorApps(prosecutorData || [])
+        }
+      } else {
+        setProsecutorApps([])
+      }
+
     } catch (error) {
       console.error('Error fetching applications:', error)
       toast.error('Failed to load applications')
@@ -61,9 +123,11 @@ export default function ApplicationsHub({
     if (onLoadApplications) onLoadApplications()
   }
 
-  const officerApps = applications.filter(app => app.type.includes('officer') && app.status === 'pending')
+  const officerApps = applications.filter(app => app.type?.includes('officer') && app.status === 'pending')
   const creatorApps = applications.filter(app => (app.type === 'creator' || app.type === 'seller') && app.status === 'pending')
   const approvedApps = applications.filter(app => app.status === 'approved').slice(0, 10)
+  const pendingAttorneyApps = attorneyApps.filter(app => app.status === 'pending')
+  const pendingProsecutorApps = prosecutorApps.filter(app => app.status === 'pending')
 
   const tabs = [
     {
@@ -85,6 +149,24 @@ export default function ApplicationsHub({
       count: creatorApps.length
     },
     {
+      id: 'attorney',
+      label: 'Attorney Applications',
+      icon: <FileText className="w-4 h-4" />,
+      color: 'text-amber-400',
+      bgColor: 'bg-amber-500/20',
+      borderColor: 'border-amber-500/30',
+      count: pendingAttorneyApps.length
+    },
+    {
+      id: 'prosecutor',
+      label: 'Prosecutor Applications',
+      icon: <Users className="w-4 h-4" />,
+      color: 'text-red-400',
+      bgColor: 'bg-red-500/20',
+      borderColor: 'border-red-500/30',
+      count: pendingProsecutorApps.length
+    },
+    {
       id: 'approved',
       label: 'Recently Approved',
       icon: <CheckCircle className="w-4 h-4" />,
@@ -98,74 +180,105 @@ export default function ApplicationsHub({
   const getApplicationsForTab = (tabId: string) => {
     switch (tabId) {
       case 'officer': return officerApps
+      case 'attorney': return pendingAttorneyApps
+      case 'prosecutor': return pendingProsecutorApps
       case 'creator': return creatorApps
       case 'approved': return approvedApps
       default: return []
     }
   }
 
-  const renderApplicationCard = (app: any) => (
-    <div key={app.id} className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#2C2C2C] rounded-full flex items-center justify-center">
-            <Users className="w-5 h-5 text-gray-400" />
+  const renderApplicationCard = (app: any) => {
+    // Determine application type and display name
+    const isAttorneyApp = app.attorney_fee !== undefined || app.is_pro_bono !== undefined
+    const isProsecutorApp = app.experience !== undefined
+    
+    let displayType = app.type || 'general'
+    if (isAttorneyApp) displayType = 'attorney'
+    if (isProsecutorApp) displayType = 'prosecutor'
+    
+    // Get fee for attorney
+    const displayFee = isAttorneyApp && app.attorney_fee ? `${app.attorney_fee} TC` : null
+    
+    return (
+      <div key={app.id} className="bg-[#0A0814] border border-[#2C2C2C] rounded-lg p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#2C2C2C] rounded-full flex items-center justify-center">
+              <Users className="w-5 h-5 text-gray-400" />
+            </div>
+            <div>
+              <h4 className="font-medium text-white">{app.user_profiles?.username || 'Unknown'}</h4>
+              <p className="text-xs text-gray-400 capitalize">{displayType.replace('_', ' ')} Application</p>
+            </div>
           </div>
-          <div>
-            <h4 className="font-medium text-white">{app.user_profiles?.username || 'Unknown'}</h4>
-            <p className="text-xs text-gray-400 capitalize">{app.type.replace('_', ' ')} Application</p>
+          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+            app.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+            app.status === 'approved' ? 'bg-green-500/20 text-green-400' :
+            'bg-red-500/20 text-red-400'
+          }`}>
+            {app.status}
           </div>
         </div>
-        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-          app.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-          app.status === 'approved' ? 'bg-green-500/20 text-green-400' :
-          'bg-red-500/20 text-red-400'
-        }`}>
-          {app.status}
-        </div>
-      </div>
 
-      <div className="space-y-2 mb-4">
-        {/* Render dynamic fields from JSONB or columns if they exist, for now basic info */}
-        <div className="text-sm">
-          <span className="text-gray-400">Applied:</span>
-          <span className="text-white ml-2">{new Date(app.created_at).toLocaleDateString()}</span>
+        <div className="space-y-2 mb-4">
+          <div className="text-sm">
+            <span className="text-gray-400">Applied:</span>
+            <span className="text-white ml-2">{new Date(app.created_at).toLocaleDateString()}</span>
+          </div>
+          {app.store_name && (
+            <div className="text-sm">
+              <span className="text-gray-400">Store Name:</span>
+              <span className="text-white ml-2">{app.store_name}</span>
+            </div>
+          )}
+          {displayFee && (
+            <div className="text-sm">
+              <span className="text-gray-400">Fee:</span>
+              <span className="text-white ml-2">{displayFee}</span>
+            </div>
+          )}
+          {isAttorneyApp && app.is_pro_bono && (
+            <div className="text-sm">
+              <span className="text-amber-400">Pro Bono</span>
+            </div>
+          )}
+          {isProsecutorApp && app.experience && (
+            <div className="text-sm">
+              <span className="text-gray-400">Experience:</span>
+              <span className="text-white ml-2 truncate">{app.experience}</span>
+            </div>
+          )}
         </div>
-        {app.store_name && (
-           <div className="text-sm">
-           <span className="text-gray-400">Store Name:</span>
-           <span className="text-white ml-2">{app.store_name}</span>
-         </div>
+
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <span>ID: {app.id?.slice(0, 8)}</span>
+          {app.reviewed_at && (
+            <span>Reviewed {new Date(app.reviewed_at).toLocaleDateString()}</span>
+          )}
+        </div>
+
+        {app.status === 'pending' && (
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => onApproveApplication?.(app.id, app.user_id, displayType)}
+              className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Approve
+            </button>
+            <button
+              onClick={() => onRejectApplication?.(app.id)}
+              className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <XCircle className="w-4 h-4" />
+              Reject
+            </button>
+          </div>
         )}
       </div>
-
-      <div className="flex items-center justify-between text-xs text-gray-400">
-        <span>ID: {app.id.slice(0, 8)}</span>
-        {app.reviewed_at && (
-          <span>Reviewed {new Date(app.reviewed_at).toLocaleDateString()}</span>
-        )}
-      </div>
-
-      {app.status === 'pending' && (
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={() => onApproveApplication?.(app.id, app.user_id, app.type)}
-            className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            <CheckCircle className="w-4 h-4" />
-            Approve
-          </button>
-          <button
-            onClick={() => onRejectApplication?.(app.id)}
-            className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            <XCircle className="w-4 h-4" />
-            Reject
-          </button>
-        </div>
-      )}
-    </div>
-  )
+    )
+  }
 
   const currentApplications = getApplicationsForTab(activeTab)
 

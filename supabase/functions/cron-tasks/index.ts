@@ -44,8 +44,22 @@ Deno.serve(async (_req) => {
         console.error('Error enforcing LMPM durations:', lmpmError)
     } else if (lmpmResult?.total_ended > 0) {
         console.log(`LMPM: Auto-ended ${lmpmResult.ended_streams} streams and ${lmpmResult.ended_pods} pods.`)
-        
+    }
 
+    // 5. Auto-release inmates
+    const { data: releaseResult, error: releaseError } = await supabase.rpc('auto_release_inmates')
+    if (releaseError) {
+        console.error('Error auto-releasing inmates:', releaseError)
+    } else if (releaseResult && releaseResult.length > 0) {
+        console.log(`Auto-released ${releaseResult.length} inmates:`, releaseResult.map((r: any) => r.username).join(', '))
+    }
+
+    // 6. Clear background jail after 24 hours
+    const { error: clearBgError } = await supabase.rpc('clear_background_jail')
+    if (clearBgError) {
+        console.error('Error clearing background jail:', clearBgError)
+    } else {
+        console.log('Background jail cleared successfully')
     }
 
     return new Response(JSON.stringify({ success: true }), {

@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
-import { Shield, Users, Skull, Crown, Store, CheckCircle, XCircle, BookOpen, Newspaper, Mic, Radio } from 'lucide-react'
+import { Shield, Users, Skull, Crown, Store, CheckCircle, XCircle, BookOpen, Newspaper, Mic, Radio, Gavel } from 'lucide-react'
 
-type ApplicationType = 'troll_officer' | 'troll_family' | 'troller' | 'lead_officer' | 'seller' | 'pastor' | 'journalist' | 'news_caster' | 'chief_news_caster' | 'troll_station_dj' | 'troll_station_manager' | null
+type ApplicationType = 'troll_officer' | 'troll_family' | 'troller' | 'lead_officer' | 'seller' | 'pastor' | 'journalist' | 'news_caster' | 'chief_news_caster' | 'troll_station_dj' | 'troll_station_manager' | 'attorney' | 'prosecutor' | null
 
 export default function Application() {
   const { user, profile } = useAuthStore()
@@ -47,6 +47,10 @@ export default function Application() {
         navigate('/apply/lead-officer')
       } else if (type === 'pastor') {
         navigate('/apply/pastor')
+      } else if (type === 'attorney') {
+        navigate('/apply/attorney')
+      } else if (type === 'prosecutor') {
+        navigate('/apply/prosecutor')
       } else if (type === 'seller') {
         // Navigate to seller application - go to sell page
         navigate('/sell')
@@ -160,6 +164,24 @@ export default function Application() {
       color: 'purple',
       disabled: profile?.is_pastor,
       disabledText: 'You are already a Pastor'
+    },
+    {
+      type: 'attorney' as ApplicationType,
+      title: 'Troll Court Attorney',
+      icon: Shield,
+      description: 'Represent defendants in Troll Court, choose pro bono (200 TC/case) or set your own fee',
+      color: 'amber',
+      disabled: profile?.is_attorney,
+      disabledText: 'You are already an Attorney'
+    },
+    {
+      type: 'prosecutor' as ApplicationType,
+      title: 'Troll Court Prosecutor',
+      icon: Gavel,
+      description: 'Prosecute cases on behalf of Troll City, work with judges and attorneys',
+      color: 'red',
+      disabled: profile?.is_prosecutor,
+      disabledText: 'You are already a Prosecutor'
     },
     {
       type: 'seller' as ApplicationType,

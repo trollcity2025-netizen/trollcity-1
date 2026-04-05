@@ -155,7 +155,7 @@ export default function CoverPhotoUpload({
 
       // Update user profile with cover_url
       const { error: profileError } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .update({ cover_url: publicUrl })
         .eq('id', effectiveUserId);
 
@@ -189,7 +189,7 @@ export default function CoverPhotoUpload({
 
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .update({ cover_url: null })
         .eq('id', effectiveUserId);
 

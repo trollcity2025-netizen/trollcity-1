@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuthStore } from '@/lib/store';
 import { usePresidentSystem } from '@/hooks/usePresidentSystem';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,6 +12,7 @@ import { toast } from 'sonner';
 
 export default function PresidentialToolsModal() {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, profile } = useAuthStore();
   const { 
     isPresident, 
     isVP, 
@@ -18,8 +20,24 @@ export default function PresidentialToolsModal() {
     postAnnouncement, 
     createProposal, 
     spendTreasury, 
-    flagUser 
+    flagUser,
+    currentPresident
   } = usePresidentSystem();
+
+  // Only president and vice president get access (not admin or secretary)
+  const hasPresidentAccess = 
+    isPresident ||
+    isVP ||
+    profile?.role === 'president' || 
+    profile?.troll_role === 'president' || 
+    profile?.badge === 'president';
+  
+  console.log('PresidentialToolsModal check:', { 
+    profileRole: profile?.role, 
+    profileTrollRole: profile?.troll_role, 
+    profileBadge: profile?.badge,
+    isAdmin: profile?.is_admin 
+  });
 
   const [announcement, setAnnouncement] = useState('');
   const [proposalTitle, setProposalTitle] = useState('');
@@ -31,23 +49,35 @@ export default function PresidentialToolsModal() {
   const [flagReason, setFlagReason] = useState('');
   const [loading, setLoading] = useState(false);
 
-  if (!isPresident && !isVP) return null;
+  if (!hasPresidentAccess) return null;
 
   const handleAnnouncement = async () => {
     if (!announcement) return;
     setLoading(true);
-    await postAnnouncement(announcement);
-    setAnnouncement('');
-    setLoading(false);
+    try {
+      await postAnnouncement(announcement);
+      setAnnouncement('');
+    } catch (err: any) {
+      console.error('Announcement error:', err);
+      toast.error(err?.message || 'Failed to post announcement');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleProposal = async () => {
     if (!proposalTitle || !proposalDesc) return;
     setLoading(true);
-    await createProposal(proposalTitle, proposalDesc, proposalType);
-    setProposalTitle('');
-    setProposalDesc('');
-    setLoading(false);
+    try {
+      await createProposal(proposalTitle, proposalDesc, proposalType);
+      setProposalTitle('');
+      setProposalDesc('');
+    } catch (err: any) {
+      console.error('Proposal error:', err);
+      toast.error(err?.message || 'Failed to create proposal');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSpend = async () => {
@@ -62,19 +92,31 @@ export default function PresidentialToolsModal() {
     if (!confirm(`Are you sure you want to spend $${amount} from the Treasury? This will be logged.`)) return;
 
     setLoading(true);
-    await spendTreasury(amount, spendReason);
-    setSpendAmount('');
-    setSpendReason('');
-    setLoading(false);
+    try {
+      await spendTreasury(amount, spendReason);
+      setSpendAmount('');
+      setSpendReason('');
+    } catch (err: any) {
+      console.error('Spend error:', err);
+      toast.error(err?.message || 'Failed to spend treasury');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleFlag = async () => {
     if (!flagTargetId || !flagReason) return;
     setLoading(true);
-    await flagUser(flagTargetId, flagReason);
-    setFlagTargetId('');
-    setFlagReason('');
-    setLoading(false);
+    try {
+      await flagUser(flagTargetId, flagReason);
+      setFlagTargetId('');
+      setFlagReason('');
+    } catch (err: any) {
+      console.error('Flag error:', err);
+      toast.error(err?.message || 'Failed to flag user');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -88,7 +130,7 @@ export default function PresidentialToolsModal() {
           <span className="hidden sm:inline">Presidential Tools</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-[#0f0a18] border-amber-500/30 text-white max-w-2xl">
+      <DialogContent className="bg-[#0f0a18] border-amber-500/30 text-white max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col !absolute !top-8">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-amber-400">
             <Crown className="w-6 h-6" />
@@ -99,13 +141,14 @@ export default function PresidentialToolsModal() {
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="announcement" className="w-full">
+        <Tabs defaultValue="announcement" className="w-full flex-1 overflow-hidden">
           <TabsList className="grid w-full grid-cols-4 bg-slate-900/50 border border-slate-800">
             <TabsTrigger value="announcement"><Megaphone className="w-4 h-4 mr-2" />Announce</TabsTrigger>
             <TabsTrigger value="proposal"><FileText className="w-4 h-4 mr-2" />Proposal</TabsTrigger>
             <TabsTrigger value="treasury"><DollarSign className="w-4 h-4 mr-2" />Treasury</TabsTrigger>
             <TabsTrigger value="flag"><Flag className="w-4 h-4 mr-2" />Flag User</TabsTrigger>
           </TabsList>
+          <div className="flex-1 overflow-y-auto pr-2">
 
           {/* Announcement Tab */}
           <TabsContent value="announcement" className="space-y-4 py-4">
@@ -226,6 +269,7 @@ export default function PresidentialToolsModal() {
             </Button>
           </TabsContent>
 
+        </div>
         </Tabs>
       </DialogContent>
     </Dialog>

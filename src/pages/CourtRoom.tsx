@@ -12,7 +12,7 @@ import CourtAIController from "../components/CourtAIController";
 import UserSearchDropdown from "../components/UserSearchDropdown";
 import { Mic, MicOff, Video, VideoOff, User } from "lucide-react";
 import { Button } from "../components/ui/button";
-import CourtGeminiModal from "../components/CourtGeminiModal";
+
 import CourtDocketModal from "../components/CourtDocketModal";
 import GiftBoxModal from "../components/broadcast/GiftBoxModal";
 import { generateSummaryFeedback, CourtAgentRole } from "../lib/courtAi";
@@ -319,7 +319,7 @@ export default function CourtRoom() {
    const [remoteUsers, setRemoteUsers] = useState<RemoteParticipant[]>([]);
    const [activeCase, setActiveCase] = useState<any>(null);
    const [courtState, setCourtState] = useState<any>(null);
-   const [isGeminiModalOpen, setIsGeminiModalOpen] = useState(false);
+ 
    const [showDocketModal, setShowDocketModal] = useState(false);
    const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null);
    const [giftOpen, setGiftOpen] = useState(false);
@@ -558,7 +558,7 @@ export default function CourtRoom() {
 
 
 
-  const toggleGeminiModal = () => setIsGeminiModalOpen(!isGeminiModalOpen);
+
   const toggleDocketModal = () => setShowDocketModal(!showDocketModal);
 
   const localUserId = user?.id || '';
@@ -670,16 +670,10 @@ export default function CourtRoom() {
             <Button onClick={() => setShowNewCaseModal(true)}>Start New Case</Button>
           )}
           <Button onClick={() => setShowDocketModal(true)}>View Docket</Button>
-          <Button onClick={() => setIsGeminiModalOpen(true)}>AI Assistant</Button>
         </div>
 
         {/* Modals and other components */}
-        <CourtGeminiModal
-          isOpen={isGeminiModalOpen}
-          onClose={() => setIsGeminiModalOpen(false)}
-          courtId={courtId}
-          isAuthorized={isJudge || isOfficer}
-        />
+
         <CourtDocketModal
           isOpen={showDocketModal}
           onClose={() => setShowDocketModal(false)}

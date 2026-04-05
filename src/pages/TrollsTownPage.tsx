@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Home, Hammer, TrendingUp, Coins, ShoppingBag, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
@@ -352,6 +352,14 @@ const TrollsTownPage: React.FC = () => {
   const [sellingToBank, setSellingToBank] = useState(false)
   const [sellingAllToBank, setSellingAllToBank] = useState(false)
   const [activeTab, setActiveTab] = useState<'real_estate' | 'ktauto' | 'my_garage'>('real_estate')
+  const [searchParams] = useSearchParams()
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'ktauto' || tab === 'my_garage') {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
 
   const effectiveBalance = useMemo(() => {
     // Prefer the hook balance as it's more frequently updated
@@ -2161,10 +2169,11 @@ const TrollsTownPage: React.FC = () => {
                   {listings.map(row => {
                     const value = computeSystemValue(row)
                     const cap = Math.round(value * (1 + MAX_LISTING_PREMIUM))
+                    const isAvailable = row.is_listed && row.ask_price
                     return (
                       <div
                         key={row.id}
-                        className={`border ${trollCityTheme.borders.glass} rounded-lg p-3 ${trollCityTheme.backgrounds.card} space-y-2`}
+                        className={`border ${trollCityTheme.borders.glass} rounded-lg p-3 ${trollCityTheme.backgrounds.card} space-y-2 ${!isAvailable ? 'opacity-50' : ''}`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
@@ -2186,13 +2195,19 @@ const TrollsTownPage: React.FC = () => {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className={`text-xs ${trollCityTheme.text.muted}`}>Ask Price</p>
-                            <p className="text-sm font-semibold text-yellow-300">
-                              {(row.ask_price || 0).toLocaleString()} TC
-                            </p>
-                            <p className={`text-[10px] ${trollCityTheme.text.muted}`}>
-                              System cap {cap.toLocaleString()} TC
-                            </p>
+                            {isAvailable ? (
+                              <>
+                                <p className={`text-xs ${trollCityTheme.text.muted}`}>Ask Price</p>
+                                <p className="text-sm font-semibold text-yellow-300">
+                                  {(row.ask_price || 0).toLocaleString()} TC
+                                </p>
+                                <p className={`text-[10px] ${trollCityTheme.text.muted}`}>
+                                  System cap {cap.toLocaleString()} TC
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-xs font-semibold text-red-400">Listing Not Available</p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center justify-between">
@@ -2202,13 +2217,19 @@ const TrollsTownPage: React.FC = () => {
                               {value.toLocaleString()} TC
                             </p>
                           </div>
-                          <button
-                            disabled={buyingId === row.id}
-                            onClick={() => handleBuyProperty(row)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold disabled:opacity-60 text-white"
-                          >
-                            {buyingId === row.id ? 'Processing...' : 'Buy Home'}
-                          </button>
+                          {isAvailable ? (
+                            <button
+                              disabled={buyingId === row.id}
+                              onClick={() => handleBuyProperty(row)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold disabled:opacity-60 text-white"
+                            >
+                              {buyingId === row.id ? 'Processing...' : 'Buy Home'}
+                            </button>
+                          ) : (
+                            <span className="px-3 py-1.5 rounded-lg bg-red-900/30 border border-red-900 text-red-400 text-xs font-semibold">
+                              Sold
+                            </span>
+                          )}
                         </div>
                       </div>
                     )

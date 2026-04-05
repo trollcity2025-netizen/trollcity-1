@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../lib/store'
+import { usePresidentSystem } from '../../hooks/usePresidentSystem'
 import {
   ClipboardList,
   CreditCard,
@@ -13,7 +14,9 @@ import {
   BookOpen,
   DollarSign,
   MapPin,
-  Network
+  Network,
+  Home,
+  Car
 } from 'lucide-react'
 import ExecutiveIntakeList from '../admin/components/shared/ExecutiveIntakeList'
 import CashoutRequestsList from '../admin/components/shared/CashoutRequestsList'
@@ -30,8 +33,10 @@ import CashoutForecastPanel from './components/CashoutForecastPanel'
 import NeighborApprovals from './components/NeighborApprovals'
 import CityAdsManager from './components/CityAdsManager'
 import EmpirePartnerAdminPanel from './components/EmpirePartnerAdminPanel'
+import TrollsTownAdminPanel from './components/TrollsTownAdminPanel'
+import KTAutoAdminPanel from './components/KTAutoAdminPanel'
 
-type Tab = 'intake' | 'cashouts' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors' | 'promo_ads' | 'empire_partners'
+type Tab = 'intake' | 'cashouts' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors' | 'promo_ads' | 'empire_partners' | 'trolls_town' | 'ktauto'
 
 interface TabInfo {
   id: Tab
@@ -57,6 +62,8 @@ const tabs: TabInfo[] = [
   { id: 'staff', label: 'Staff', icon: <Users className="w-4 h-4" />, color: 'purple' },
   { id: 'promo_ads', label: 'Promo Ads', icon: <FileText className="w-4 h-4" />, color: 'orange' },
   { id: 'empire_partners', label: 'Empire Partners', icon: <Network className="w-4 h-4" />, color: 'pink' },
+  { id: 'trolls_town', label: 'Trolls Town', icon: <Home className="w-4 h-4" />, color: 'emerald' },
+  { id: 'ktauto', label: 'KTAuto', icon: <Car className="w-4 h-4" />, color: 'blue' },
 ]
 
 const getColorClasses = (color: string, active: boolean) => {
@@ -75,8 +82,8 @@ const getColorClasses = (color: string, active: boolean) => {
 }
 
 export default function SecretaryConsole() {
-  const { user, profile, logout } = useAuthStore()
-  const navigate = useNavigate()
+  const { user, profile } = useAuthStore()
+  const { currentElection, finalizeElection, loading } = usePresidentSystem()
   const [activeTab, setActiveTab] = useState<Tab>('intake')
 
   const handleLogout = async () => {
@@ -217,6 +224,18 @@ export default function SecretaryConsole() {
             <EmpirePartnerAdminPanel />
           </div>
         )
+      case 'trolls_town':
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <TrollsTownAdminPanel />
+          </div>
+        )
+      case 'ktauto':
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <KTAutoAdminPanel />
+          </div>
+        )
       default:
         return null
     }
@@ -294,6 +313,28 @@ export default function SecretaryConsole() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#05010a]">
         <div className="max-w-7xl mx-auto">
+          {/* Quick Election Control */}
+          {currentElection && currentElection.status !== 'finalized' && (
+            <div className="mb-6">
+              <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6">
+                <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-yellow-400" />
+                  Election Control
+                </h2>
+                <p className="text-slate-400 mb-4">
+                  Current election: {currentElection.title || 'Untitled'} - Status: {currentElection.status.toUpperCase()}
+                </p>
+                <button
+                  onClick={() => finalizeElection(currentElection.id)}
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                >
+                  {loading ? 'Processing...' : 'End Election & Appoint President'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {renderContent()}
         </div>
       </main>

@@ -17,6 +17,87 @@ interface AuthProps {
   initialMode?: 'login' | 'signup';
 }
 
+// Check for jail IP violations and ban if necessary
+const checkJailIpViolations = async (userId: string, ipAddress: string) => {
+  try {
+    // Check if there are any jailed users on this IP (excluding current user)
+    const { data: jailedUsers } = await supabase
+      .from('jail')
+      .select('user_id')
+      .eq('ip_address', ipAddress)
+      .neq('user_id', userId)
+      .gt('release_time', new Date().toISOString());
+
+    if (!jailedUsers || jailedUsers.length === 0) return; // No violations
+
+    // Check existing violations for this IP
+    const { data: existingViolation } = await supabase
+      .from('jail_ip_violations')
+      .select('count, is_permanent_ban')
+      .eq('ip_address', ipAddress)
+      .maybeSingle();
+
+    let newCount = 1;
+    if (existingViolation) {
+      newCount = existingViolation.count + 1;
+    }
+
+    // Update or create violation record
+    if (existingViolation) {
+      await supabase
+        .from('jail_ip_violations')
+        .update({
+          count: newCount,
+          is_permanent_ban: newCount >= 3,
+          banned_until: newCount >= 3 ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString() : null
+        })
+        .eq('ip_address', ipAddress);
+    } else {
+      await supabase
+        .from('jail_ip_violations')
+        .insert({
+          ip_address: ipAddress,
+          user_id: userId,
+          count: 1
+        });
+    }
+
+    // If 3rd violation, ban all accounts on this IP
+    if (newCount >= 3) {
+      const { data: allUsersOnIp } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .contains('ip_address_history', [{ ip: ipAddress }]);
+
+      if (allUsersOnIp && allUsersOnIp.length > 0) {
+        await supabase
+          .from('user_profiles')
+          .update({ is_banned: true })
+          .in('id', allUsersOnIp.map(u => u.id));
+
+        // Log security violation
+        await supabase
+          .from('jail_security_violations')
+          .insert({
+            user_id: userId,
+            ip_address: ipAddress,
+            violation_type: 'multi_account',
+            severity: 'critical',
+            details: { banned_users: allUsersOnIp.length, ip_address: ipAddress }
+          });
+
+        toast.error('Your IP address has been permanently banned due to multiple account violations.');
+        return;
+      }
+    }
+
+    // For first 2 violations, just warn
+    toast.warning(`Warning: Multiple accounts detected on this IP address. Violation ${newCount}/3.`);
+  } catch (error) {
+    console.error('Error checking jail IP violations:', error);
+  }
+};
+
 const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = {}) => {
   const [loading, setLoading] = useState(false)
   const [searchParams] = useSearchParams()
@@ -331,6 +412,12 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
               .from('user_profiles')
               .update({ last_known_ip: userIP, ip_address_history: updated })
               .eq('id', data.user.id)
+
+            // Check for jail IP violations
+            await checkJailIpViolations(data.user.id, userIP)
+
+            // Check for jail IP violations
+            await checkJailIpViolations(data.user.id, userIP)
           } catch {}
           
           // Track navigation to home

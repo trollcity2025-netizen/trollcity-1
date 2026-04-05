@@ -49,16 +49,42 @@ interface SellerAppeal {
   }
 }
 
+interface AttorneyApplication {
+  id: string
+  user_id: string
+  status: 'pending' | 'approved' | 'rejected'
+  attorney_fee: number
+  is_pro_bono: boolean
+  created_at: string
+  user_profiles?: {
+    username: string
+    email?: string
+  }
+}
+
+interface ProsecutorApplication {
+  id: string
+  user_id: string
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+  user_profiles?: {
+    username: string
+    email?: string
+  }
+}
+
 export default function AdminApplications() {
   const { user, refreshProfile } = useAuthStore()
   const [applications, setApplications] = useState<Application[]>([])
   const [sellerAppeals, setSellerAppeals] = useState<SellerAppeal[]>([])
+  const [attorneyApps, setAttorneyApps] = useState<AttorneyApplication[]>([])
+  const [prosecutorApps, setProsecutorApps] = useState<ProsecutorApplication[]>([])
   const [loading, setLoading] = useState(false)
   const [positionFilled, setPositionFilled] = useState(false)
   const loadingRef = useRef(false)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending')
+  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected' | 'attorney' | 'prosecutor'>('pending')
 
   const loadApplications = useCallback(async (skipLoadingState = false) => {
     if (loadingRef.current) return
@@ -67,13 +93,17 @@ export default function AdminApplications() {
     if (!skipLoadingState) setLoading(true)
 
     try {
-      const [appRes, appealRes] = await Promise.all([
+      const [appRes, appealRes, attorneyRes, prosecutorRes] = await Promise.all([
         supabase.functions.invoke('admin-actions', { body: { action: 'get_applications' } }),
-        supabase.functions.invoke('admin-actions', { body: { action: 'get_seller_appeals' } })
+        supabase.functions.invoke('admin-actions', { body: { action: 'get_seller_appeals' } }),
+        supabase.from('attorney_applications').select('*').order('created_at', { ascending: false }),
+        supabase.from('prosecutor_applications').select('*').order('created_at', { ascending: false })
       ])
 
       const { data: appData, error: appError } = appRes
       const { data: appealData, error: appealError } = appealRes
+      const { data: attorneyData, error: attorneyError } = attorneyRes
+      const { data: prosecutorData, error: prosecutorError } = prosecutorRes
 
       if (appError) throw appError
       if (appData?.error) throw new Error(appData.error)
@@ -83,6 +113,48 @@ export default function AdminApplications() {
 
       if (!appealError && !appealData?.error) {
         setSellerAppeals(appealData.appeals || [])
+      }
+
+      // Fetch user profiles for attorney applications
+      if (!attorneyError && attorneyData && attorneyData.length > 0) {
+        const userIds = attorneyData.map((a: any) => a.user_id).filter(Boolean)
+        if (userIds.length > 0) {
+          const { data: users } = await supabase
+            .from('user_profiles')
+            .select('id, username, email')
+            .in('id', userIds)
+          
+          const mapped = attorneyData.map((app: any) => ({
+            ...app,
+            user_profiles: users?.find((u: any) => u.id === app.user_id) || null
+          }))
+          setAttorneyApps(mapped as any)
+        } else {
+          setAttorneyApps([])
+        }
+      } else {
+        setAttorneyApps([])
+      }
+
+      // Fetch user profiles for prosecutor applications
+      if (!prosecutorError && prosecutorData && prosecutorData.length > 0) {
+        const userIds = prosecutorData.map((p: any) => p.user_id).filter(Boolean)
+        if (userIds.length > 0) {
+          const { data: users } = await supabase
+            .from('user_profiles')
+            .select('id, username, email')
+            .in('id', userIds)
+          
+          const mapped = prosecutorData.map((app: any) => ({
+            ...app,
+            user_profiles: users?.find((u: any) => u.id === app.user_id) || null
+          }))
+          setProsecutorApps(mapped as any)
+        } else {
+          setProsecutorApps([])
+        }
+      } else {
+        setProsecutorApps([])
       }
     } catch (err: unknown) {
       toast.error("Failed to load applications")
@@ -106,6 +178,8 @@ export default function AdminApplications() {
     const channel1 = supabase
       .channel('applications_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, handleRealtimeUpdate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attorney_applications' }, handleRealtimeUpdate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prosecutor_applications' }, handleRealtimeUpdate)
       .subscribe()
 
     return () => {
@@ -157,6 +231,160 @@ export default function AdminApplications() {
       setLoading(false)
     }
   }, [user, loadApplications, refreshProfile])
+
+
+  // APPROVE ATTORNEY APPLICATIONS
+  const handleApproveAttorney = useCallback(async (app: AttorneyApplication) => {
+    if (!user) return toast.error("You must be logged in")
+
+    try {
+      setLoading(true)
+
+      // Update attorney application status
+      const { error } = await supabase
+        .from('attorney_applications')
+        .update({
+          status: 'approved',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', app.id)
+
+      if (error) throw error
+
+      // Update user profile with attorney status and fee
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .update({
+          is_attorney: true,
+          attorney_fee: app.attorney_fee,
+          is_pro_bono: app.is_pro_bono
+        })
+        .eq('id', app.user_id)
+
+      if (profileError) throw profileError
+
+      toast.success("Attorney application approved!")
+      const scrollY = window.scrollY
+      await loadApplications()
+      if (refreshProfile) await refreshProfile()
+      requestAnimationFrame(() => window.scrollTo(0, scrollY))
+
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to approve attorney application"
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }, [user, loadApplications, refreshProfile])
+
+
+  // REJECT ATTORNEY APPLICATIONS
+  const handleRejectAttorney = useCallback(async (app: AttorneyApplication) => {
+    if (!user) return toast.error("You must be logged in")
+
+    try {
+      setLoading(true)
+
+      const { error } = await supabase
+        .from('attorney_applications')
+        .update({
+          status: 'rejected',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', app.id)
+
+      if (error) throw error
+
+      toast.success("Attorney application rejected")
+      const scrollY = window.scrollY
+      await loadApplications()
+      requestAnimationFrame(() => window.scrollTo(0, scrollY))
+
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to reject attorney application"
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }, [user, loadApplications])
+
+
+  // APPROVE PROSECUTOR APPLICATIONS
+  const handleApproveProsecutor = useCallback(async (app: ProsecutorApplication) => {
+    if (!user) return toast.error("You must be logged in")
+
+    try {
+      setLoading(true)
+
+      // Update prosecutor application status
+      const { error } = await supabase
+        .from('prosecutor_applications')
+        .update({
+          status: 'approved',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', app.id)
+
+      if (error) throw error
+
+      // Update user profile with prosecutor status
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .update({
+          is_prosecutor: true
+        })
+        .eq('id', app.user_id)
+
+      if (profileError) throw profileError
+
+      toast.success("Prosecutor application approved!")
+      const scrollY = window.scrollY
+      await loadApplications()
+      if (refreshProfile) await refreshProfile()
+      requestAnimationFrame(() => window.scrollTo(0, scrollY))
+
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to approve prosecutor application"
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }, [user, loadApplications, refreshProfile])
+
+
+  // REJECT PROSECUTOR APPLICATIONS
+  const handleRejectProsecutor = useCallback(async (app: ProsecutorApplication) => {
+    if (!user) return toast.error("You must be logged in")
+
+    try {
+      setLoading(true)
+
+      const { error } = await supabase
+        .from('prosecutor_applications')
+        .update({
+          status: 'rejected',
+          reviewed_by: user.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', app.id)
+
+      if (error) throw error
+
+      toast.success("Prosecutor application rejected")
+      const scrollY = window.scrollY
+      await loadApplications()
+      requestAnimationFrame(() => window.scrollTo(0, scrollY))
+
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to reject prosecutor application"
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }, [user, loadApplications])
 
 
   // REJECT REGULAR APPLICATIONS
@@ -341,6 +569,26 @@ export default function AdminApplications() {
             {tab.charAt(0).toUpperCase() + tab.slice(1)} ({counts[tab]})
           </button>
         ))}
+        <button
+          onClick={() => setActiveTab('attorney')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'attorney'
+              ? 'text-amber-400 border-b-2 border-amber-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Attorney ({attorneyApps.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('prosecutor')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'prosecutor'
+              ? 'text-red-400 border-b-2 border-red-400'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Prosecutor ({prosecutorApps.length})
+        </button>
       </div>
 
       <div className="flex items-center justify-between">
@@ -560,6 +808,115 @@ export default function AdminApplications() {
               </div>
             )}
           </div>
+          )}
+
+          {/* ATTORNEY APPLICATIONS */}
+          {activeTab === 'attorney' && (
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-amber-400 flex items-center gap-2">
+                ⚖️ Attorney Applications ({attorneyApps.length})
+              </h3>
+
+              {attorneyApps.filter(app => app.status === 'pending').map(app => (
+                <div key={app.id} className="bg-[#1A1A1A] border border-amber-500/30 rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <UserNameWithAge user={app.user_profiles} className="text-white font-semibold" />
+                        <span className="text-xs px-2 py-1 rounded bg-amber-900 text-amber-300">
+                          ATTORNEY APPLICATION
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-gray-500 mb-3">
+                        Applied: {new Date(app.created_at).toLocaleDateString()}
+                      </div>
+
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="text-gray-400">Type:</span>
+                          <span className="text-white ml-2">
+                            {app.is_pro_bono ? 'Pro Bono (200 TC per case)' : `Private (${app.attorney_fee} TC per case)`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="ml-4 flex gap-2">
+                      <button
+                        onClick={() => handleApproveAttorney(app)}
+                        className="px-3 py-2 bg-green-600 text-white text-xs rounded-lg"
+                      >
+                        APPROVE
+                      </button>
+                      <button
+                        onClick={() => handleRejectAttorney(app)}
+                        className="px-3 py-2 bg-red-600 text-white text-xs rounded-lg"
+                      >
+                        DENY
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {attorneyApps.filter(app => app.status === 'pending').length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="w-12 h-12 mx-auto mb-2 opacity-20 text-amber-400">⚖️</div>
+                  <p>No pending attorney applications</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* PROSECUTOR APPLICATIONS */}
+          {activeTab === 'prosecutor' && (
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-red-400 flex items-center gap-2">
+                🏛️ Prosecutor Applications ({prosecutorApps.length})
+              </h3>
+
+              {prosecutorApps.filter(app => app.status === 'pending').map(app => (
+                <div key={app.id} className="bg-[#1A1A1A] border border-red-500/30 rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <UserNameWithAge user={app.user_profiles} className="text-white font-semibold" />
+                        <span className="text-xs px-2 py-1 rounded bg-red-900 text-red-300">
+                          PROSECUTOR APPLICATION
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-gray-500 mb-3">
+                        Applied: {new Date(app.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    <div className="ml-4 flex gap-2">
+                      <button
+                        onClick={() => handleApproveProsecutor(app)}
+                        className="px-3 py-2 bg-green-600 text-white text-xs rounded-lg"
+                      >
+                        APPROVE
+                      </button>
+                      <button
+                        onClick={() => handleRejectProsecutor(app)}
+                        className="px-3 py-2 bg-red-600 text-white text-xs rounded-lg"
+                      >
+                        DENY
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {prosecutorApps.filter(app => app.status === 'pending').length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="w-12 h-12 mx-auto mb-2 opacity-20 text-red-400">🏛️</div>
+                  <p>No pending prosecutor applications</p>
+                </div>
+              )}
+            </div>
           )}
         </>
       )}

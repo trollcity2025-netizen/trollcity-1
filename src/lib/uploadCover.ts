@@ -122,7 +122,7 @@ export async function deleteCover(filePath: string): Promise<{ success: boolean;
 export async function updateProfileCover(userId: string, coverUrl: string): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .update({ cover_url: coverUrl })
       .eq('id', userId)
 

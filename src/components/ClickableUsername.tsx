@@ -3,7 +3,7 @@ import VerifiedBadge from './VerifiedBadge'
 import OfficerTierBadge from './OfficerTierBadge'
 import { EmpireBadge } from './EmpireBadge'
 import { useNavigate } from 'react-router-dom'
-import { Shield, Crown, Skull, Star, UserX, Ban, MicOff, User, LogOut, ClipboardList, Gavel } from 'lucide-react'
+import { Shield, Crown, Skull, Star, UserX, Ban, MicOff, User, LogOut, ClipboardList, Gavel, Lock } from 'lucide-react'
 import { applyGlowingUsername, getGlowingTextStyle } from '../lib/perkEffects'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
@@ -492,6 +492,56 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
             setShowSummonModal(true)
             break
         }
+
+        case 'arrest_user': {
+            const targetIsAdmin = userProfile?.is_admin || userProfile?.role === 'admin';
+            if (targetIsAdmin) {
+                toast.error('Cannot arrest an Admin. Use other moderation tools.');
+                return;
+            }
+            
+            const daysStr = prompt('Enter sentence days:', '1');
+            if (daysStr === null) return;
+            const days = parseInt(daysStr) || 1;
+            const reason = window.prompt('Reason for arrest:', 'Violation of Troll City rules') || 'Violation of rules';
+            
+            try {
+                const releaseTime = new Date();
+                releaseTime.setDate(releaseTime.getDate() + days);
+                
+                const { error } = await supabase
+                    .from('jail')
+                    .insert({
+                        user_id: targetUserId,
+                        release_time: releaseTime.toISOString(),
+                        reason: reason,
+                        sentence_days: days,
+                        arrest_by: currentUser?.id
+                    });
+                
+                if (error) throw error;
+                toast.success(`${username} arrested for ${days} day(s)`);
+                
+                await notifyAdmins(
+                    'User Arrested',
+                    `@${currentUserProfile?.username || 'Staff'} arrested @${username} for ${days} day(s)`,
+                    'moderation_action',
+                    {
+                        target_user_id: targetUserId,
+                        target_username: username,
+                        action: 'arrest',
+                        days: days,
+                        reason: reason,
+                        performed_by: currentUser?.id,
+                        performed_by_username: currentUserProfile?.username
+                    }
+                );
+            } catch (err: any) {
+                console.error('Error arresting user:', err);
+                toast.error(err.message || 'Failed to arrest user');
+            }
+            break
+        }
     }
   }
 
@@ -707,6 +757,13 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
                             >
                                 <Gavel size={14} />
                                 Summon to Court
+                            </button>
+                            <button
+                                onClick={() => handleAction('arrest_user')}
+                                className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-zinc-800 hover:text-red-300 rounded flex items-center gap-2"
+                            >
+                                <Lock size={14} />
+                                Arrest (Send to Jail)
                             </button>
                             <div className="border-t border-gray-800 my-1"></div>
                             <button

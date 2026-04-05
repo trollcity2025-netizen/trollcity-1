@@ -34,60 +34,45 @@ export default function SidebarTopBroadcasters({ isCollapsed }: SidebarTopBroadc
       startOfWeek.setHours(0, 0, 0, 0);
 
       // 2. Query gift_ledger for gifts received this week, aggregated by receiver
-      const { data: giftData, error: giftError } = await supabase
-        .from('gift_ledger')
-        .select('receiver_id, amount')
-        .eq('status', 'processed')
-        .gte('created_at', startOfWeek.toISOString());
+      const { data, error } = await supabase
+        .from('broadcaster_stats')
+        .select(`
+          total_gifts_all_time,
+          user_profiles!broadcaster_stats_user_id_fkey (
+            id,
+            username,
+            avatar_url
+          )
+        `)
+        .order('total_gifts_all_time', { ascending: false })
+        .limit(10);
 
-      if (giftError) throw giftError;
+      if (error) throw error;
 
-      // 3. Aggregate gifts per broadcaster, excluding current user
-      const giftMap = new Map<string, number>();
-      giftData?.forEach((g: any) => {
-        if (g.receiver_id === user?.id) return;
-        const current = giftMap.get(g.receiver_id) || 0;
-        giftMap.set(g.receiver_id, current + (g.amount || 0));
-      });
-
-      // 4. Sort by total gifts, take only the #1
-      const sorted = Array.from(giftMap.entries())
-        .sort((a, b) => b[1] - a[1]);
-
-      if (sorted.length === 0) {
+      if (!data || data.length === 0) {
         setBroadcaster(null);
         setLoading(false);
         return;
       }
 
-      const [topId, topGifts] = sorted[0];
+      const topBroadcaster = data[0];
 
-      // 5. Check live status
       const { data: streams } = await supabase
         .from('streams')
         .select('broadcaster_id, id, is_live')
-        .eq('broadcaster_id', topId)
+        .eq('broadcaster_id', topBroadcaster.user_profiles.id)
         .eq('is_live', true);
 
       const liveStreamId = streams?.[0]?.id;
 
-      // 6. Fetch profile
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('id, username, avatar_url')
-        .eq('id', topId)
-        .maybeSingle();
-
-      if (profile) {
-        setBroadcaster({
-          user_id: profile.id,
-          username: profile.username,
-          avatar_url: profile.avatar_url,
-          total_gifts: topGifts,
-          is_live: !!liveStreamId,
-          stream_id: liveStreamId
-        });
-      }
+      setBroadcaster({
+        user_id: topBroadcaster.user_profiles.id,
+        username: topBroadcaster.user_profiles.username,
+        avatar_url: topBroadcaster.user_profiles.avatar_url,
+        total_gifts: topBroadcaster.total_gifts_all_time,
+        is_live: !!liveStreamId,
+        stream_id: liveStreamId
+      });
     } catch (err) {
       console.error('Error fetching sidebar broadcaster:', err);
     } finally {

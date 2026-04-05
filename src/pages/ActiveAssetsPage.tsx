@@ -182,7 +182,7 @@ export default function ActiveAssetsPage() {
         <Button 
           variant="outline" 
           className={`h-24 flex flex-col items-center justify-center gap-2 ${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} hover:border-cyan-500/50 transition-all text-white hover:text-cyan-400`}
-          onClick={() => navigate('/car-dealership')}
+          onClick={() => navigate('/trollstown?tab=ktauto')}
         >
           <Car className="w-8 h-8 mb-1" />
           Car Dealership

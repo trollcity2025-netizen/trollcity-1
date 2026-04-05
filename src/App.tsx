@@ -58,7 +58,6 @@ import TermsAgreement from "./pages/TermsAgreement";
 import ExitPage from "./pages/ExitPage";
 
 import TrollBank from "./pages/TrollBank";
-import CityHall from "./pages/CityHall";
 import CityRegistry from "./pages/CityRegistry";
 const SetupPage = lazyWithRetry(() => import("./pages/broadcast/SetupPage"));
 const BroadcastPage = lazyWithRetry(() => import("./pages/broadcast/BroadcastPage"));
@@ -79,6 +78,7 @@ const EasterThemePreview = lazyWithRetry(() => import("./pages/dev/EasterThemePr
 const StreamControlPreview = lazyWithRetry(() => import("./pages/dev/StreamControlPreview"));
 const BroadcastLayoutPreview = lazyWithRetry(() => import("./pages/dev/BroadcastLayoutPreview"));
 const SetupPreview = lazyWithRetry(() => import("./pages/dev/SetupPreview"));
+const JailPreviewPage = lazyWithRetry(() => import("./pages/dev/JailPreviewPage"));
 const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 
 // Live Streaming System
@@ -190,6 +190,12 @@ const TrollerApplication = lazyWithRetry(() => import("./pages/TrollerApplicatio
 const Career = lazyWithRetry(() => import("./pages/Career"));
 const LeadOfficerApplication = lazyWithRetry(() => import("./pages/LeadOfficerApplication"));
 const PastorApplication = lazyWithRetry(() => import("./pages/PastorApplication"));
+const AttorneyApplication = lazyWithRetry(() => import("./pages/AttorneyApplication"));
+const ProsecutorApplication = lazyWithRetry(() => import("./pages/ProsecutorApplication"));
+const AttorneyDashboard = lazyWithRetry(() => import("./pages/attorney/AttorneyDashboard"));
+const ProsecutorDashboard = lazyWithRetry(() => import("./pages/prosecutor/ProsecutorDashboard"));
+const InmatesPage = lazyWithRetry(() => import("./pages/InmatesPage"));
+const JailAppealPage = lazyWithRetry(() => import("./pages/JailAppealPage"));
 const ShopEarnings = lazyWithRetry(() => import("./pages/ShopEarnings"));
 const MobileAdminDashboard = lazyWithRetry(() => import("./pages/admin/MobileAdminDashboard"));
 const PaymentsDashboard = lazyWithRetry(() => import("./pages/admin/PaymentsDashboard"));
@@ -307,8 +313,9 @@ const LoadingScreen = () => (
     if (isLoading || isRefreshing) return <LoadingScreen />;
     if (!user) return <Navigate to="/auth" replace />;
 
-    // 🚔 Jail Guard
-    if (isJailed && location.pathname !== "/jail") {
+    // 🚔 Jail Guard - Exempt admins from jail redirect so they can manage the system
+    const isAdminUser = profile?.role === UserRole.ADMIN || profile?.is_admin === true || profile?.role === UserRole.SUPERADMIN;
+    if (isJailed && !isAdminUser && location.pathname !== "/jail") {
       return <Navigate to="/jail" replace />;
     }
     
@@ -1164,7 +1171,7 @@ function AppContent() {
                   <Route path="/messages" element={<Navigate to="/tcps" replace />} />
                   <Route path="/tcps" element={<TCPS />} />
                   <Route path="/match" element={<MatchPage />} />
-          <Route path="/city-hall" element={<CityHall />} />
+          <Route path="/city-hall" element={<Navigate to="/" replace />} />
                   <Route path="/city-registry" element={<CityRegistry />} />
                 <Route path="/universe-event" element={<UniverseEventPage />} />
                 <Route path="/events/universe" element={<Navigate to="/universe-event" replace />} />
@@ -1204,6 +1211,8 @@ function AppContent() {
                   <Route path="/credit-scores" element={<CreditScorePage />} />
                   <Route path="/support" element={<Support />} />
                   <Route path="/jail" element={<JailPage />} />
+                  <Route path="/inmates" element={<InmatesPage />} />
+                  <Route path="/jail/appeal" element={<JailAppealPage />} />
                   <Route path="/wall" element={<TrollCityWall />} />
                   <Route path="/wall/:postId" element={<WallPostPage />} />
                   <Route path="/profile/setup" element={<ProfileSetup />} />
@@ -1227,6 +1236,7 @@ function AppContent() {
                    <Route path="/dev/gift-animation-showcase" element={<GiftAnimationShowcase />} />
                    <Route path="/dev/gift-animations" element={<GiftAnimationPreview />} />
                    <Route path="/dev/easter-theme-preview" element={<EasterThemePreview />} />
+                   <Route path="/dev/jail-preview" element={<JailPreviewPage />} />
 
 
                    {/* 📺 Live Streaming System */}
@@ -1310,9 +1320,13 @@ function AppContent() {
                   <Route path="/apply/troller" element={<TrollerApplication />} />
                   <Route path="/apply/lead-officer" element={<LeadOfficerApplication />} />
                   <Route path="/apply/pastor" element={<PastorApplication />} />
+                  <Route path="/apply/attorney" element={<AttorneyApplication />} />
+                  <Route path="/apply/prosecutor" element={<ProsecutorApplication />} />
                   <Route path="/apply/journalist" element={<Application />} />
                   <Route path="/apply/news-caster" element={<Application />} />
                   <Route path="/apply/chief-news-caster" element={<Application />} />
+                  <Route path="/attorney" element={<AttorneyDashboard />} />
+                  <Route path="/prosecutor" element={<ProsecutorDashboard />} />
                   <Route path="/career" element={<Career />} />
                   <Route path="/interview-room" element={<InterviewRoomPage />} />
                   <Route path="/admin/interview-test" element={<AdminInterviewDashboard />} />

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Home, MessageSquare, Video, Shield, Gavel, LogOut, FileText, ShoppingBag, Banknote, Mic, Menu, X, LogIn, UserPlus, Trash2, Building2, Landmark, Warehouse, Package, Store, Coins, TrendingUp, Shuffle, Scale, Crown, LifeBuoy, Waves, Globe, Gamepad2, Compass, Lock, BookOpen, Radio, LayoutDashboard, Newspaper, DollarSign, Users, AlertTriangle, Settings, Star, Eye, Siren, ClipboardList, BarChart3, MonitorDot, ScrollText, Calendar, Wallet, Trophy, Bell, Megaphone, Database } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown'
+import { usePresidentSystem } from '@/hooks/usePresidentSystem'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase, UserRole } from '@/lib/supabase'
 import { toast } from 'sonner'
@@ -20,9 +21,11 @@ interface RecentMessage {
 export default function BottomNavigation() {
   const { user, profile, logout } = useAuthStore()
   const { isBroadcastLockedDown } = useBroadcastLockdown()
+  const { currentElection, finalizeElection, loading } = usePresidentSystem()
   const location = useLocation()
   const navigate = useNavigate()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const [tcpsUnreadCount, setTcpsUnreadCount] = useState(0)
   const [notificationCount, setNotificationCount] = useState(0)
   const totalUnreadCount = tcpsUnreadCount + notificationCount
@@ -44,6 +47,13 @@ export default function BottomNavigation() {
   
   // Drag state
   const [isDragging, setIsDragging] = useState(false)
+
+  // Handle window resize for mobile detection
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Handle keyboard shortcut 'b' to reopen bubble
   useEffect(() => {
@@ -375,8 +385,9 @@ export default function BottomNavigation() {
   const role = profile?.role || 'viewer'
   const isAdmin = profile?.role === UserRole.ADMIN || profile?.troll_role === UserRole.ADMIN || profile?.role === UserRole.HR_ADMIN || (profile as any)?.is_admin;
   const isSecretary = profile?.role === UserRole.SECRETARY || profile?.troll_role === UserRole.SECRETARY;
-  const isLead = profile?.role === UserRole.LEAD_TROLL_OFFICER || (profile as any)?.is_lead_officer || profile?.troll_role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
+  const isLead = profile?.role === UserRole.LEAD_TROLL_OFFICER || (profile as any)?.is_lead_troll_officer;
   const isOfficer = profile?.role === UserRole.TROLL_OFFICER || (profile as any)?.is_troll_officer;
+  const isPresident = profile?.role === 'president' || profile?.troll_role === 'president' || (profile as any)?.is_president;
   const canSeeCourt = isOfficer || profile?.role === UserRole.LEAD_TROLL_OFFICER || isAdmin;
 
   const canBroadcast = () => {
@@ -400,7 +411,6 @@ export default function BottomNavigation() {
     // City Center
     { category: 'City Center', label: 'Home', icon: Home, path: '/' },
     { category: 'City Center', label: 'Troll Town', icon: Building2, path: '/trollstown' },
-    { category: 'City Center', label: 'City Hall', icon: Landmark, path: '/city-hall' },
     { category: 'City Center', label: 'Living', icon: Warehouse, path: '/living' },
     { category: 'City Center', label: 'Inventory', icon: Package, path: '/inventory' },
     { category: 'City Center', label: 'Marketplace', icon: Store, path: '/marketplace' },
@@ -420,6 +430,7 @@ export default function BottomNavigation() {
     // Social
     { category: 'Social', label: 'Postal Service', icon: MessageSquare, path: '/tcps', badge: totalUnreadCount, onClick: handleMessagesClick },
     { category: 'Social', label: 'Troll Pods', icon: Mic, path: '/pods' },
+    ...(isPresident ? [{ category: 'Social', label: 'President', icon: Crown, path: '/president' }] : []),
     { category: 'Social', label: 'Public Pool', icon: Waves, path: '/pool' },
     { category: 'Social', label: 'Universe Event', icon: Globe, path: '/universe-event' },
     { category: 'Social', label: 'Troll Wheel', icon: Gamepad2, path: '/troll-wheel' },
@@ -565,7 +576,7 @@ export default function BottomNavigation() {
 
       {/* Draggable Floating Menu Bubble - Always Visible */}
       <AnimatePresence>
-        {isBubbleVisible && (
+        {isBubbleVisible && isMobile && (
           <motion.div
             initial={{ scale: 0, opacity: 0, x: 0, y: 0 }}
             animate={{ scale: 1, opacity: 1, x: bubblePosition.x, y: bubblePosition.y }}
@@ -626,6 +637,35 @@ export default function BottomNavigation() {
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               className="fixed inset-0 z-[70] overflow-y-auto bg-gradient-to-br from-[#080b14] via-[#0c101f] to-[#080b14]"
             >
+              {/* President Tools for Current Presidents */}
+              {isPresident && (
+                <div className="p-4">
+                  <div className="bg-slate-900/50 border border-slate-800 rounded-lg p-6 mb-6">
+                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                      <Crown className="w-5 h-5 text-yellow-400" />
+                      President Tools
+                    </h3>
+                    {currentElection && currentElection.status !== 'finalized' ? (
+                      <>
+                        <p className="text-slate-400 mb-4">
+                          Current election: {currentElection.title || 'Untitled'} - Status: {currentElection.status.toUpperCase()}
+                        </p>
+                        <button
+                          onClick={() => { finalizeElection(currentElection.id); setIsMenuOpen(false); }}
+                          disabled={loading}
+                          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                        >
+                          End Election & Appoint President
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-slate-400 mb-4">
+                        No active election. Your dashboard is accessible at /president
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Header */}
               <div className="sticky top-0 z-10 bg-[#0a0e1a]/80 backdrop-blur-2xl border-b border-white/[0.06] p-4">
                 <div className="flex items-center justify-between max-w-4xl mx-auto">

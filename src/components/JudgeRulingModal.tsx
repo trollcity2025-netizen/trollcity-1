@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { X, Gavel, Scale, ExternalLink } from 'lucide-react';
+import { X, Gavel, Scale, ExternalLink, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface JudgeRulingModalProps {
@@ -12,9 +12,10 @@ interface JudgeRulingModalProps {
 }
 
 export default function JudgeRulingModal({ isOpen, onClose, caseData, onSuccess }: JudgeRulingModalProps) {
-  const [rulingType, setRulingType] = useState<'dismissed' | 'plaintiff_favored' | 'defendant_favored' | ''>('');
+  const [rulingType, setRulingType] = useState<'dismissed' | 'plaintiff_favored' | 'defendant_favored' | 'sentence_to_jail' | ''>('');
   const [rulingNotes, setRulingNotes] = useState('');
   const [awardAmount, setAwardAmount] = useState<number>(0);
+  const [jailDays, setJailDays] = useState<number>(1);
   const [loading, setLoading] = useState(false);
 
   const isImpeachment = caseData?.category === 'IMPEACHMENT';
@@ -25,9 +26,39 @@ export default function JudgeRulingModal({ isOpen, onClose, caseData, onSuccess 
     if (!rulingType) return toast.error('Please select a verdict');
     if (!rulingNotes) return toast.error('Please provide ruling notes');
     if (rulingType === 'plaintiff_favored' && awardAmount < 0) return toast.error('Award amount cannot be negative');
+    if (rulingType === 'sentence_to_jail' && jailDays < 1) return toast.error('Please enter valid jail days');
 
     setLoading(true);
     try {
+      // Handle sentence to jail
+      if (rulingType === 'sentence_to_jail') {
+        const releaseTime = new Date();
+        releaseTime.setDate(releaseTime.getDate() + jailDays);
+        
+        const { error: jailError } = await supabase
+          .from('jail')
+          .insert({
+            user_id: caseData.defendant_id,
+            release_time: releaseTime.toISOString(),
+            reason: rulingNotes,
+            sentence_days: jailDays,
+            arrest_by: null // Judge issued the sentence
+          });
+        
+        if (jailError) throw jailError;
+        
+        // Also update the case status
+        await supabase
+          .from('court_cases')
+          .update({ status: 'resolved', judgment: rulingNotes })
+          .eq('id', caseData.id);
+        
+        toast.success(`Defendant sentenced to ${jailDays} day(s) in jail`);
+        onSuccess();
+        onClose();
+        return;
+      }
+
       const { data, error } = await supabase.rpc('rule_civil_lawsuit', {
         p_case_id: caseData.id,
         p_verdict: rulingType,
@@ -163,6 +194,21 @@ export default function JudgeRulingModal({ isOpen, onClose, caseData, onSuccess 
                   <span className="font-semibold">{isImpeachment ? 'NOT GUILTY (Acquit)' : 'Rule for Defendant'}</span>
                   <span className="text-xs">{isImpeachment ? 'Retain Presidency' : 'No Damages'}</span>
                 </button>
+
+                <button
+                  onClick={() => setRulingType('sentence_to_jail')}
+                  className={`w-full p-4 rounded-lg border flex items-center justify-between transition-all ${
+                    rulingType === 'sentence_to_jail' 
+                      ? 'bg-red-900/40 border-red-500 text-red-100' 
+                      : 'bg-black/20 border-white/10 text-gray-400 hover:bg-white/5'
+                  }`}
+                >
+                  <span className="font-semibold flex items-center gap-2">
+                    <Lock size={16} />
+                    Sentence to Jail
+                  </span>
+                  <span className="text-xs">Send defendant to jail</span>
+                </button>
               </div>
             </div>
 
@@ -182,6 +228,24 @@ export default function JudgeRulingModal({ isOpen, onClose, caseData, onSuccess 
                 <p className="text-xs text-gray-500">
                   This amount will be automatically transferred from the Defendant&apos;s balance to the Plaintiff.
                   If the Defendant has insufficient funds, the maximum available balance will be transferred.
+                </p>
+              </div>
+            )}
+
+            {rulingType === 'sentence_to_jail' && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                <label className="text-sm font-medium text-gray-300">Jail Sentence (Days)</label>
+                <input
+                  type="number"
+                  value={jailDays}
+                  onChange={(e) => setJailDays(parseInt(e.target.value) || 1)}
+                  className="w-full bg-black/30 border border-red-500/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-400"
+                  min="1"
+                  max="365"
+                />
+                <p className="text-xs text-gray-500">
+                  The defendant will be sent to jail for the specified number of days.
+                  They will not be able to use most city services while incarcerated.
                 </p>
               </div>
             )}

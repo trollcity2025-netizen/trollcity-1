@@ -89,6 +89,48 @@ const jobPositions: JobPosition[] = [
     color: 'from-purple-500 to-pink-500'
   },
   {
+    id: 'attorney',
+    title: 'Troll Court Attorney',
+    department: 'Troll Court',
+    description: 'Defense attorney representing defendants in Troll Court. Advocates for clients, presents cases, and ensures fair proceedings.',
+    requirements: [
+      'Strong legal knowledge and reasoning',
+      'Excellent communication skills',
+      'Ability to build persuasive arguments',
+      'Available for court sessions',
+      'Professional demeanor'
+    ],
+    benefits: [
+      'Attorney role and badge',
+      'Access to court case system',
+      'Represent clients in court',
+      'Build reputation as advocate'
+    ],
+    icon: <FileText className="w-6 h-6" />,
+    color: 'from-amber-500 to-yellow-500'
+  },
+  {
+    id: 'prosecutor',
+    title: 'Troll Court Prosecutor',
+    department: 'Troll Court',
+    description: 'Prosecuting attorney representing the city in criminal cases. Presents evidence, questions witnesses, and seeks justice.',
+    requirements: [
+      'Understanding of criminal procedure',
+      'Strong presentation skills',
+      'Ability to examine evidence critically',
+      'Available for court sessions',
+      'Commitment to justice'
+    ],
+    benefits: [
+      'Prosecutor role and badge',
+      'Access to case management',
+      'Present cases in court',
+      'City-wide recognition'
+    ],
+    icon: <Users className="w-6 h-6" />,
+    color: 'from-red-500 to-orange-500'
+  },
+  {
     id: 'pastor',
     title: 'Pastor',
     department: 'Spiritual',
@@ -294,34 +336,106 @@ export default function Career() {
         setLoading(true)
         
         if (activeTab === 'my_applications') {
-          const { data, error } = await supabase
-            .from('applications')
-            .select('id, type, status, created_at, reviewed_at')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
+          const [regularApps, attorneyApps, prosecutorApps] = await Promise.all([
+            supabase
+              .from('applications')
+              .select('id, type, status, created_at, reviewed_at')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('attorney_applications')
+              .select('id, status, created_at, reviewed_at')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('prosecutor_applications')
+              .select('id, status, created_at, reviewed_at')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false })
+          ])
 
-          if (error) throw error
-          setApplications(data || [])
+          // Log errors for debugging
+          // Continue even if some queries fail - log errors but don't throw
+          if (regularApps.error) console.error('Regular apps error:', regularApps.error)
+          if (attorneyApps.error) console.error('Attorney apps error:', attorneyApps.error)
+          if (prosecutorApps.error) console.error('Prosecutor apps error:', prosecutorApps.error)
+
+          console.log('Attorney apps raw data:', attorneyApps.data)
+          console.log('Prosecutor apps raw data:', prosecutorApps.data)
+
+          const allApps = [
+            ...(regularApps.data || []).map((a: any) => ({ ...a, applicationType: 'regular' })),
+            ...(attorneyApps.data || []).map((a: any) => ({ ...a, type: 'attorney', applicationType: 'attorney' })),
+            ...(prosecutorApps.data || []).map((a: any) => ({ ...a, type: 'prosecutor', applicationType: 'prosecutor' }))
+          ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+          console.log('My applications fetched:', { 
+            regular: regularApps.data?.length || 0, 
+            attorney: attorneyApps.data?.length || 0, 
+            prosecutor: prosecutorApps.data?.length || 0 
+          })
+
+          setApplications(allApps)
+
+          setApplications(allApps)
         } else if (activeTab === 'all_applications' && isAdminOrLead) {
-            const { data, error } = await supabase
-            .from('applications')
-            .select(`
-              id,
-              type,
-              status,
-              created_at,
-              reviewed_at,
-              answers,
-              user:user_profiles!applications_user_id_fkey (
-                username,
-                full_name,
-                avatar_url
-              )
-            `)
-            .order('created_at', { ascending: false })
+          const [regularApps, attorneyApps, prosecutorApps] = await Promise.all([
+            supabase
+              .from('applications')
+              .select('id, type, status, created_at, reviewed_at, answers, user_id')
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('attorney_applications')
+              .select('id, status, created_at, reviewed_at, data, user_id')
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('prosecutor_applications')
+              .select('id, status, created_at, reviewed_at, data, user_id')
+              .order('created_at', { ascending: false })
+          ])
 
-          if (error) throw error
-          setApplications(data || [])
+          // Continue even if some queries fail
+          if (regularApps.error) console.error('All - Regular apps error:', regularApps.error)
+          if (attorneyApps.error) console.error('All - Attorney apps error:', attorneyApps.error)
+          if (prosecutorApps.error) console.error('All - Prosecutor apps error:', prosecutorApps.error)
+
+          // Fetch user profiles for attorneys and prosecutors
+        const allUserIds = [
+          ...(attorneyApps.data || []).map((a: any) => a.user_id),
+          ...(prosecutorApps.data || []).map((a: any) => a.user_id)
+        ].filter(Boolean)
+
+        let userMap = new Map()
+        if (allUserIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('user_profiles')
+            .select('id, username, full_name, avatar_url')
+            .in('id', [...new Set(allUserIds)])
+          
+          if (profiles) {
+            userMap = new Map(profiles.map((p: any) => [p.id, p]))
+          }
+        }
+
+        const allApps = [
+          ...(regularApps.data || []).map((a: any) => ({ ...a, applicationType: 'regular' })),
+          ...(attorneyApps.data || []).map((a: any) => ({ 
+            ...a, 
+            type: 'attorney', 
+            answers: a.data,
+            applicationType: 'attorney',
+            user: userMap.get(a.user_id) || null
+          })),
+          ...(prosecutorApps.data || []).map((a: any) => ({ 
+            ...a, 
+            type: 'prosecutor', 
+            answers: a.data,
+            applicationType: 'prosecutor',
+            user: userMap.get(a.user_id) || null
+          }))
+        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+          setApplications(allApps)
         }
       } catch (error) {
         console.error('Error fetching data:', error)
@@ -396,6 +510,12 @@ export default function Career() {
         break
       case 'pastor':
         navigate('/apply/pastor')
+        break
+      case 'attorney':
+        navigate('/apply/attorney')
+        break
+      case 'prosecutor':
+        navigate('/apply/prosecutor')
         break
       case 'journalist':
       case 'news_caster':
@@ -639,15 +759,16 @@ export default function Career() {
                 {applications.map((app) => {
                   const position = jobPositions.find(p => p.id === app.type)
                   const applicantName = app.user?.full_name || app.user?.username || 'Unknown User'
+                  const displayType = app.type === 'attorney' ? 'Troll Court Attorney' : app.type === 'prosecutor' ? 'Troll Court Prosecutor' : app.type.replace(/_/g, ' ')
                   
                   return (
                     <div key={app.id} className="p-6 flex items-center justify-between hover:bg-[#252525] transition-colors">
                       <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-lg bg-gradient-to-r ${position?.color || 'from-gray-500 to-gray-600'}`}>
-                          {position?.icon || <Briefcase className="w-6 h-6" />}
+                        <div className={`p-3 rounded-lg bg-gradient-to-r ${position?.color || (app.type === 'attorney' ? 'from-amber-500 to-yellow-500' : app.type === 'prosecutor' ? 'from-red-500 to-orange-500' : 'from-gray-500 to-gray-600')}`}>
+                          {position?.icon || (app.type === 'attorney' ? <FileText className="w-6 h-6" /> : app.type === 'prosecutor' ? <Users className="w-6 h-6" /> : <Briefcase className="w-6 h-6" />)}
                         </div>
                         <div>
-                          <h4 className="font-semibold text-white capitalize">{app.type.replace(/_/g, ' ')}</h4>
+                          <h4 className="font-semibold text-white capitalize">{displayType}</h4>
                           <div className="flex flex-col gap-1">
                             <p className="text-gray-400 text-sm">
                               {activeTab === 'all_applications' ? (
@@ -734,6 +855,7 @@ export default function Career() {
               <div className="divide-y divide-[#2C2C2C]">
                 {applications.map((app) => {
                   const _position = jobPositions.find(p => p.id === app.type)
+                  const _displayType = app.type === 'attorney' ? 'Troll Court Attorney' : app.type === 'prosecutor' ? 'Troll Court Prosecutor' : app.type.replace(/_/g, ' ')
                   return (
                     <div key={app.id} className="p-6 flex items-center justify-between hover:bg-[#252525] transition-colors">
                       <div className="flex items-center gap-4">
@@ -746,7 +868,7 @@ export default function Career() {
                           <div className="flex items-center gap-2">
                             <h4 className="font-semibold text-white">{app.user?.full_name || app.user?.username}</h4>
                             <span className="text-gray-500 text-xs">•</span>
-                            <span className="text-gray-400 text-sm capitalize">{app.type.replace(/_/g, ' ')}</span>
+                            <span className="text-gray-400 text-sm capitalize">{_displayType}</span>
                           </div>
                           <p className="text-gray-500 text-xs">Applied {formatDate(app.created_at)}</p>
                         </div>

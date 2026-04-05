@@ -39,10 +39,10 @@ const CourtDocketView: React.FC = () => {
       // Fetch officer profiles for RGB
       const officerIds = (data || []).map((e: any) => e.assigned_officer).filter((id: any) => id && typeof id === 'string' && id.length > 10);
       if (officerIds.length > 0) {
-         const { data: profileData } = await supabase
-           .from('profiles')
-           .select('id, username, role, is_admin, is_troll_officer, is_troller, is_verified, rgb_username_expires_at, created_at')
-           .in('id', officerIds);
+const { data: profileData } = await supabase
+            .from('user_profiles')
+            .select('id, username, role, is_admin, is_troll_officer, is_troller, is_verified, rgb_username_expires_at, created_at')
+            .in('id', officerIds);
          
          const profileMap: Record<string, any> = {};
          profileData?.forEach(p => profileMap[p.id] = p);

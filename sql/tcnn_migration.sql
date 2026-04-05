@@ -232,19 +232,24 @@ DROP POLICY IF EXISTS "News Casters can submit tickers" ON public.tcnn_ticker_qu
 CREATE POLICY "News Casters can submit tickers"
     ON public.tcnn_ticker_queue FOR INSERT
     WITH CHECK (auth.uid() = submitted_by AND 
-                EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND (is_news_caster = TRUE OR is_chief_news_caster = TRUE)));
+                EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND (is_news_caster = TRUE OR is_chief_news_caster = TRUE OR is_admin = TRUE OR role = 'admin')));
 
-DROP POLICY IF EXISTS "Users can view their own tickers" ON public.tcnn_ticker_queue;
-CREATE POLICY "Users can view their own tickers"
+DROP POLICY IF EXISTS "Users can view tickers" ON public.tcnn_ticker_queue;
+CREATE POLICY "Users can view tickers"
     ON public.tcnn_ticker_queue FOR SELECT
     USING (submitted_by = auth.uid() OR 
-           EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND is_chief_news_caster = TRUE) OR
+           EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND (is_chief_news_caster = TRUE OR is_news_caster = TRUE OR is_admin = TRUE OR role = 'admin')) OR
            status = 'approved');
 
 DROP POLICY IF EXISTS "Chief News Casters can approve tickers" ON public.tcnn_ticker_queue;
 CREATE POLICY "Chief News Casters can approve tickers"
     ON public.tcnn_ticker_queue FOR UPDATE
-    USING (EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND is_chief_news_caster = TRUE));
+    USING (EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND (is_chief_news_caster = TRUE OR is_news_caster = TRUE OR is_admin = TRUE OR role = 'admin')));
+
+DROP POLICY IF EXISTS "Anyone can delete tickers" ON public.tcnn_ticker_queue;
+CREATE POLICY "Anyone can delete tickers"
+    ON public.tcnn_ticker_queue FOR DELETE
+    USING (EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND (is_chief_news_caster = TRUE OR is_news_caster = TRUE OR is_admin = TRUE OR role = 'admin')));
 
 -- Policies for tcnn_tips
 DROP POLICY IF EXISTS "Tips are viewable by tipper and recipient" ON public.tcnn_tips;
@@ -549,6 +554,9 @@ GRANT ALL ON public.tcnn_articles TO authenticated;
 GRANT ALL ON public.tcnn_articles TO anon;
 GRANT ALL ON public.tcnn_ticker_queue TO authenticated;
 GRANT ALL ON public.tcnn_ticker_queue TO anon;
+
+-- Add tcnn_ticker_queue to realtime for ticker subscriptions
+ALTER PUBLICATION supabase_realtime ADD TABLE public.tcnn_ticker_queue;
 GRANT ALL ON public.tcnn_tips TO authenticated;
 GRANT ALL ON public.tcnn_tips TO anon;
 GRANT ALL ON public.tcnn_role_assignments TO authenticated;

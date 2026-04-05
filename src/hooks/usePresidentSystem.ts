@@ -227,6 +227,20 @@ export const usePresidentSystem = () => {
   const finalizeElection = async (electionId: string) => {
     setLoading(true);
     try {
+      // If election is still open, end it first (allows secretaries to finalize early)
+      const { data: election } = await supabase
+        .from('president_elections')
+        .select('status')
+        .eq('id', electionId)
+        .single();
+
+      if (election?.status === 'open') {
+        await supabase
+          .from('president_elections')
+          .update({ status: 'closed', ends_at: new Date(Date.now() - 1000).toISOString() })
+          .eq('id', electionId);
+      }
+
       const { error } = await supabase.rpc('finalize_president_election', {
         p_election_id: electionId
       });
@@ -248,9 +262,28 @@ export const usePresidentSystem = () => {
         .from('president_elections')
         .update({ status: 'closed', ends_at: new Date().toISOString() })
         .eq('id', electionId);
-      
+
       if (error) throw error;
       toast.success('Election ended successfully');
+      fetchCurrentElection();
+      fetchAllElections();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteElection = async (electionId: string) => {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('president_elections')
+        .delete()
+        .eq('id', electionId);
+
+      if (error) throw error;
+      toast.success('Election deleted successfully');
       fetchCurrentElection();
       fetchAllElections();
     } catch (err: any) {
@@ -506,16 +539,23 @@ export const usePresidentSystem = () => {
     treasuryBalance,
     proposals,
     loading,
-    refresh: () => {
-      fetchCurrentElection();
-      fetchCurrentPresident();
-      fetchVicePresident();
-      fetchTreasuryBalance();
-      fetchProposals();
+    refresh: async () => {
+      try {
+        await Promise.all([
+          fetchCurrentElection(),
+          fetchCurrentPresident(),
+          fetchVicePresident(),
+          fetchTreasuryBalance(),
+          fetchProposals()
+        ]);
+      } catch (err) {
+        console.warn('Refresh error:', err);
+      }
     },
     createElection,
     finalizeElection,
     endElection,
+    deleteElection,
     allElections,
     fetchAllElections,
     signupCandidate,

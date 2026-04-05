@@ -38,7 +38,10 @@ import {
   Files,
   Gamepad2,
   Music,
-  Newspaper
+  Newspaper,
+  Users,
+  Briefcase,
+  AlertTriangle
 } from 'lucide-react'
 
 import { useAuthStore } from '@/lib/store'
@@ -49,7 +52,7 @@ import { useSidebarUpdates } from '@/hooks/useSidebarUpdates'
 import { useJailMode } from '@/hooks/useJailMode'
 import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown'
 
-import SidebarTopBroadcasters from './sidebar/SidebarTopBroadcasters'
+
 
 
 import UserProfileWidget from './sidebar/UserProfileWidget';
@@ -72,6 +75,10 @@ export default function Sidebar() {
   const [isFamilyMember, setIsFamilyMember] = useState(false)
   const [canSeeSecretary, setCanSeeSecretary] = useState(false)
   const [isStaff, setIsStaff] = useState(false)
+  const [isAttorney, setIsAttorney] = useState(false)
+  const [isProsecutor, setIsProsecutor] = useState(false)
+  const [canSeeInmates, setCanSeeInmates] = useState(false)
+  const [isBackgroundJailed, setIsBackgroundJailed] = useState(false)
 
   const [showCourtModal, setShowCourtModal] = useState(false)
   const { isCollapsed, setCollapsed, expandedGroups, toggleGroup, expandGroup } = useSidebarStore();
@@ -112,16 +119,43 @@ export default function Sidebar() {
         }
 
         // Check if user can see Troll Family
-        setCanSeeTrollFamily(!!familyData || profile?.role === 'admin')
+        setCanSeeTrollFamily(!!familyData || profile?.role === UserRole.ADMIN)
 
         // Check if user is secretary
         const { data: secData } = await supabase
-          .from('profiles')
+          .from('user_profiles')
           .select('role')
           .eq('id', profile.id)
           .single()
-        setCanSeeSecretary(secData?.role === 'secretary' || secData?.role === 'admin')
-        setIsStaff(secData?.role === 'secretary' || secData?.role === 'admin' || !!officerData)
+        setCanSeeSecretary(secData?.role === UserRole.SECRETARY || secData?.role === UserRole.ADMIN)
+        setIsStaff(secData?.role === UserRole.SECRETARY || secData?.role === UserRole.ADMIN || !!officerData)
+        
+        // Check if user is attorney
+        const { data: attorneyData } = await supabase
+          .from('user_profiles')
+          .select('is_attorney')
+          .eq('id', profile.id)
+          .single()
+        setIsAttorney(attorneyData?.is_attorney === true)
+        
+        // Check if user is prosecutor
+        const { data: prosecutorData } = await supabase
+          .from('user_profiles')
+          .select('is_prosecutor')
+          .eq('id', profile.id)
+          .single()
+        setIsProsecutor(prosecutorData?.is_prosecutor === true)
+        
+        // Staff can see inmates page
+        setCanSeeInmates(!!officerData || secData?.role === UserRole.ADMIN || secData?.role === UserRole.LEAD_TROLL_OFFICER)
+        
+        // Check background jail status
+        const { data: profileData } = await supabase
+          .from('user_profiles')
+          .select('is_background_jailed')
+          .eq('id', profile.id)
+          .single()
+        setIsBackgroundJailed(profileData?.is_background_jailed === true)
         
       } catch (error) {
         console.error('Error fetching user data:', error)
@@ -133,9 +167,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     const path = location.pathname;
-    if (path.startsWith('/city-hall')) {
-      expandGroup('City Center');
-    } else if (path.startsWith('/pool')) {
+    if (path.startsWith('/pool')) {
       expandGroup('Social');
     } else if (path.startsWith('/marketplace')) {
       expandGroup('City Center');
@@ -153,7 +185,7 @@ export default function Sidebar() {
   const canSeeCourt = profile?.role === UserRole.TROLL_OFFICER || profile?.role === UserRole.LEAD_TROLL_OFFICER || profile?.role === UserRole.ADMIN || profile?.is_troll_officer;
 
   const canBroadcast = () => {
-    return !isBroadcastLockedDown && (profile?.role === 'broadcaster' || profile?.is_broadcaster || profile?.troll_role === 'broadcaster');
+    return !isBroadcastLockedDown && (profile?.role === UserRole.BROADCASTER || profile?.is_broadcaster || profile?.troll_role === UserRole.BROADCASTER);
   }
 
   const mainPaths = ['/', '/trollstown', '/inventory', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
@@ -202,7 +234,8 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-3 space-y-4 custom-scrollbar min-h-0">
-        {isJailed ? (
+        {/* Admins are exempt from jail restrictions */}
+        {isJailed && !(profile?.role === 'admin' || profile?.is_admin) ? (
           <>
             <div className="px-4 py-6 text-center space-y-4">
               <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
@@ -216,12 +249,15 @@ export default function Sidebar() {
 
             <SidebarGroup title={isSidebarCollapsed ? '' : "Public Services"} isCollapsed={isSidebarCollapsed} highlight={true}>
               <SidebarItem icon={Lock} label="Jail" to="/jail" active={isActive('/jail')} collapsed={isSidebarCollapsed} className="text-red-400 hover:text-red-300" />
+              {isBackgroundJailed && (
+                <SidebarItem icon={AlertTriangle} label="Appeal Jail" to="/jail/appeal?active=false" active={isActive('/jail/appeal')} collapsed={isSidebarCollapsed} className="text-yellow-400 hover:text-yellow-300" />
+              )}
               <SidebarItem icon={LifeBuoy} label="Support" to="/support" active={isActive('/support')} collapsed={isSidebarCollapsed} />
             </SidebarGroup>
           </>
         ) : (
           <>
-            <SidebarTopBroadcasters isCollapsed={isSidebarCollapsed} />
+
 
             <div className={`px-4 mb-2 mt-2 ${isSidebarCollapsed ? 'flex justify-center' : ''}`}>
               {canBroadcast() ? (
@@ -267,7 +303,6 @@ export default function Sidebar() {
             >
               <SidebarItem icon={Home} label="Home" to="/" active={isActive('/')} collapsed={isSidebarCollapsed} highlight={isUpdated('/')} onClick={() => markAsViewed('/')} />
               <SidebarItem icon={Building2} label="Troll Town" to="/trollstown" active={isActive('/trollstown')} collapsed={isSidebarCollapsed} highlight={isUpdated('/trollstown')} onClick={() => markAsViewed('/trollstown')} />
-              <SidebarItem icon={Landmark} label="City Hall" to="/city-hall" active={isActive('/city-hall')} collapsed={isSidebarCollapsed} highlight={isUpdated('/city-hall')} onClick={() => markAsViewed('/city-hall')} />
               <SidebarItem icon={Warehouse} label="Living" to="/living" active={isActive('/living')} collapsed={isSidebarCollapsed} highlight={isUpdated('/living')} onClick={() => markAsViewed('/living')} />
               <SidebarItem icon={Package} label="Inventory" to="/inventory" active={isActive('/inventory')} collapsed={isSidebarCollapsed} highlight={isUpdated('/inventory')} onClick={() => markAsViewed('/inventory')} />
               <SidebarItem icon={Store} label="Marketplace" to="/marketplace" active={isActive('/marketplace')} collapsed={isSidebarCollapsed} highlight={isUpdated('/marketplace')} onClick={() => markAsViewed('/marketplace')} />
@@ -286,6 +321,9 @@ export default function Sidebar() {
               isExpanded={expandedGroups.includes('Public Services')}
               onToggle={() => toggleGroup('Public Services')}
             >
+              {canSeeInmates && (
+                <SidebarItem icon={Users} label="Inmates" to="/inmates" active={isActive('/inmates')} collapsed={isSidebarCollapsed} highlight={isUpdated('/inmates')} onClick={() => markAsViewed('/inmates')} className="text-orange-400 hover:text-orange-300" />
+              )}
               <SidebarItem icon={Lock} label="Jail" to="/jail" active={isActive('/jail')} collapsed={isSidebarCollapsed} highlight={isUpdated('/jail')} onClick={() => markAsViewed('/jail')} className="text-red-400 hover:text-red-300" />
               <SidebarItem icon={BookOpen} label="Troll Church" to="/church" active={isActive('/church')} collapsed={isSidebarCollapsed} highlight={isUpdated('/church')} onClick={() => markAsViewed('/church')} />
               {((profile as any)?.is_pastor || profile?.role === 'admin' || (profile as any)?.is_admin) && (
@@ -400,6 +438,28 @@ export default function Sidebar() {
                     className="text-orange-400 hover:text-orange-300"
                   />
                 )}
+                {isAttorney && (
+                  <SidebarItem 
+                    icon={Briefcase} 
+                    label="Attorney Dashboard" 
+                    to="/attorney" 
+                    active={isActive('/attorney')} 
+                    collapsed={isSidebarCollapsed}
+                    highlight={isUpdated('/attorney')} onClick={() => markAsViewed('/attorney')}
+                    className="text-amber-400 hover:text-amber-300"
+                  />
+                )}
+                {isProsecutor && (
+                  <SidebarItem 
+                    icon={Shield} 
+                    label="Prosecutor Dashboard" 
+                    to="/prosecutor" 
+                    active={isActive('/prosecutor')} 
+                    collapsed={isSidebarCollapsed}
+                    highlight={isUpdated('/prosecutor')} onClick={() => markAsViewed('/prosecutor')}
+                    className="text-red-400 hover:text-red-300"
+                  />
+                )}
                 {canSeeOfficer && (
                   <>
                     <SidebarItem 
@@ -436,7 +496,7 @@ export default function Sidebar() {
                     />
                 )}
                 {/* TCNN Dashboard - Only for TCNN staff, Admins, and SuperAdmins */}
-                {(profile?.is_journalist || profile?.is_news_caster || profile?.is_chief_news_caster || isAdmin || profile?.role === 'superadmin' || profile?.is_superadmin) && (
+                {(profile?.is_journalist || profile?.is_news_caster || profile?.is_chief_news_caster || isAdmin || profile?.role === UserRole.SUPERADMIN || profile?.is_superadmin) && (
                    <SidebarItem 
                       icon={Newspaper} 
                       label="TCNN Dashboard" 
@@ -468,7 +528,7 @@ export default function Sidebar() {
               isExpanded={expandedGroups.includes('City Registry')}
               onToggle={() => toggleGroup('City Registry')}
             >
-              <SidebarItem icon={FileText} label="Careers" to="/application" active={isActive('/application')} collapsed={isSidebarCollapsed} highlight={isUpdated('/application')} onClick={() => markAsViewed('/application')} />
+              <SidebarItem icon={FileText} label="Careers" to="/career" active={isActive('/career')} collapsed={isSidebarCollapsed} highlight={isUpdated('/career')} onClick={() => markAsViewed('/career')} />
               <SidebarItem icon={Video} label="Interview Room" to="/interview-room" active={isActive('/interview-room')} collapsed={isSidebarCollapsed} highlight={isUpdated('/interview-room')} onClick={() => markAsViewed('/interview-room')} />
               <SidebarItem icon={Banknote} label="Wallet" to="/wallet" active={isActive('/wallet')} collapsed={isSidebarCollapsed} highlight={isUpdated('/wallet')} onClick={() => markAsViewed('/wallet')} />
               <SidebarItem icon={Scale} label="Appeals" to="/city-registry" active={isActive('/city-registry')} collapsed={isSidebarCollapsed} highlight={isUpdated('/city-registry')} onClick={() => markAsViewed('/city-registry')} />

@@ -1343,7 +1343,7 @@ function ProfileInner() {
                               {isOwnProfile && (
                                 <button
                                   type="button"
-                                  onClick={() => navigate('/dealership')}
+                                  onClick={() => navigate('/trollstown?tab=ktauto')}
                                   className={`${trollCityTheme.components.buttonSecondary} px-3 py-1.5 text-xs font-medium transition-colors`}
                                 >
                                   Manage
@@ -1359,7 +1359,7 @@ function ProfileInner() {
                       <p className={`${trollCityTheme.text.muted} mb-4`}>No vehicles found in garage.</p>
                       {isOwnProfile && (
                          <button
-                           onClick={() => navigate('/dealership')}
+                           onClick={() => navigate('/trollstown?tab=ktauto')}
                            className={`${trollCityTheme.components.buttonPrimary} px-4 py-2 font-medium`}
                          >
                            Visit Dealership
@@ -1448,7 +1448,7 @@ function ProfileInner() {
                             {isOwnProfile && (
                               <button
                                 type="button"
-                                onClick={() => navigate(listing.listing_type === 'auction' ? '/auctions' : '/dealership')}
+                                onClick={() => navigate(listing.listing_type === 'auction' ? '/auctions' : '/trollstown?tab=ktauto')}
                                 className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium"
                               >
                                 Manage Listing

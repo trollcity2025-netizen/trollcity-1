@@ -1,62 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useChatStore } from '../../lib/chatStore';
-import { formatDuration } from '../../utils/time';
-import { 
-  Users, 
-  Clock, 
-  Unlock, 
-  MessageCircle, 
-  Search,
-  Calendar,
-  TrendingDown
-} from 'lucide-react';
 import { toast } from 'sonner';
 
-interface Inmate {
+interface JailInmate {
+  id: string;
   user_id: string;
-  release_time: string;
+  username: string;
+  avatar_url?: string;
   reason: string;
+  sentenced_by: string;
+  sentence_start: string;
+  sentence_end: string;
+  message_minutes: number;
+  message_minutes_remaining: number;
+  is_bond_posted: boolean;
+  bond_amount: number;
+  can_appeal: boolean;
+  appeal_status?: string;
   created_at: string;
-  profile: {
-    username: string;
-    avatar_url: string | null;
-  };
 }
 
-const AdminJailManagement: React.FC = () => {
-  const [inmates, setInmates] = useState<Inmate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedInmate, setSelectedInmate] = useState<Inmate | null>(null);
-  const [reductionMinutes, setReductionMinutes] = useState(30);
-  const openChat = useChatStore((s) => s.openChatBubble);
+interface JailTransaction {
+  id: string;
+  inmate_id: string;
+  type: string;
+  amount: number;
+  description: string;
+  created_at: string;
+}
 
-  const fetchInmates = async () => {
-    setLoading(true);
+export default function AdminJailManagement() {
+  const [inmates, setInmates] = useState<JailInmate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedInmate, setSelectedInmate] = useState<JailInmate | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editMinutes, setEditMinutes] = useState(0);
+  const [showTransactions, setShowTransactions] = useState(false);
+  const [transactions, setTransactions] = useState<JailTransaction[]>([]);
+
+  const loadInmates = async () => {
     try {
       const { data, error } = await supabase
-        .from('jail')
-        .select(`
-          user_id,
-          release_time,
-          reason,
-          created_at,
-          user_profiles (username, avatar_url)
-        `)
-        .gt('release_time', new Date().toISOString())
-        .order('release_time', { ascending: true });
+        .from('jail_inmates')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
-      const formattedData = (data as any[])?.map(item => ({
-        ...item,
-        profile: item.user_profiles
-      })) || [];
-      
-      setInmates(formattedData);
-    } catch (error: any) {
-      console.error('Error fetching inmates:', error);
+      setInmates(data || []);
+    } catch (err: any) {
+      console.error('Error loading inmates:', err);
       toast.error('Failed to load inmates');
     } finally {
       setLoading(false);
@@ -64,243 +56,316 @@ const AdminJailManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchInmates();
-
-    const subscription = supabase
-      .channel('jail_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'jail' },
-        () => fetchInmates()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
+    loadInmates();
   }, []);
 
-  const handleRelease = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to release this inmate immediately?')) return;
-
+  const handleRelease = async (inmate: JailInmate, refundCoins: boolean = false) => {
     try {
-      const { error } = await supabase
-        .from('jail')
-        .delete()
-        .eq('user_id', userId);
+      const { error } = await supabase.functions.invoke('admin-jail-actions', {
+        body: {
+          action: 'release_inmate',
+          inmate_id: inmate.id,
+          user_id: inmate.user_id,
+          refund_coins: refundCoins
+        }
+      });
 
       if (error) throw error;
-      toast.success('Inmate released successfully');
-      fetchInmates();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to release inmate');
+      toast.success(`Inmate ${inmate.username} released${refundCoins ? ' with coin refund' : ''}`);
+      loadInmates();
+    } catch (err: any) {
+      console.error('Error releasing inmate:', err);
+      toast.error('Failed to release inmate');
     }
   };
 
-  const handleReduceSentence = async (inmate: Inmate) => {
+  const handleEditSentence = async () => {
+    if (!selectedInmate) return;
+    
     try {
-      const currentRelease = new Date(inmate.release_time);
-      const newRelease = new Date(currentRelease.getTime() - reductionMinutes * 60000);
-      
-      // Don't allow negative sentence (just release if it goes past now)
-      const now = new Date();
-      if (newRelease <= now) {
-        return handleRelease(inmate.user_id);
-      }
-
       const { error } = await supabase
-        .from('jail')
-        .update({ release_time: newRelease.toISOString() })
-        .eq('user_id', inmate.user_id);
+        .from('jail_inmates')
+        .update({ 
+          message_minutes: editMinutes,
+          message_minutes_remaining: editMinutes
+        })
+        .eq('id', selectedInmate.id);
 
       if (error) throw error;
-      toast.success(`Sentence reduced by ${reductionMinutes} minutes`);
-      setSelectedInmate(null);
-      fetchInmates();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to reduce sentence');
+      toast.success('Sentence updated');
+      setShowEditModal(false);
+      loadInmates();
+    } catch (err: any) {
+      console.error('Error updating sentence:', err);
+      toast.error('Failed to update sentence');
     }
   };
 
-  const filteredInmates = inmates.filter(inmate => 
-    inmate.profile?.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    inmate.reason?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleAssignAttorney = async (inmate: JailInmate, attorneyId: string) => {
+    try {
+      const { error } = await supabase
+        .from('jail_inmates')
+        .update({ assigned_attorney_id: attorneyId })
+        .eq('id', inmate.id);
 
-  return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <Users className="w-8 h-8 text-red-500" />
-            Jail Management
-          </h1>
-          <p className="text-gray-400 mt-1">Monitor and manage current city inmates</p>
-        </div>
+      if (error) throw error;
+      toast.success('Attorney assigned');
+      loadInmates();
+    } catch (err: any) {
+      console.error('Error assigning attorney:', err);
+      toast.error('Failed to assign attorney');
+    }
+  };
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-          <input
-            type="text"
-            placeholder="Search inmates..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 w-full md:w-64"
-          />
+  const loadTransactions = async (inmateId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('jail_transactions')
+        .select('*')
+        .eq('inmate_id', inmateId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTransactions(data || []);
+      setShowTransactions(true);
+    } catch (err: any) {
+      console.error('Error loading transactions:', err);
+      toast.error('Failed to load transactions');
+    }
+  };
+
+  const formatTimeRemaining = (endDate: string) => {
+    const end = new Date(endDate);
+    const now = new Date();
+    const diff = end.getTime() - now.getTime();
+    
+    if (diff <= 0) return 'Expired';
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return `${days}d ${hours}h ${minutes}m`;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+        <div className="max-w-6xl mx-auto">
+          <h1 className="text-3xl font-bold mb-6">Jail Management</h1>
+          <div className="bg-black/40 rounded-lg p-8 text-center">Loading inmates...</div>
         </div>
       </div>
+    );
+  }
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#0A0814] via-[#0D0D1A] to-[#14061A] text-white p-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Jail Management</h1>
+          <button 
+            onClick={loadInmates}
+            className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700"
+          >
+            Refresh
+          </button>
         </div>
-      ) : filteredInmates.length === 0 ? (
-        <div className="bg-gray-800/50 rounded-xl p-12 text-center border border-gray-700">
-          <Clock className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-gray-300">No active inmates</h3>
-          <p className="text-gray-500 mt-2">The city jail is currently empty.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {filteredInmates.map((inmate) => {
-            const timeRemaining = new Date(inmate.release_time).getTime() - new Date().getTime();
-            
-            return (
-              <div key={inmate.user_id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden hover:border-red-500/50 transition-colors">
-                <div className="p-5 flex items-start gap-4">
-                  <img 
-                    src={inmate.profile?.avatar_url || 'https://via.placeholder.com/150'} 
-                    alt={inmate.profile?.username}
-                    className="w-16 h-16 rounded-full border-2 border-red-900/50 object-cover"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="text-xl font-bold text-white truncate">{inmate.profile?.username}</h3>
-                      <span className="px-2 py-1 bg-red-900/30 text-red-400 text-xs font-bold rounded uppercase">Incarcerated</span>
-                    </div>
-                    <p className="text-sm text-gray-400 line-clamp-2 italic">&quot;{inmate.reason || 'No reason provided'}&quot;</p>
-                  </div>
-                </div>
 
-                <div className="px-5 py-4 bg-black/20 border-t border-gray-700/50 grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-gray-500 mb-1 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" /> Incarcerated Since
-                    </p>
-                    <p className="text-sm text-gray-300">{new Date(inmate.created_at).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-gray-500 mb-1 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> Time Remaining
-                    </p>
-                    <p className="text-sm font-mono text-red-400">
-                      {timeRemaining > 0 ? formatDuration(timeRemaining) : 'Released'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-gray-900/50 border-t border-gray-700 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => openChat(inmate.user_id, inmate.profile?.username, inmate.profile?.avatar_url)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-sm font-medium"
-                  >
-                    <MessageCircle className="w-4 h-4" /> Chat
-                  </button>
-                  <button
-                    onClick={() => setSelectedInmate(inmate)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors text-sm font-medium"
-                  >
-                    <TrendingDown className="w-4 h-4" /> Reduce
-                  </button>
-                  <button
-                    onClick={() => handleRelease(inmate.user_id)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors text-sm font-medium"
-                  >
-                    <Unlock className="w-4 h-4" /> Release
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Reduce Sentence Modal */}
-      {selectedInmate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
-                <TrendingDown className="w-6 h-6 text-amber-500" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white">Reduce Sentence</h2>
-                <p className="text-sm text-gray-400">For {selectedInmate.profile?.username}</p>
-              </div>
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-black/40 rounded-lg p-4">
+            <div className="text-2xl font-bold">{inmates.length}</div>
+            <div className="text-gray-400">Total Inmates</div>
+          </div>
+          <div className="bg-black/40 rounded-lg p-4">
+            <div className="text-2xl font-bold">{inmates.filter(i => i.is_bond_posted).length}</div>
+            <div className="text-gray-400">With Bond Posted</div>
+          </div>
+          <div className="bg-black/40 rounded-lg p-4">
+            <div className="text-2xl font-bold">{inmates.filter(i => i.can_appeal && i.appeal_status === 'pending').length}</div>
+            <div className="text-gray-400">Pending Appeals</div>
+          </div>
+          <div className="bg-black/40 rounded-lg p-4">
+            <div className="text-2xl font-bold">
+              {inmates.reduce((acc, i) => acc + (i.message_minutes_remaining || 0), 0)}
             </div>
+            <div className="text-gray-400">Total Minutes Remaining</div>
+          </div>
+        </div>
 
-            <div className="space-y-4 mb-8">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Reduction Amount (Minutes)</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[15, 30, 60, 120].map((mins) => (
-                    <button
-                      key={mins}
-                      onClick={() => setReductionMinutes(mins)}
-                      className={`py-2 rounded-lg text-sm font-bold transition-all ${
-                        reductionMinutes === mins 
-                          ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' 
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      {mins}m
-                    </button>
-                  ))}
-                </div>
-              </div>
+        {/* Inmates List */}
+        <div className="bg-black/40 rounded-lg overflow-hidden">
+          {inmates.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">No inmates in jail</div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-black/60">
+                <tr>
+                  <th className="px-4 py-3 text-left">Inmate</th>
+                  <th className="px-4 py-3 text-left">Reason</th>
+                  <th className="px-4 py-3 text-left">Sentenced By</th>
+                  <th className="px-4 py-3 text-left">Time Remaining</th>
+                  <th className="px-4 py-3 text-left">Messages</th>
+                  <th className="px-4 py-3 text-left">Bond</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inmates.map((inmate) => (
+                  <tr key={inmate.id} className="border-t border-gray-800">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {inmate.avatar_url ? (
+                          <img src={inmate.avatar_url} alt="" className="w-8 h-8 rounded-full" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center">
+                            {inmate.username[0].toUpperCase()}
+                          </div>
+                        )}
+                        <span className="font-medium">{inmate.username}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-300">{inmate.reason}</td>
+                    <td className="px-4 py-3 text-gray-300">{inmate.sentenced_by}</td>
+                    <td className="px-4 py-3">
+                      <span className={new Date(inmate.sentence_end) < new Date() ? 'text-red-400' : 'text-green-400'}>
+                        {formatTimeRemaining(inmate.sentence_end)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {inmate.message_minutes_remaining} / {inmate.message_minutes}
+                    </td>
+                    <td className="px-4 py-3">
+                      {inmate.is_bond_posted ? (
+                        <span className="text-green-400">{inmate.bond_amount} TC</span>
+                      ) : (
+                        <span className="text-gray-500">Not posted</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {inmate.appeal_status === 'pending' && (
+                        <span className="text-yellow-400 text-sm">Appeal Pending</span>
+                      )}
+                      {inmate.appeal_status === 'approved' && (
+                        <span className="text-green-400 text-sm">Appeal Approved</span>
+                      )}
+                      {inmate.appeal_status === 'rejected' && (
+                        <span className="text-red-400 text-sm">Appeal Rejected</span>
+                      )}
+                      {!inmate.appeal_status && (
+                        <span className="text-gray-500 text-sm">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => loadTransactions(inmate.id)}
+                          className="px-2 py-1 text-xs bg-blue-600 rounded hover:bg-blue-700"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedInmate(inmate);
+                            setEditMinutes(inmate.message_minutes);
+                            setShowEditModal(true);
+                          }}
+                          className="px-2 py-1 text-xs bg-yellow-600 rounded hover:bg-yellow-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleRelease(inmate, false)}
+                          className="px-2 py-1 text-xs bg-green-600 rounded hover:bg-green-700"
+                        >
+                          Release
+                        </button>
+                        <button
+                          onClick={() => handleRelease(inmate, true)}
+                          className="px-2 py-1 text-xs bg-red-600 rounded hover:bg-red-700"
+                        >
+                          Release + Refund
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-              <div className="relative mt-2">
+        {/* Edit Modal */}
+        {showEditModal && selectedInmate && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+            <div className="bg-[#1a1a2e] rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4">Edit Sentence - {selectedInmate.username}</h2>
+              <div className="mb-4">
+                <label className="block text-sm text-gray-400 mb-2">Message Minutes</label>
                 <input
                   type="number"
-                  value={reductionMinutes}
-                  onChange={(e) => setReductionMinutes(parseInt(e.target.value) || 0)}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-xl text-white focus:ring-2 focus:ring-amber-500 outline-none"
-                  placeholder="Custom minutes..."
+                  value={editMinutes}
+                  onChange={(e) => setEditMinutes(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 bg-black/40 border border-gray-700 rounded-lg text-white"
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-bold uppercase tracking-wider">Minutes</span>
               </div>
-
-              <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-700">
-                <div className="flex justify-between text-xs text-gray-500 mb-2">
-                  <span>Current Release</span>
-                  <span>{new Date(selectedInmate.release_time).toLocaleTimeString()}</span>
-                </div>
-                <div className="flex justify-between text-sm font-bold text-amber-500">
-                  <span>New Release</span>
-                  <span>{new Date(new Date(selectedInmate.release_time).getTime() - reductionMinutes * 60000).toLocaleTimeString()}</span>
-                </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleEditSentence}
+                  className="flex-1 px-4 py-2 bg-yellow-600 rounded-lg hover:bg-yellow-700"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 px-4 py-2 bg-gray-600 rounded-lg hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
+          </div>
+        )}
 
-            <div className="flex gap-3">
+        {/* Transactions Modal */}
+        {showTransactions && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+            <div className="bg-[#1a1a2e] rounded-lg p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4">Jail Transactions</h2>
+              {transactions.length === 0 ? (
+                <div className="text-gray-400 text-center py-4">No transactions found</div>
+              ) : (
+                <div className="space-y-2">
+                  {transactions.map((tx) => (
+                    <div key={tx.id} className="bg-black/40 rounded p-3 flex justify-between">
+                      <div>
+                        <div className="font-medium">{tx.type}</div>
+                        <div className="text-sm text-gray-400">{tx.description}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className={tx.amount > 0 ? 'text-green-400' : 'text-red-400'}>
+                          {tx.amount > 0 ? '+' : ''}{tx.amount} TC
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(tx.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <button
-                onClick={() => setSelectedInmate(null)}
-                className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-xl transition-colors"
+                onClick={() => setShowTransactions(false)}
+                className="w-full mt-4 px-4 py-2 bg-gray-600 rounded-lg hover:bg-gray-700"
               >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleReduceSentence(selectedInmate)}
-                className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition-colors shadow-lg shadow-amber-900/20"
-              >
-                Apply Reduction
+                Close
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
-};
-
-export default AdminJailManagement;
+}

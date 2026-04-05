@@ -144,10 +144,10 @@ export default function TickerSubmissionModal({
         .from('tcnn_ticker_queue')
         .insert({
           message: message.trim(),
-          priority,
-          duration_seconds: duration,
+          ticker_type: priority === 'breaking' ? 'breaking' : 'standard',
+          priority: priority === 'breaking' ? 3 : 1,
           submitted_by: user.id,
-          status: 'pending',
+          status: 'approved',
           created_at: new Date().toISOString()
         });
 

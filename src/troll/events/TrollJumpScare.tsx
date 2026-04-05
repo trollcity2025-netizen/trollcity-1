@@ -24,28 +24,13 @@ const TrollJumpScare: React.FC<TrollJumpScareProps> = ({ rarity }) => {
     '/img/jumpscares/jumpscare11.jpeg',
   ];
 
-  // Scary sound files - real screams and shocking sounds
-  const scarySounds = [
-    '/sounds/scare1.mp3',
-    '/sounds/scare2.mp3',
-    '/sounds/scare3.mp3',
-    '/sounds/scare4.mp3',
-    '/sounds/scare5.mp3',
-    '/sounds/scare6.mp3',
-    '/sounds/scare7.mp3',
-    '/sounds/scare8.mp3',
-  ];
+  // Scary sound files - using click as fallback since mp3 files are having issues
+  const scarySounds: string[] = [];
 
-  // Play actual scary sound files
+  // Play actual scary sound files (disabled due to server issues with mp3 files)
   const playScarySound = (index: number, volume: number) => {
-    try {
-      const soundIndex = index % scarySounds.length;
-      const audio = new Audio(scarySounds[soundIndex]);
-      audio.volume = volume;
-      audio.play().catch(e => console.log('Audio play failed:', e));
-    } catch (e) {
-      console.log('Audio playback failed:', e);
-    }
+    // Sound playback disabled - only visual jumpscare
+    console.log('Jumpscare triggered with volume:', volume);
   };
 
   useEffect(() => {

@@ -43,7 +43,7 @@ const CourtDocketDashboard: React.FC = (): JSX.Element => {
 
       if (allIds.length > 0) {
         const { data: profileData } = await supabase
-          .from('profiles')
+          .from('user_profiles')
           .select('id, username, role, is_admin, is_troll_officer, is_troller, is_verified, rgb_username_expires_at, created_at')
           .in('id', allIds);
         

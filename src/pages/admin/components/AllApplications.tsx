@@ -21,6 +21,8 @@ interface Application {
 export default function AllApplications() {
   const { user, refreshProfile } = useAuthStore()
   const [applications, setApplications] = useState<Application[]>([])
+  const [attorneyApps, setAttorneyApps] = useState<Application[]>([])
+  const [prosecutorApps, setProsecutorApps] = useState<Application[]>([])
   const [loading, setLoading] = useState(false)
   const [positionFilled, setPositionFilled] = useState(false)
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'interview_scheduled'>('pending')
@@ -49,7 +51,7 @@ export default function AllApplications() {
         .from('applications')
         .select(`
           *,
-          user_profiles!user_id (
+          user_profiles!applications_user_id_fkey (
             username,
             email
           )
@@ -59,6 +61,60 @@ export default function AllApplications() {
 
       if (error) throw error
       setApplications(data || [])
+
+      // Load attorney applications
+      const { data: attorneyData } = await supabase
+        .from('attorney_applications')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (attorneyData && attorneyData.length > 0) {
+        const userIds = attorneyData.map(a => a.user_id).filter(Boolean)
+        if (userIds.length > 0) {
+          const { data: users } = await supabase
+            .from('user_profiles')
+            .select('id, username, email')
+            .in('id', userIds)
+          
+          const mapped = attorneyData.map((app: any) => ({
+            ...app,
+            type: 'attorney',
+            user_profiles: users?.find((u: any) => u.id === app.user_id) || null
+          }))
+          setAttorneyApps(mapped)
+        } else {
+          setAttorneyApps([])
+        }
+      } else {
+        setAttorneyApps([])
+      }
+
+      // Load prosecutor applications similarly
+      const { data: prosecutorData } = await supabase
+        .from('prosecutor_applications')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (prosecutorData && prosecutorData.length > 0) {
+        const userIds = prosecutorData.map(p => p.user_id).filter(Boolean)
+        if (userIds.length > 0) {
+          const { data: users } = await supabase
+            .from('user_profiles')
+            .select('id, username, email')
+            .in('id', userIds)
+          
+          const mapped = prosecutorData.map((app: any) => ({
+            ...app,
+            type: 'prosecutor',
+            user_profiles: users?.find((u: any) => u.id === app.user_id) || null
+          }))
+          setProsecutorApps(mapped)
+        } else {
+          setProsecutorApps([])
+        }
+      } else {
+        setProsecutorApps([])
+      }
 
     } catch (err) {
       toast.error("Failed to load applications")
@@ -178,6 +234,96 @@ export default function AllApplications() {
     }
   }
 
+  // APPROVE ATTORNEY APPLICATION
+  const handleApproveAttorney = async (app: Application) => {
+    if (!user) return toast.error("You must be logged in")
+    try {
+      setLoading(true)
+      const { error } = await supabase.rpc('approve_attorney_application', {
+        p_application_id: app.id,
+        p_reviewer_id: user.id
+      })
+      if (error) throw error
+      toast.success("Attorney application approved!")
+      const scrollY = window.scrollY
+      await loadApplications()
+      if (refreshProfile) await refreshProfile()
+      requestAnimationFrame(() => window.scrollTo(0, scrollY))
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve attorney application")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // DENY ATTORNEY APPLICATION
+  const handleDenyAttorney = async (app: Application) => {
+    if (!user) return toast.error("You must be logged in")
+    try {
+      setLoading(true)
+      const { error } = await supabase.rpc('deny_attorney_application', {
+        p_application_id: app.id,
+        p_reviewer_id: user.id,
+        p_reason: null
+      })
+      if (error) throw error
+      toast.error("Attorney application denied.")
+      const scrollY = window.scrollY
+      await loadApplications()
+      if (refreshProfile) await refreshProfile()
+      requestAnimationFrame(() => window.scrollTo(0, scrollY))
+    } catch (err: any) {
+      toast.error(err.message || "Failed to deny attorney application")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // APPROVE PROSECUTOR APPLICATION
+  const handleApproveProsecutor = async (app: Application) => {
+    if (!user) return toast.error("You must be logged in")
+    try {
+      setLoading(true)
+      const { error } = await supabase.rpc('approve_prosecutor_application', {
+        p_application_id: app.id,
+        p_reviewer_id: user.id
+      })
+      if (error) throw error
+      toast.success("Prosecutor application approved!")
+      const scrollY = window.scrollY
+      await loadApplications()
+      if (refreshProfile) await refreshProfile()
+      requestAnimationFrame(() => window.scrollTo(0, scrollY))
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve prosecutor application")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // DENY PROSECUTOR APPLICATION
+  const handleDenyProsecutor = async (app: Application) => {
+    if (!user) return toast.error("You must be logged in")
+    try {
+      setLoading(true)
+      const { error } = await supabase.rpc('deny_prosecutor_application', {
+        p_application_id: app.id,
+        p_reviewer_id: user.id,
+        p_reason: null
+      })
+      if (error) throw error
+      toast.error("Prosecutor application denied.")
+      const scrollY = window.scrollY
+      await loadApplications()
+      if (refreshProfile) await refreshProfile()
+      requestAnimationFrame(() => window.scrollTo(0, scrollY))
+    } catch (err: any) {
+      toast.error(err.message || "Failed to deny prosecutor application")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getApplicationIcon = (type: string) => {
     switch (type) {
       case 'troll_officer':
@@ -190,6 +336,10 @@ export default function AllApplications() {
         return <Radio className="w-4 h-4 text-pink-400" />
       case 'troll_station_manager':
         return <Crown className="w-4 h-4 text-purple-400" />
+      case 'attorney':
+        return <User className="w-4 h-4 text-amber-400" />
+      case 'prosecutor':
+        return <User className="w-4 h-4 text-red-400" />
       default:
         return <User className="w-4 h-4 text-gray-400" />
     }
@@ -209,6 +359,10 @@ export default function AllApplications() {
         return 'Troll Station DJ'
       case 'troll_station_manager':
         return 'Troll Station Manager'
+      case 'attorney':
+        return 'Attorney'
+      case 'prosecutor':
+        return 'Prosecutor'
       default:
         return type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')
     }
@@ -224,13 +378,20 @@ export default function AllApplications() {
     return configs[status as keyof typeof configs] || configs.pending
   }
 
+  // Combine all types of applications
+  const allApps = [
+    ...applications,
+    ...attorneyApps.filter(a => a.status === 'pending'),
+    ...prosecutorApps.filter(p => p.status === 'pending')
+  ]
+
   // Filter applications
-  const filteredApplications = applications.filter(app => {
+  const filteredApplications = allApps.filter(app => {
     if (filter === 'all') return true
     return app.status === filter
   })
 
-  const totalPending = applications.filter(a => a.status === 'pending').length
+  const totalPending = allApps.filter(a => a.status === 'pending').length
 
   return (
     <div className="space-y-4">
@@ -314,18 +475,52 @@ export default function AllApplications() {
 
                       {app.status === "pending" && !disable ? (
                         <div className="flex gap-2">
-                          <button 
-                            onClick={() => initiateApprove(app)} 
-                            className="px-3 py-2 bg-green-600 text-white text-xs rounded-lg flex items-center gap-1"
-                          >
-                            <Check className="w-3 h-3" /> Approve
-                          </button>
-                          <button 
-                            onClick={() => handleReject(app)} 
-                            className="px-3 py-2 bg-red-600 text-white text-xs rounded-lg flex items-center gap-1"
-                          >
-                            <X className="w-3 h-3" /> Deny
-                          </button>
+                          {app.type === 'attorney' ? (
+                            <>
+                              <button 
+                                onClick={() => handleApproveAttorney(app)} 
+                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-lg flex items-center gap-1"
+                              >
+                                <Check className="w-3 h-3" /> Approve
+                              </button>
+                              <button 
+                                onClick={() => handleDenyAttorney(app)} 
+                                className="px-3 py-2 bg-red-600 text-white text-xs rounded-lg flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" /> Deny
+                              </button>
+                            </>
+                          ) : app.type === 'prosecutor' ? (
+                            <>
+                              <button 
+                                onClick={() => handleApproveProsecutor(app)} 
+                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-lg flex items-center gap-1"
+                              >
+                                <Check className="w-3 h-3" /> Approve
+                              </button>
+                              <button 
+                                onClick={() => handleDenyProsecutor(app)} 
+                                className="px-3 py-2 bg-red-600 text-white text-xs rounded-lg flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" /> Deny
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button 
+                                onClick={() => initiateApprove(app)} 
+                                className="px-3 py-2 bg-green-600 text-white text-xs rounded-lg flex items-center gap-1"
+                              >
+                                <Check className="w-3 h-3" /> Approve
+                              </button>
+                              <button 
+                                onClick={() => handleReject(app)} 
+                                className="px-3 py-2 bg-red-600 text-white text-xs rounded-lg flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" /> Deny
+                              </button>
+                            </>
+                          )}
                         </div>
                       ) : app.status === "approved" ? (
                         <div className="text-green-400 text-sm flex items-center gap-1">

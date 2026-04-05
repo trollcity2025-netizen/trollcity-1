@@ -165,7 +165,7 @@ export const TrollopolyCityBoard: React.FC<TrollopolyCityBoardProps> = ({
       for (const player of gameState.players) {
         try {
           const { data } = await supabase
-            .from('profiles')
+            .from('user_profiles')
             .select('troll_coins')
             .eq('id', player.id)
             .single();

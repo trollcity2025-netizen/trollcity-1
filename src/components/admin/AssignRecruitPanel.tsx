@@ -66,7 +66,7 @@ export function AssignRecruitPanel() {
 
       // Load available recruits (users with approved TrollTract but not assigned to a partner)
       const { data: recruitsData, error: recruitsError } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select(`
           id,
           username,
@@ -107,7 +107,7 @@ export function AssignRecruitPanel() {
       setAssigning(true);
       
       const { error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .update({ recruiter_id: selectedPartner })
         .eq('id', selectedRecruit);
 

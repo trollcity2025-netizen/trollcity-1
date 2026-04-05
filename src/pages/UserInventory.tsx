@@ -733,7 +733,7 @@ export default function UserInventory({ embedded = false }: { embedded?: boolean
                 <h2 className="text-2xl font-bold mb-2">No Vehicle Titles</h2>
                 <p className={`${trollCityTheme.text.muted} mb-6`}>Visit the Dealership to buy vehicles.</p>
                 <button
-                  onClick={() => navigate('/dealership')}
+                  onClick={() => navigate('/trollstown?tab=ktauto')}
                   className={`px-6 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-semibold`}
                 >
                   Go to Dealership

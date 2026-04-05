@@ -12,7 +12,9 @@ import {
   Clock, 
   TrendingUp,
   Loader2,
-  Radio
+  Radio,
+  Trash2,
+  Play
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -47,11 +49,36 @@ export default function TickerQueueTab() {
   const [tickerQueue, setTickerQueue] = useState<TickerItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTicker, setActiveTicker] = useState<TickerItem | null>(null);
+  const [displayingTickers, setDisplayingTickers] = useState<TickerItem[]>([]);
 
   useEffect(() => {
     loadTickerQueue();
-    const interval = setInterval(loadTickerQueue, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
+    
+    const channel = supabase.channel('ticker-broadcast')
+      .on('broadcast', { event: 'ticker-message' }, (payload) => {
+        console.log('[TickerQueue] Received ticker message:', payload);
+        const ticker = payload.payload as any;
+        setDisplayingTickers(prev => {
+          const filtered = prev.filter(t => t.id !== ticker.id);
+          return [{ id: ticker.id, message: ticker.message.replace(/^🚨 BREAKING: |^📰 /, ''), type: ticker.priority === 'breaking' ? 'breaking' : 'standard', status: 'approved', submitted_by: '', submitter_name: 'Live', priority: ticker.priority === 'breaking' ? 3 : 1, created_at: ticker.created_at }, ...filtered].slice(0, 10);
+        });
+        loadTickerQueue();
+      })
+      .on('broadcast', { event: 'ticker-clear' }, (payload) => {
+        console.log('[TickerQueue] Received ticker clear:', payload);
+        const { id } = payload.payload as { id: string };
+        setDisplayingTickers(prev => prev.filter(t => t.id !== id));
+      })
+      .subscribe((status) => {
+        console.log('[TickerQueue] Channel status:', status);
+      });
+
+    const interval = setInterval(loadTickerQueue, 30000);
+
+    return () => {
+      channel.unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   const loadTickerQueue = async () => {
@@ -152,8 +179,85 @@ export default function TickerQueueTab() {
     }
   };
 
+  const handleDeleteTicker = async (id: string) => {
+    if (!confirm('Are you sure you want to permanently delete this ticker?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('tcnn_ticker_queue')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('Ticker deleted');
+      loadTickerQueue();
+    } catch (error) {
+      console.error('Error deleting ticker:', error);
+      toast.error('Failed to delete ticker');
+    }
+  };
+
+  const handleBroadcastNow = async (ticker: TickerItem) => {
+    try {
+      await supabase.channel('ticker-broadcast').send({
+        type: 'broadcast',
+        event: 'ticker-message',
+        payload: {
+          id: ticker.id,
+          type: ticker.type === 'breaking' ? 'tcnn_breaking' : 'tcnn_live',
+          message: ticker.type === 'breaking' 
+            ? `🚨 BREAKING: ${ticker.message}` 
+            : `📰 ${ticker.message}`,
+          priority: ticker.type === 'breaking' ? 'breaking' : 'medium',
+          created_at: new Date().toISOString(),
+          metadata: {
+            category: ticker.type === 'breaking' ? 'breaking_news' : 'ticker_message'
+          }
+        }
+      });
+
+      toast.success('Ticker broadcast to global display!');
+    } catch (error) {
+      console.error('Error broadcasting ticker:', error);
+      toast.error('Failed to broadcast ticker');
+    }
+  };
+
+  const handleStopDisplay = async (id: string) => {
+    if (!confirm('Stop displaying this ticker?')) return;
+    
+    try {
+      // Send a clear event to remove from global ticker
+      await supabase.channel('ticker-broadcast').send({
+        type: 'broadcast',
+        event: 'ticker-clear',
+        payload: { id }
+      });
+
+      // Also update database status
+      const { error } = await supabase
+        .from('tcnn_ticker_queue')
+        .update({
+          status: 'rejected',
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('Ticker stopped');
+      loadTickerQueue();
+    } catch (error) {
+      console.error('Error stopping ticker:', error);
+      toast.error('Failed to stop ticker');
+    }
+  };
+
   const pendingTickers = tickerQueue.filter(t => t.status === 'pending');
   const approvedTickers = tickerQueue.filter(t => t.status === 'approved');
+  const rejectedTickers = tickerQueue.filter(t => t.status === 'rejected');
 
   if (isLoading) {
     return (
@@ -207,6 +311,45 @@ export default function TickerQueueTab() {
             )}
           </div>
         </Card>
+      )}
+
+      {/* Currently Displaying */}
+      {displayingTickers.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Radio className="w-5 h-5 text-green-400 animate-pulse" />
+            Currently Displaying ({displayingTickers.length})
+          </h3>
+          <div className="space-y-2">
+            {displayingTickers.map((ticker) => (
+              <Card key={ticker.id} className="bg-slate-900/50 border-blue-500/30 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    <Badge className={ticker.type === 'breaking' ? 'bg-red-500' : 'bg-blue-500'}>
+                      {ticker.type === 'breaking' ? '🚨 BREAKING' : '📰'}
+                    </Badge>
+                    <p className="text-white text-sm truncate max-w-lg">
+                      {ticker.message}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-4">
+                    {(isNewsCaster || isChiefNewsCaster) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleStopDisplay(ticker.id)}
+                        className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+                      >
+                        <XCircle className="w-3 h-3 mr-1" />
+                        Stop
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Pending Approvals */}
@@ -264,6 +407,16 @@ export default function TickerQueueTab() {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => handleBroadcastNow(ticker)}
+                        className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+                        title="Broadcast now (skip queue)"
+                      >
+                        <Play className="w-4 h-4 mr-1" />
+                        Push Live
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => handleReject(ticker.id)}
                         className="border-red-500/50 text-red-400 hover:bg-red-500/10"
                       >
@@ -279,28 +432,94 @@ export default function TickerQueueTab() {
         )}
       </div>
 
-      {/* Recently Approved */}
+      {/* Approved */}
       {approvedTickers.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-400" />
-            Recently Approved ({approvedTickers.length})
+            Approved ({approvedTickers.length})
           </h3>
           <div className="space-y-2">
-            {approvedTickers.slice(0, 5).map((ticker) => (
+            {approvedTickers.slice(0, 10).map((ticker) => (
               <Card key={ticker.id} className="bg-slate-900/30 border-white/5 p-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-1">
                     <Badge variant="outline" className="text-xs">
                       {ticker.type}
                     </Badge>
-                    <p className="text-gray-300 text-sm truncate max-w-md">
+                    <p className="text-gray-300 text-sm truncate max-w-lg">
                       {ticker.message}
                     </p>
                   </div>
-                  <span className="text-xs text-gray-500">
-                    {formatDistanceToNow(ticker.reviewed_at || ticker.created_at)}
-                  </span>
+                  <div className="flex items-center gap-2 ml-4">
+                    {(isNewsCaster || isChiefNewsCaster) && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleBroadcastNow(ticker)}
+                          className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+                          title="Broadcast to global ticker"
+                        >
+                          <Play className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteTicker(ticker.id)}
+                          className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+                          title="Delete ticker"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </>
+                    )}
+                    <span className="text-xs text-gray-500">
+                      {formatDistanceToNow(ticker.reviewed_at || ticker.created_at)}
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Rejected */}
+      {rejectedTickers.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <XCircle className="w-5 h-5 text-red-400" />
+            Rejected ({rejectedTickers.length})
+          </h3>
+          <div className="space-y-2">
+            {rejectedTickers.slice(0, 5).map((ticker) => (
+              <Card key={ticker.id} className="bg-slate-900/20 border-white/5 p-3 opacity-60">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    <Badge variant="outline" className="text-xs text-gray-500">
+                      {ticker.type}
+                    </Badge>
+                    <p className="text-gray-400 text-sm truncate max-w-lg">
+                      {ticker.message}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-4">
+                    {(isNewsCaster || isChiefNewsCaster) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteTicker(ticker.id)}
+                        className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+                        title="Delete ticker"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
+                    <span className="text-xs text-gray-500">
+                      {formatDistanceToNow(ticker.reviewed_at || ticker.created_at)}
+                    </span>
+                  </div>
                 </div>
               </Card>
             ))}

@@ -89,6 +89,7 @@ interface TenantLease {
   electric_cost: number;
   water_cost: number;
   is_overdue: boolean;
+  has_lease?: boolean;
 }
 
 interface RentalApplication {
@@ -565,47 +566,99 @@ export default function LivingPage() {
         .in('property_id', propIds)
         .eq('status', 'active');
 
-      if (!leases || leases.length === 0) {
-        setAllTenants([]);
-        setLoadingTenants(false);
-        return;
+      const tenantLeases: TenantLease[] = [];
+
+      // Add tenants with leases
+      if (leases && leases.length > 0) {
+        const tenantIds = [...new Set(leases.map(l => l.tenant_id))];
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, username, troll_coins')
+          .in('id', tenantIds);
+
+        const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
+        for (const lease of leases) {
+          const prop = propMap.get(lease.property_id);
+          const tenant = profileMap.get(lease.tenant_id);
+          const lastPaid = lease.last_rent_paid_at ? new Date(lease.last_rent_paid_at) : null;
+          const now = new Date();
+          const daysSincePayment = lastPaid ? (now.getTime() - lastPaid.getTime()) / (1000 * 60 * 60 * 24) : 999;
+          tenantLeases.push({
+            id: lease.id,
+            property_id: lease.property_id,
+            tenant_id: lease.tenant_id,
+            start_date: lease.start_date,
+            rent_due_day: lease.rent_due_day,
+            last_rent_paid_at: lease.last_rent_paid_at,
+            last_utility_paid_at: lease.last_utility_paid_at,
+            status: lease.status,
+            created_at: lease.created_at,
+            tenant_username: tenant?.username || 'Unknown',
+            property_name: prop?.name || 'Unknown Property',
+            property_type: prop?.type_id || 'apartment',
+            rent_amount: prop?.rent_amount || 0,
+            electric_cost: prop?.electric_cost ?? Math.ceil((prop?.utility_cost || 0) / 2),
+            water_cost: prop?.water_cost ?? Math.floor((prop?.utility_cost || 0) / 2),
+            is_overdue: daysSincePayment > 30,
+            has_lease: true,
+          });
+        }
       }
 
-      // Fetch tenant usernames
-      const tenantIds = [...new Set(leases.map(l => l.tenant_id))];
-      const { data: profiles } = await supabase
-        .from('user_profiles')
-        .select('id, username, troll_coins')
-        .in('id', tenantIds);
+      // Also fetch from house_rentals for older rentals without leases
+      const { data: houseRentals } = await supabase
+        .from('house_rentals')
+        .select('*')
+        .eq('landlord_user_id', user.id)
+        .in('status', ['active', 'late']);
 
-      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+      if (houseRentals && houseRentals.length > 0) {
+        // Filter out any rentals that already have leases (by property_id)
+        const leasePropertyIds = new Set(leases?.map(l => l.property_id) || []);
+        
+        const rentalTenantIds = houseRentals
+          .filter(r => !leasePropertyIds.has(r.user_house_id))
+          .map(r => r.tenant_user_id);
+        
+        let profileMap2 = new Map();
+        if (rentalTenantIds.length > 0) {
+          const { data: profiles2 } = await supabase
+            .from('user_profiles')
+            .select('id, username, troll_coins')
+            .in('id', rentalTenantIds);
+          profileMap2 = new Map((profiles2 || []).map(p => [p.id, p]));
+        }
 
-      // Build TenantLease objects
-      const tenantLeases: TenantLease[] = leases.map(lease => {
-        const prop = propMap.get(lease.property_id);
-        const tenant = profileMap.get(lease.tenant_id);
-        const lastPaid = lease.last_rent_paid_at ? new Date(lease.last_rent_paid_at) : null;
-        const now = new Date();
-        const daysSincePayment = lastPaid ? (now.getTime() - lastPaid.getTime()) / (1000 * 60 * 60 * 24) : 999;
-        return {
-          id: lease.id,
-          property_id: lease.property_id,
-          tenant_id: lease.tenant_id,
-          start_date: lease.start_date,
-          rent_due_day: lease.rent_due_day,
-          last_rent_paid_at: lease.last_rent_paid_at,
-          last_utility_paid_at: lease.last_utility_paid_at,
-          status: lease.status,
-          created_at: lease.created_at,
-          tenant_username: tenant?.username || 'Unknown',
-          property_name: prop?.name || 'Unknown Property',
-          property_type: prop?.type_id || 'apartment',
-          rent_amount: prop?.rent_amount || 0,
-          electric_cost: prop?.electric_cost ?? Math.ceil((prop?.utility_cost || 0) / 2),
-          water_cost: prop?.water_cost ?? Math.floor((prop?.utility_cost || 0) / 2),
-          is_overdue: daysSincePayment > 30,
-        };
-      });
+        for (const rental of houseRentals) {
+          if (leasePropertyIds.has(rental.user_house_id)) continue;
+          
+          const tenant = profileMap2.get(rental.tenant_user_id);
+          const lastPaid = rental.last_paid_at ? new Date(rental.last_paid_at) : null;
+          const now = new Date();
+          const daysSincePayment = lastPaid ? (now.getTime() - lastPaid.getTime()) / (1000 * 60 * 60 * 24) : 999;
+          
+          tenantLeases.push({
+            id: rental.id, // Use rental ID - collect_rent will check both tables
+            property_id: rental.user_house_id,
+            tenant_id: rental.tenant_user_id,
+            start_date: rental.created_at,
+            rent_due_day: 1,
+            last_rent_paid_at: rental.last_paid_at,
+            last_utility_paid_at: null,
+            status: rental.status,
+            created_at: rental.created_at,
+            tenant_username: tenant?.username || 'Unknown',
+            property_name: 'Rental Property',
+            property_type: 'house',
+            rent_amount: rental.rent_amount || 0,
+            electric_cost: 0,
+            water_cost: 0,
+            is_overdue: daysSincePayment > 30,
+            has_lease: false,
+          });
+        }
+      }
 
       setAllTenants(tenantLeases);
     } catch (err: any) {
@@ -621,7 +674,16 @@ export default function LivingPage() {
     if (!confirm(`Collect rent from ${lease.tenant_username}? Total: ${total.toLocaleString()} coins`)) return;
 
     try {
-      const { data, error } = await supabase.rpc('pay_rent', { p_lease_id: lease.id });
+      let result;
+      if (lease.has_lease) {
+        // Use collect_rent for new lease system
+        result = await supabase.rpc('collect_rent', { p_lease_id: lease.id });
+      } else {
+        // Use collect_house_rent for legacy house_rentals
+        result = await supabase.rpc('collect_house_rent', { p_rental_id: lease.id });
+      }
+      
+      const { data, error } = result;
       if (error) throw error;
       if (data && !data.success) throw new Error(data.error);
 
@@ -1261,8 +1323,8 @@ export default function LivingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-4 pb-20 md:pb-4 md:ml-64">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-4 pb-20 md:pb-4">
+      <div className="max-w-4xl space-y-6">
         
         <header className="flex items-center justify-between mb-8">
             <div>

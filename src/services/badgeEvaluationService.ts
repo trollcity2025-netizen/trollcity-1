@@ -109,7 +109,7 @@ export async function checkStreamingBadges(userId: string): Promise<BadgeCheckRe
   
   // Get user's streaming stats
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('user_profiles')
     .select('total_streams, total_viewers, max_concurrent_viewers, max_stream_coins_received')
     .eq('id', userId)
     .maybeSingle()
@@ -159,7 +159,7 @@ export async function checkCommunityBadges(userId: string): Promise<BadgeCheckRe
   
   // Get user's community stats
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('user_profiles')
     .select('total_jury_duty, total_rulings_accepted, total_helpful_reports, total_chat_messages')
     .eq('id', userId)
     .maybeSingle()
@@ -209,7 +209,7 @@ export async function checkSocialBadges(userId: string): Promise<BadgeCheckResul
   
   // Get user's social stats
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('user_profiles')
     .select('login_streak, created_at, total_badges_earned, total_violations, last_violation_at')
     .eq('id', userId)
     .maybeSingle()
@@ -275,7 +275,7 @@ export async function checkHiddenBadges(userId: string, context: any = {}): Prom
   
   // Ghost (no profile picture for 6 months)
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('user_profiles')
     .select('avatar_url, created_at')
     .eq('id', userId)
     .maybeSingle()
@@ -430,7 +430,7 @@ export async function evaluateBadgesForUser(userId: string, context: any = {}): 
   try {
     // Get current level
     const { data: profile } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .select('level')
       .eq('id', userId)
       .maybeSingle()

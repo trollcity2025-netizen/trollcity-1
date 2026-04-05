@@ -120,19 +120,22 @@ const useGlobalActivity = () => {
     // TCNN Breaking News Handler
     const handleTCNNBreakingNews = async (payload: any) => {
       const ticker = payload.new as any;
-      if (ticker.status === 'active' && ticker.priority === 'breaking') {
+      // Handle both breaking (priority 3) and standard (priority 1) ticker messages
+      if (ticker.status === 'active' || ticker.status === 'approved') {
         const event: ActivityEvent = {
           id: ticker.id,
-          type: 'tcnn_breaking',
-          message: `🚨 BREAKING: ${ticker.message}`,
-          priority: 'breaking',
+          type: ticker.priority >= 3 ? 'tcnn_breaking' : 'tcnn_live',
+          message: ticker.priority >= 3 
+            ? `🚨 BREAKING: ${ticker.message}` 
+            : `📰 ${ticker.message}`,
+          priority: ticker.priority >= 3 ? 'breaking' : 'medium',
           created_at: ticker.created_at,
           metadata: {
-            category: 'breaking_news'
+            category: ticker.priority >= 3 ? 'breaking_news' : 'ticker_message'
           }
         };
         setEvents((prevEvents) => {
-          const filtered = prevEvents.filter(e => !(e.id === ticker.id && e.type === 'tcnn_breaking'));
+          const filtered = prevEvents.filter(e => e.id !== ticker.id);
           return [event, ...filtered].slice(0, 50);
         });
       }
@@ -185,7 +188,27 @@ const useGlobalActivity = () => {
       }
     };
 
-    // TCNN Ticker Queue Subscription
+    // TCNN Ticker Queue Broadcast (primary method for instant display)
+    const tickerBroadcastSubscription = supabase
+      .channel('ticker-broadcast')
+      .on('broadcast', { event: 'ticker-message' }, (payload) => {
+        console.log('[GlobalTicker] Broadcast ticker received:', payload);
+        const ticker = payload.payload as ActivityEvent;
+        setEvents((prevEvents) => {
+          const filtered = prevEvents.filter(e => e.id !== ticker.id);
+          return [ticker, ...filtered].slice(0, 50);
+        });
+      })
+      .on('broadcast', { event: 'ticker-clear' }, (payload) => {
+        console.log('[GlobalTicker] Clear ticker received:', payload);
+        const { id } = payload.payload as { id: string };
+        setEvents((prevEvents) => prevEvents.filter(e => e.id !== id));
+      })
+      .subscribe((status) => {
+        console.log('[GlobalTicker] Broadcast subscription status:', status);
+      });
+
+    // TCNN Ticker Queue Subscription (fallback for database changes)
     const tcnnTickerSubscription = supabase
       .channel('tcnn-ticker-activity')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tcnn_ticker_queue' }, handleTCNNBreakingNews)
@@ -215,6 +238,7 @@ const useGlobalActivity = () => {
       streamsSubscription.unsubscribe();
       coinTransactionsSubscription.unsubscribe();
       trollBattlesSubscription.unsubscribe();
+      tickerBroadcastSubscription.unsubscribe();
       tcnnTickerSubscription.unsubscribe();
       tcnnStreamSubscription.unsubscribe();
       tcnnArticlesSubscription.unsubscribe();

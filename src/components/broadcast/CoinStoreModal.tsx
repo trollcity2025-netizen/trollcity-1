@@ -39,7 +39,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
     try {
       // Check user's account creation date
       const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .select('created_at')
         .eq('id', user.id)
         .single();
