@@ -221,6 +221,22 @@ export default function Trollifieds() {
   // Item detail modal state
   const [itemDetail, setItemDetail] = useState<{open: boolean, item?: any}>({open: false})
 
+  // Create listing modal state
+  const [createModal, setCreateModal] = useState<{open: boolean, type: 'marketplace' | 'vehicle' | 'service'}>({open: false, type: 'marketplace'})
+  const [createForm, setCreateForm] = useState({
+    title: '',
+    description: '',
+    price_coins: '',
+    price_usd: '',
+    category: '',
+    condition: 'good',
+    delivery_type: 'both',
+    city: '',
+    state: '',
+    images: [] as File[]
+  })
+  const [creating, setCreating] = useState(false)
+
   // Get user location
   useEffect(() => {
     if (navigator.geolocation) {
@@ -517,6 +533,100 @@ export default function Trollifieds() {
     setItemDetail({ open: true, item })
   }
 
+  // Open create listing modal
+  const openCreateModal = (type: 'marketplace' | 'vehicle' | 'service') => {
+    if (!user) {
+      navigate('/auth')
+      return
+    }
+    setCreateModal({ open: true, type })
+  }
+
+  // Handle create listing
+  const handleCreateListing = async () => {
+    if (!user || !userLocation) {
+      toast.error('Please log in and allow location access')
+      return
+    }
+
+    if (!createForm.title.trim() || !createForm.description.trim()) {
+      toast.error('Title and description are required')
+      return
+    }
+
+    if (!createForm.price_coins && !createForm.price_usd) {
+      toast.error('At least one price (coins or USD) is required')
+      return
+    }
+
+    setCreating(true)
+    try {
+      // Upload images first
+      let imageUrls: string[] = []
+      if (createForm.images.length > 0) {
+        for (const image of createForm.images) {
+          const fileExt = image.name.split('.').pop()
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+          const filePath = `marketplace/${user.id}/${fileName}`
+
+          const { error: uploadError } = await supabase.storage
+            .from('post-images')
+            .upload(filePath, image)
+
+          if (uploadError) throw uploadError
+
+          const { data: urlData } = supabase.storage
+            .from('post-images')
+            .getPublicUrl(filePath)
+
+          imageUrls.push(urlData.publicUrl)
+        }
+      }
+
+      // Create listing
+      const { data, error } = await supabase.rpc('create_marketplace_listing', {
+        p_title: createForm.title.trim(),
+        p_description: createForm.description.trim(),
+        p_price_coins: createForm.price_coins ? parseInt(createForm.price_coins) : null,
+        p_price_usd: createForm.price_usd ? parseFloat(createForm.price_usd) : null,
+        p_category: createForm.category || 'other',
+        p_condition: createForm.condition,
+        p_delivery_type: createForm.delivery_type,
+        p_latitude: userLocation.lat,
+        p_longitude: userLocation.lon,
+        p_city: createForm.city.trim() || null,
+        p_state: createForm.state.trim() || null,
+        p_images: imageUrls,
+        p_stock: 1
+      })
+
+      if (error) throw error
+
+      toast.success('Listing created successfully!')
+      setCreateModal({ open: false, type: 'marketplace' })
+      setCreateForm({
+        title: '',
+        description: '',
+        price_coins: '',
+        price_usd: '',
+        category: '',
+        condition: 'good',
+        delivery_type: 'both',
+        city: '',
+        state: '',
+        images: []
+      })
+      loadData() // Refresh listings
+    } catch (err: any) {
+      console.error('Error creating listing:', err)
+      toast.error(err.message || 'Failed to create listing')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  // Get price display
+
   // Get price display
   const getPriceDisplay = (item: any) => {
     if (item.price_coins && item.price_usd) {
@@ -572,7 +682,7 @@ export default function Trollifieds() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate('/sell')}
+                onClick={() => openCreateModal('marketplace')}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium text-sm flex items-center gap-2"
               >
                 <DollarSign className="w-4 h-4" />
@@ -1192,6 +1302,196 @@ export default function Trollifieds() {
                   <Zap className="w-5 h-5" />
                   Boost
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Listing Modal */}
+      {createModal.open && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1A1A1A] rounded-xl border border-[#2C2C2C] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-green-400" />
+                  Create {createModal.type === 'marketplace' ? 'Marketplace' : createModal.type === 'vehicle' ? 'Vehicle' : 'Service'} Listing
+                </h3>
+                <button
+                  onClick={() => setCreateModal({ open: false, type: 'marketplace' })}
+                  className="p-1 hover:bg-[#2C2C2C] rounded"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Title *</label>
+                  <input
+                    type="text"
+                    value={createForm.title}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="What are you selling?"
+                    className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none"
+                    maxLength={100}
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Description *</label>
+                  <textarea
+                    value={createForm.description}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Describe your item in detail..."
+                    rows={4}
+                    className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none resize-none"
+                    maxLength={1000}
+                  />
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+                  <select
+                    value={createForm.category}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="">Select a category</option>
+                    {MARKETPLACE_CATEGORIES.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Prices */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Price (Coins)</label>
+                    <input
+                      type="number"
+                      value={createForm.price_coins}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, price_coins: e.target.value }))}
+                      placeholder="0"
+                      min="0"
+                      className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Price (USD)</label>
+                    <input
+                      type="number"
+                      value={createForm.price_usd}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, price_usd: e.target.value }))}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Condition */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Condition</label>
+                  <select
+                    value={createForm.condition}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, condition: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="new">New</option>
+                    <option value="like_new">Like New</option>
+                    <option value="good">Good</option>
+                    <option value="fair">Fair</option>
+                    <option value="poor">Poor</option>
+                  </select>
+                </div>
+
+                {/* Delivery Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Delivery Options</label>
+                  <select
+                    value={createForm.delivery_type}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, delivery_type: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="shipping">Shipping Only</option>
+                    <option value="pickup">Pickup Only</option>
+                    <option value="both">Shipping or Pickup</option>
+                  </select>
+                </div>
+
+                {/* Location */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">City</label>
+                    <input
+                      type="text"
+                      value={createForm.city}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, city: e.target.value }))}
+                      placeholder="Your city"
+                      className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">State</label>
+                    <input
+                      type="text"
+                      value={createForm.state}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, state: e.target.value }))}
+                      placeholder="Your state"
+                      className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Images */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Images</label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || [])
+                      setCreateForm(prev => ({ ...prev, images: files }))
+                    }}
+                    className="w-full px-3 py-2 bg-[#0D0D0D] border border-[#2C2C2C] rounded-lg focus:border-purple-500 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-purple-600 file:text-white hover:file:bg-purple-700"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Upload up to 5 images. Your location will be automatically included for local pickup.</p>
+                </div>
+
+                {/* Submit */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => setCreateModal({ open: false, type: 'marketplace' })}
+                    className="flex-1 px-4 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg font-medium"
+                    disabled={creating}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateListing}
+                    disabled={creating}
+                    className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium flex items-center justify-center gap-2"
+                  >
+                    {creating ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        Create Listing
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

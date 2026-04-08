@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
@@ -12,7 +13,7 @@ interface Family {
   banner_url: string | null
   description: string | null
   level: number
-  total_points: number
+  xp: number
 }
 
 interface FamilyMember {
@@ -30,10 +31,15 @@ interface FamilyMember {
 
 export default function FamilyProfilePage() {
   const { user } = useAuthStore()
+  const navigate = useNavigate()
+  const params = useParams<{ id: string }>()
+  const familyId = params.id
   const [family, setFamily] = useState<Family | null>(null)
   const [members, setMembers] = useState<FamilyMember[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadingBanner, setUploadingBanner] = useState(false)
+  const [userFamilyId, setUserFamilyId] = useState<string | null>(null)
+  const [joinLoading, setJoinLoading] = useState(false)
 
   const isLeader =
     members.find((m) => m.user_id === user?.id)?.role === 'leader' ||
@@ -42,79 +48,150 @@ export default function FamilyProfilePage() {
   const loadFamily = useCallback(async () => {
     setLoading(true)
 
-    // 1) Find user's family
-    const { data: member, error: memberErr } = await supabase
-      .from('troll_family_members')
-      .select('family_id')
-      .eq('user_id', user!.id)
-      .single()
-
-    if (memberErr || !member?.family_id) {
+    if (!familyId) {
       setFamily(null)
       setMembers([])
       setLoading(false)
       return
     }
 
-    // 2) Load family info and members in parallel
-    const [familyRes, membersRes] = await Promise.all([
-      supabase
-        .from('troll_families')
-        .select('*')
-        .eq('id', member.family_id)
-        .single(),
-      supabase
-        .from('troll_family_members')
-        .select(
+    try {
+      if (user) {
+        const { data: membershipData, error: membershipError } = await supabase
+          .from('family_members')
+          .select('family_id')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (membershipError) {
+          console.error('Error checking family membership:', membershipError)
+        }
+
+        if (membershipData?.family_id) {
+          setUserFamilyId(membershipData.family_id)
+        } else {
+          const { data: trollMembershipData, error: trollMembershipError } = await supabase
+            .from('troll_family_members')
+            .select('family_id')
+            .eq('user_id', user.id)
+            .maybeSingle()
+
+          if (trollMembershipError) {
+            console.error('Error checking troll family membership:', trollMembershipError)
+          }
+
+          setUserFamilyId(trollMembershipData?.family_id || null)
+        }
+      } else {
+        setUserFamilyId(null)
+      }
+
+      const [familyRes, membersRes] = await Promise.all([
+        supabase
+          .from('troll_families')
+          .select('*')
+          .eq('id', familyId)
+          .maybeSingle(),
+        supabase
+          .from('troll_family_members')
+          .select(
+            `
+            id,
+            user_id,
+            role,
+            contribution_points,
+            profiles:user_id (
+              username,
+              avatar_url,
+              has_crown_badge,
+              created_at,
+              is_gold,
+              glowing_username_color,
+              rgb_username_expires_at,
+              username_style,
+              badge
+            )
           `
-          id,
-          user_id,
-          role,
-          contribution_points,
-          profiles:user_id (
-            username,
-            avatar_url,
-            has_crown_badge,
-            created_at,
-            is_gold,
-            glowing_username_color,
-            rgb_username_expires_at,
-            username_style,
-            badge
           )
-        `
-        )
-        .eq('family_id', member.family_id)
-        .order('role', { ascending: true })
-    ])
+          .eq('family_id', familyId)
+          .order('role', { ascending: true })
+      ])
 
-    const { data: fam, error: famErr } = familyRes
-    const { data: memberList, error: membersErr } = membersRes
+      const { data: fam, error: famErr } = familyRes
+      const { data: memberList, error: membersErr } = membersRes
 
-    if (famErr || !fam) {
+      if (famErr || !fam) {
+        setFamily(null)
+        setMembers([])
+        setLoading(false)
+        return
+      }
+
+      setFamily(fam as Family)
+
+      if (membersErr) {
+        console.error(membersErr)
+        setMembers([])
+      } else {
+        setMembers((memberList || []) as unknown as FamilyMember[])
+      }
+    } catch (err) {
+      console.error('Failed to load family:', err)
       setFamily(null)
       setMembers([])
+    } finally {
       setLoading(false)
+    }
+  }, [familyId, user])
+
+  const handleJoinFamily = async () => {
+    if (!user) {
+      toast.error('Please sign in to join this family.')
+      return
+    }
+    if (!family?.id) {
+      toast.error('Family not found.')
+      return
+    }
+    if (userFamilyId && userFamilyId !== family.id) {
+      toast.error('Leave your current family before joining another.')
+      return
+    }
+    if (userFamilyId === family.id) {
+      toast.success('You are already a member of this family.')
       return
     }
 
-    setFamily(fam as Family)
+    setJoinLoading(true)
+    try {
+      const { data, error } = await supabase.rpc('join_family', {
+        p_family_id: family.id,
+        p_user_id: user.id
+      })
 
-    if (membersErr) {
-      console.error(membersErr)
-      setMembers([])
-    } else {
-      setMembers((memberList || []) as unknown as FamilyMember[])
+      if (error) {
+        throw error
+      }
+
+      const result = data as { success: boolean; error?: string }
+      if (!result.success) {
+        toast.error(result.error || 'Failed to join family.')
+        return
+      }
+
+      toast.success('Joined family successfully!')
+      navigate('/family/home')
+    } catch (err: any) {
+      console.error('Error joining family:', err)
+      toast.error(err?.message || 'Failed to join family.')
+    } finally {
+      setJoinLoading(false)
     }
-
-    setLoading(false)
-  }, [user])
+  }
 
   useEffect(() => {
-    if (user) {
-      loadFamily()
-    }
-  }, [user, loadFamily])
+    loadFamily()
+  }, [familyId, user, loadFamily])
 
   const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -230,10 +307,35 @@ export default function FamilyProfilePage() {
             <h1 className="text-2xl font-extrabold">{family.name}</h1>
           </div>
           <div className="text-sm text-gray-300 mt-1">
-            Level {family.level} • {getRankName(family.total_points)}
+            Level {family.level} • {getRankName(family.xp)}
           </div>
           {family.description && (
             <p className="text-xs text-gray-400 mt-1">{family.description}</p>
+          )}
+
+          {!userFamilyId && !joinLoading && (
+            <div className="mt-4 rounded-2xl border border-purple-500/20 bg-slate-900/80 p-4 text-sm text-gray-300">
+              <p className="mb-3">Want to join this family? Click below to request membership.</p>
+              <button
+                onClick={handleJoinFamily}
+                disabled={joinLoading}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-colors"
+              >
+                Join Family
+              </button>
+            </div>
+          )}
+
+          {userFamilyId && userFamilyId !== family.id && (
+            <div className="mt-4 rounded-2xl border border-orange-500/20 bg-orange-900/10 p-4 text-sm text-orange-200">
+              You are already in another family. Leave your current family before joining this one.
+            </div>
+          )}
+
+          {userFamilyId === family.id && (
+            <div className="mt-4 rounded-2xl border border-green-500/20 bg-green-900/10 p-4 text-sm text-green-200">
+              You are already a member of this family.
+            </div>
           )}
         </div>
 
@@ -243,7 +345,7 @@ export default function FamilyProfilePage() {
             Weekly Crown Eligible
           </div>
           <div className="flex items-center justify-end gap-1 text-purple-300 text-xs mt-1">
-            <Star size={14} /> {family.total_points.toLocaleString()} family points
+            <Star size={14} /> {family.xp.toLocaleString()} family points
           </div>
         </div>
       </div>

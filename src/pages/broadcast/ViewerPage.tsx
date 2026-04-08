@@ -27,6 +27,7 @@ import BattleGiftPanel from '../../components/broadcast/BattleGiftPanel'
 
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { playArrivalEffects } from '../../lib/perkEffects'
 import { 
   Room, 
   RoomEvent, 
@@ -404,6 +405,11 @@ function ViewerPage() {
         });
         
         console.log('[ViewerPage] ✅ Viewer connected to LiveKit room successfully');
+        
+        // Play arrival effects if user has the perk
+        if (user?.id) {
+          playArrivalEffects(user.id);
+        }
         
           // Get existing participants (LiveKit v2.x uses remoteParticipants)
           const existingParticipants = room.remoteParticipants

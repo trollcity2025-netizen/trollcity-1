@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/lib/store';
 import { useXPStore } from '@/stores/useXPStore';
 import { useCoins } from '@/lib/hooks/useCoins';
 import { getRoleDisplayName } from '@/lib/supabase';
 import { Crown, Coins, Gem } from 'lucide-react';
+import { getGlowingTextStyle } from '@/lib/perkEffects';
 
 const UserProfileWidget = () => {
   const { profile } = useAuthStore();
@@ -12,6 +13,12 @@ const UserProfileWidget = () => {
   // Get trollmonds from profile (not returned by useCoins hook)
   const displayTrollmonds = profile?.trollmonds ?? 0;
   const prevXPData = useRef({ level: 0, xpTotal: 0, progress: 0 });
+
+  // RGB and Glowing Username checks
+  const now = new Date();
+  const hasRgbUsername = profile?.rgb_username_expires_at && new Date(profile.rgb_username_expires_at) > now;
+  const hasGlowingUsername = profile?.glowing_username_color;
+  const glowingStyle = hasGlowingUsername ? getGlowingTextStyle(profile.glowing_username_color) : undefined;
 
   // Subscribe to XP updates when profile is available
   useEffect(() => {
@@ -51,7 +58,9 @@ const UserProfileWidget = () => {
       <div className="flex items-center gap-2">
         <img src={profile.avatar_url} alt={profile.username} className="w-8 h-8 rounded-full border border-white/10" />
         <div className="min-w-0">
-          <h3 className="font-bold text-sm text-white truncate">{profile.username}</h3>
+          <h3 className={`font-bold text-sm truncate ${hasRgbUsername ? 'rgb-username' : ''}`} style={glowingStyle}>
+            {profile.username}
+          </h3>
           <p className="text-[10px] text-slate-400 capitalize bg-slate-800 px-1.5 py-0.5 rounded inline-block">{getRoleDisplayName(profile.role, profile.is_admin)}</p>
         </div>
       </div>

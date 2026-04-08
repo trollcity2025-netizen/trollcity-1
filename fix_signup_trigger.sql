@@ -57,8 +57,8 @@ BEGIN
     'https://api.dicebear.com/7.x/avataaars/svg?seed=' || v_username
   );
 
-  -- Set role from metadata or default to 'user'
-  v_role := COALESCE(NEW.raw_user_meta_data->>'role', 'user');
+  -- Force all new users to the regular user role
+  v_role := 'user';
   
   -- Safe Boolean Parsing for terms_accepted
   BEGIN

@@ -917,10 +917,9 @@ export default function TrollWheelGame({
       try {
         supabase.from('troll_wheel_wins').insert({
           user_id: profile.id,
-          spin_cost: currentBidCost,
-          reward_value: finalCoins,
-          coins_awarded: finalCoins,
-          multiplier_used: selectedMultiplier,
+          cost_trollz: currentBidCost,
+          reward_type: result.type,
+          reward_amount: finalCoins,
         });
       } catch (e) { console.warn('Failed to record spin'); }
     } catch (err) {

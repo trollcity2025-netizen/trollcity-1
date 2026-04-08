@@ -65,6 +65,11 @@ BEGIN
     SET troll_coins = troll_coins - v_total_cost
     WHERE id = v_sender_id;
 
+    -- Award trollmonds to sender: 1 trollmond per 100 coins spent
+    UPDATE public.user_profiles
+    SET trollmonds = COALESCE(trollmonds, 0) + FLOOR(v_total_cost / 100)
+    WHERE id = v_sender_id;
+
     -- Credit recipient (95%)
     v_recipient_share := FLOOR(v_total_cost * 0.95);
     

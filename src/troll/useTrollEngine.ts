@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PreflightStore } from '../lib/preflightStore';
+import { useAuthStore } from '../lib/store';
 
 // Define rarity tiers
 export type Rarity = 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
@@ -148,6 +149,13 @@ export const useTrollEngine = (onBackgroundTrigger?: (event: TrollEvent) => void
   // Trigger a troll event
   const triggerTroll = useCallback((context?: string, options?: { safe?: boolean }) => {
     console.log('[TrollEngine] Trigger attempt. Context:', context, 'Safe:', options?.safe);
+
+    // Check if user is admin/staff - they should not get trolls
+    const { profile } = useAuthStore.getState();
+    if (profile?.is_admin || profile?.is_ceo || profile?.is_staff || profile?.role === 'admin' || profile?.role === 'staff') {
+      console.log('[TrollEngine] Blocked - user is admin/staff');
+      return null;
+    }
 
     // Check if user is in battle or broadcast mode (should disable trolls)
     const isInBattle = PreflightStore.getInBattle();

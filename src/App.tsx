@@ -4,6 +4,8 @@ import React, { useEffect, Suspense, useState, useRef } from "react";
 import TrollProvider from "./troll/TrollProvider";
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./lib/store";
+import { GlobalEventThemeLayer } from "./components/GlobalEventThemeLayer";
+import { GlobalEventProvider } from "./contexts/GlobalEventContext";
 
 import { useEligibilityStore } from "./lib/eligibilityStore";
 import { useJailMode } from "./hooks/useJailMode";
@@ -57,8 +59,16 @@ import SessionMonitor from "./components/auth/SessionMonitor";
 import TermsAgreement from "./pages/TermsAgreement";
 import ExitPage from "./pages/ExitPage";
 
+import AboutPage from "./pages/seo/AboutPage";
+import BroadcastingPage from "./pages/seo/BroadcastingPage";
+import CategoriesPage from "./pages/seo/CategoriesPage";
+import SEOTrollCityGovernment from "./pages/seo/GovernmentPage";
+import CreatorsPage from "./pages/seo/CreatorsPage";
+import GoLivePage from "./pages/seo/GoLivePage";
+
 import TrollBank from "./pages/TrollBank";
 import CityRegistry from "./pages/CityRegistry";
+const AdvertisePage = lazyWithRetry(() => import("./pages/city-registry/AdvertisePage"));
 const SetupPage = lazyWithRetry(() => import("./pages/broadcast/SetupPage"));
 const BroadcastPage = lazyWithRetry(() => import("./pages/broadcast/BroadcastPage"));
 const BroadcastRouter = lazyWithRetry(() => import("./pages/broadcast/BroadcastRouter"));
@@ -78,6 +88,7 @@ const EasterThemePreview = lazyWithRetry(() => import("./pages/dev/EasterThemePr
 const StreamControlPreview = lazyWithRetry(() => import("./pages/dev/StreamControlPreview"));
 const BroadcastLayoutPreview = lazyWithRetry(() => import("./pages/dev/BroadcastLayoutPreview"));
 const SetupPreview = lazyWithRetry(() => import("./pages/dev/SetupPreview"));
+const MobileLayoutPreview = lazyWithRetry(() => import("./pages/dev/MobileLayoutPreview"));
 const JailPreviewPage = lazyWithRetry(() => import("./pages/dev/JailPreviewPage"));
 const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 
@@ -648,9 +659,9 @@ function AppContent() {
 
     hasNavigatedRef.current = true;
 
-    // Redirect to family if troll_family role
+    // Redirect to family home if troll_family role
     if (profileRole === 'troll_family') {
-      navigate('/family', { replace: true });
+      navigate('/family/home', { replace: true });
     }
   }, [profile, location.pathname, navigate, userId, profileRole]);
 
@@ -1094,6 +1105,12 @@ function AppContent() {
             <Routes>
                 {/* 🚪 Public Routes */}
                 <Route path="/" element={<LandingHome />} />
+                <Route path="/about" element={<AboutPage />} />
+                <Route path="/broadcasting" element={<BroadcastingPage />} />
+                <Route path="/categories" element={<CategoriesPage />} />
+                <Route path="/seo-government" element={<SEOTrollCityGovernment />} />
+                <Route path="/creators" element={<CreatorsPage />} />
+                <Route path="/live" element={<GoLivePage />} />
               <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/exit" element={<ExitPage />} />
@@ -1139,6 +1156,7 @@ function AppContent() {
                 <Route path="/dev/stream-controls" element={<StreamControlPreview />} />
                 <Route path="/dev/broadcast-layout" element={<BroadcastLayoutPreview />} />
                 <Route path="/dev/setup-preview" element={<SetupPreview />} />
+                <Route path="/dev/mobile-layouts" element={<MobileLayoutPreview />} />
 
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>
@@ -1173,6 +1191,7 @@ function AppContent() {
                   <Route path="/match" element={<MatchPage />} />
           <Route path="/city-hall" element={<Navigate to="/" replace />} />
                   <Route path="/city-registry" element={<CityRegistry />} />
+                  <Route path="/city-registry/advertise" element={<AdvertisePage />} />
                 <Route path="/universe-event" element={<UniverseEventPage />} />
                 <Route path="/events/universe" element={<Navigate to="/universe-event" replace />} />
                 
@@ -1297,8 +1316,8 @@ function AppContent() {
                   {/* Gift store routes removed */}
 
                   {/* 👨‍👩‍👧 Family */}
-                  <Route path="/family" element={<TrollFamily />} />
-                  <Route path="/family/browse" element={<FamilyBrowse />} />
+                <Route path="/family" element={<Navigate to="/family/browse" replace />} />
+                <Route path="/family/browse" element={<FamilyBrowse />} />
                   <Route path="/family/create" element={<FamilyBrowse />} />
                   <Route path="/family/city" element={<TrollFamilyCity />} />
                   <Route path="/family/profile/:id" element={<FamilyProfilePage />} />
@@ -1953,15 +1972,19 @@ function App() {
   }, []);
 
   return (
-    <TrollProvider>
-      <AppContent />
-      {/* Easter Egg Global Overlay - eggs on all pages during hunt */}
-      <Suspense fallback={null}>
-        <EasterEggGlobalOverlay />
-      </Suspense>
-      {/* TM Family Invite Handler - shows pending invites as notifications */}
-      <TMFamilyInviteHandler />
-    </TrollProvider>
+    <GlobalEventProvider>
+      <TrollProvider>
+        <GlobalEventThemeLayer>
+          <AppContent />
+        </GlobalEventThemeLayer>
+        {/* Easter Egg Global Overlay - eggs on all pages during hunt */}
+        <Suspense fallback={null}>
+          <EasterEggGlobalOverlay />
+        </Suspense>
+        {/* TM Family Invite Handler - shows pending invites as notifications */}
+        <TMFamilyInviteHandler />
+      </TrollProvider>
+    </GlobalEventProvider>
   );
 }
 

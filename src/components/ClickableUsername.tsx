@@ -4,7 +4,7 @@ import OfficerTierBadge from './OfficerTierBadge'
 import { EmpireBadge } from './EmpireBadge'
 import { useNavigate } from 'react-router-dom'
 import { Shield, Crown, Skull, Star, UserX, Ban, MicOff, User, LogOut, ClipboardList, Gavel, Lock } from 'lucide-react'
-import { applyGlowingUsername, getGlowingTextStyle } from '../lib/perkEffects'
+import { applyGlowingUsername, getGlowingTextStyle, getTrollSpellEffect } from '../lib/perkEffects'
 import { useAuthStore } from '../lib/store'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
@@ -92,6 +92,20 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
 
   // Glowing Username Check
   const glowingColor = userProfile?.glowing_username_color;
+  
+  // Troll Spell Effect Check
+  const [trollSpellEffect, setTrollSpellEffect] = useState<{ style: string; emoji: string; color: string } | null>(null);
+  
+  useEffect(() => {
+    if (!targetUserId) return;
+    
+    const checkTrollSpell = async () => {
+      const effect = await getTrollSpellEffect(targetUserId);
+      setTrollSpellEffect(effect);
+    };
+    
+    checkTrollSpell();
+  }, [targetUserId]);
 
   useEffect(() => {
     if (!targetUserId || !usernameRef.current) {
@@ -591,7 +605,13 @@ const ClickableUsername: React.FC<ClickableUsernameProps> = ({
         ref={usernameRef}
         className={`cursor-pointer hover:text-troll-gold transition-colors username ${isAdmin ? 'admin-user' : isOfficer ? 'officer-user' : isTroller ? 'troller-user' : ''} ${specialClass}`}
         title={`View ${username}'s profile`}
+        style={trollSpellEffect ? {
+          color: trollSpellEffect.color,
+          textShadow: `0 0 10px ${trollSpellEffect.color}`,
+          animation: 'pulse 1s infinite'
+        } : undefined}
         >
+        {trollSpellEffect && <span className="mr-1">{trollSpellEffect.emoji}</span>}
         {prefix}{username}
         </span>
         

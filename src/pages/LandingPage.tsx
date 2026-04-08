@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
 
 import MoneyRain from '../components/MoneyRain';
-import { Play, Users, Coins, Trophy, Sparkles, ArrowRight } from 'lucide-react';
+import { Play, MessageSquare, Image, Plus, Settings, HelpCircle, LogOut, Mic, Send, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import HomeLiveGrid from '@/components/broadcast/HomeLiveGrid';
 import AppLayout from '@/components/layout/AppLayout';
 import EventCountdown from '@/components/EventCountdown';
+import { useEventTheme } from '@/components/GlobalEventThemeLayer';
 
 interface PlatformStats {
   totalUsers: number;
@@ -19,9 +20,9 @@ interface PlatformStats {
 export default function LandingPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  // Theme audio disabled - entrance effect should not play on landing page
-  // const { playTheme } = useThemeAudio();
+  const { isActive, primaryColor, secondaryColor, backgroundAccent, particleEffect } = useEventTheme();
   const [isEntering, setIsEntering] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState<PlatformStats>({
     totalUsers: 0,
     totalPaidOut: 0,
@@ -33,7 +34,6 @@ export default function LandingPage() {
     // playTheme();
   }, []);
 
-
   const handleEnterTrollCity = () => {
     setIsEntering(true);
     setTimeout(() => {
@@ -43,6 +43,14 @@ export default function LandingPage() {
         navigate('/auth?mode=login');
       }
     }, 1000);
+  };
+
+  const handleStartNewChat = () => {
+    if (user) {
+      navigate('/');
+    } else {
+      navigate('/auth?mode=login');
+    }
   };
 
   // Fetch and subscribe to real-time stats
@@ -113,7 +121,17 @@ export default function LandingPage() {
 
   return (
     <AppLayout showSidebar={true} showHeader={true} showBottomNav={true}>
-      <div className={`min-h-screen w-full ${trollCityTheme.backgrounds.primary} overflow-x-hidden relative font-sans`}>
+      <div className={`min-h-screen w-full ${isActive ? backgroundAccent : trollCityTheme.backgrounds.primary} overflow-x-hidden relative font-sans`}>
+        {/* Event Theme Overlay */}
+        {isActive && (
+          <div 
+            className="fixed inset-0 pointer-events-none z-0"
+            style={{
+              background: `linear-gradient(135deg, ${primaryColor}10 0%, ${secondaryColor}10 100%)`,
+            }}
+          />
+        )}
+        
         {/* Event Countdown Banner */}
         <EventCountdown />
 
@@ -168,9 +186,11 @@ export default function LandingPage() {
                 <div className="text-center lg:text-left space-y-8 animate-fade-in-up">
                   {/* Logo/Title */}
                   <div className="space-y-4">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full mb-4">
-                      <Sparkles className="w-4 h-4 text-purple-400" />
-                      <span className="text-purple-400 font-semibold text-sm">Get Paid Every Friday</span>
+                    <div className={`inline-flex items-center gap-2 px-4 py-2 ${isActive ? 'bg-pink-500/10 border-pink-500/20' : 'bg-purple-500/10 border-purple-500/20'} rounded-full mb-4`}>
+                      <Sparkles className={`w-4 h-4 ${isActive ? 'text-pink-400' : 'text-purple-400'}`} />
+                      <span className={`${isActive ? 'text-pink-400' : 'text-purple-400'} font-semibold text-sm`}>
+                        {isActive ? '🎉 Easter Event Active!' : 'Get Paid Every Friday'}
+                      </span>
                     </div>
                     
                     <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black">

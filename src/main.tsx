@@ -8,6 +8,7 @@ import './styles/mobile-theme.css'
 import './styles/leaflet.css'
 import { AuthProvider } from './contexts/AuthProvider'
 import { GlobalAppProvider } from './contexts/GlobalAppContext'
+import { GlobalEventProvider } from './contexts/GlobalEventContext'
 import AprilFoolsProvider from './components/april-fools/AprilFoolsProvider'
 import { EasterEggHuntProvider } from './contexts/EasterEggHuntContext'
 import { supabase } from './lib/supabase'
@@ -300,15 +301,17 @@ createRoot(rootElement).render(
   <QueryClientProvider client={queryClient}>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       
-        <AuthProvider>
-          <GlobalAppProvider>
+      <AuthProvider>
+        <GlobalAppProvider>
+          <GlobalEventProvider>
             <AprilFoolsProvider>
               <EasterEggHuntProvider>
                 <App />
               </EasterEggHuntProvider>
             </AprilFoolsProvider>
-          </GlobalAppProvider>
-        </AuthProvider>
+          </GlobalEventProvider>
+        </GlobalAppProvider>
+      </AuthProvider>
       
     </BrowserRouter>
   </QueryClientProvider>

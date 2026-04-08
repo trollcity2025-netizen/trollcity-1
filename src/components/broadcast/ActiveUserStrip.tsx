@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { User } from 'lucide-react';
 import UserActionModal from './UserActionModal';
 import EntranceEffectOverlay from './EntranceEffectOverlay';
+import { shouldHideUserFromViewers } from '../../lib/perkEffects';
 
 interface ActiveUserStripProps {
   streamId: string;
@@ -38,7 +39,7 @@ export default function ActiveUserStrip({ streamId, isHost, isModerator, onGift 
       // Fetch viewers active in the last 5 minutes
       const { data } = await supabase
         .from('stream_viewers')
-        .select('user_id, user:user_profiles(username, avatar_url, role, troll_role, created_at, active_entrance_effect)')
+        .select('user_id, user:user_profiles(id, username, avatar_url, role, troll_role, created_at, active_entrance_effect)')
         .eq('stream_id', streamId)
         .gt('last_seen', new Date(Date.now() - 5 * 60 * 1000).toISOString())
         .limit(20);
@@ -47,14 +48,23 @@ export default function ActiveUserStrip({ streamId, isHost, isModerator, onGift 
         // @ts-expect-error: data type inference
         const newViewers = data as Viewer[];
         
+        // Filter out users with ghost mode perk
+        const visibleViewers: Viewer[] = [];
+        for (const v of newViewers) {
+          const shouldHide = await shouldHideUserFromViewers(v.user_id);
+          if (!shouldHide) {
+            visibleViewers.push(v);
+          }
+        }
+        
         // Detect new viewers for effects
         const prevIds = prevViewersRef.current;
-        const currentIds = new Set(newViewers.map(v => v.user_id));
+        const currentIds = new Set(visibleViewers.map(v => v.user_id));
         
         // Find users who are in newViewers but were NOT in prevIds
         // AND haven't already shown their entrance effect
         if (prevIds.size > 0) {
-            newViewers.forEach(v => {
+            visibleViewers.forEach(v => {
                 if (!prevIds.has(v.user_id) && 
                     v.user.active_entrance_effect && 
                     !shownEffectsRef.current.has(v.user_id)) {
@@ -72,7 +82,7 @@ export default function ActiveUserStrip({ streamId, isHost, isModerator, onGift 
 
         // Update ref
         prevViewersRef.current = currentIds;
-        setViewers(newViewers);
+        setViewers(visibleViewers);
       }
     };
 

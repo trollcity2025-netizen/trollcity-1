@@ -71,6 +71,14 @@ body {
   overflow: hidden !important;
 }
 
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;

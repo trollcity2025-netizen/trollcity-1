@@ -17,6 +17,8 @@ interface NeonGlowUsernameProps {
     username_style?: string
     badge?: string
     empire_role?: string | null
+    rgb_username_expires_at?: string
+    glowing_username_color?: string | null
   }
   size?: 'sm' | 'md' | 'lg'
   showBadges?: boolean
@@ -40,11 +42,19 @@ export default function NeonGlowUsername({
 
   const sizes = sizeClasses[size]
 
+  // Check for special username effects
+  const now = new Date()
+  const hasRgb = profile?.rgb_username_expires_at && new Date(profile.rgb_username_expires_at) > now
+  const glowingColor = profile?.glowing_username_color
+
   // Determine primary role for glow color
+  const isOfficerProfile = Boolean(profile?.is_troll_officer || profile?.role === 'troll_officer')
+  const hasOfficerLevel = isOfficerProfile && profile?.officer_level && profile.officer_level > 0
+
   const getGlowColor = () => {
     if (profile?.is_admin || profile?.role === 'admin') return 'shadow-[0_0_15px_rgba(248,113,113,0.6)] border-red-500/50'
     if (profile?.role === 'temp_city_admin') return 'shadow-[0_0_15px_rgba(248,113,113,0.5)] border-red-400/50'
-    if (profile?.officer_level && profile.officer_level > 0) return 'shadow-[0_0_15px_rgba(96,165,250,0.6)] border-blue-500/50'
+    if (hasOfficerLevel) return 'shadow-[0_0_15px_rgba(96,165,250,0.6)] border-blue-500/50'
     if (profile?.is_troller || profile?.role === 'troller') return 'shadow-[0_0_15px_rgba(192,132,252,0.6)] border-purple-500/50'
     if (profile?.is_gold || profile?.username_style === 'gold' || profile?.badge === 'president') return 'shadow-[0_0_15px_rgba(250,204,21,0.6)] border-yellow-500/50'
     return 'shadow-[0_0_10px_rgba(107,114,128,0.3)] border-zinc-500/30'
@@ -53,7 +63,7 @@ export default function NeonGlowUsername({
   const getRoleColor = () => {
     if (profile?.is_admin || profile?.role === 'admin') return 'text-red-400'
     if (profile?.role === 'temp_city_admin') return 'text-red-400'
-    if (profile?.officer_level && profile.officer_level > 0) return 'text-blue-400'
+    if (hasOfficerLevel) return 'text-blue-400'
     if (profile?.is_troller || profile?.role === 'troller') return 'text-purple-400'
     return 'text-white'
   }
@@ -64,17 +74,25 @@ export default function NeonGlowUsername({
     return 'text-white'
   }
 
+  // Get special username classes
+  const getSpecialClasses = () => {
+    let classes = ''
+    if (hasRgb) classes += ' rgb-username'
+    if (glowingColor && !hasRgb) classes += ' glowing-username'
+    return classes
+  }
+
   // Get role-specific badge
   const getPrimaryBadge = () => {
     if (profile?.is_admin || profile?.role === 'admin') 
       return { icon: Crown, color: 'text-red-400', label: 'Admin' }
     if (profile?.role === 'temp_city_admin') 
       return { icon: Shield, color: 'text-red-400', label: 'City Admin' }
-    if (profile?.officer_level === 3) 
+    if (hasOfficerLevel && profile.officer_level === 3) 
       return { icon: Shield, color: 'text-blue-400', label: 'Commander' }
-    if (profile?.officer_level === 2) 
+    if (hasOfficerLevel && profile.officer_level === 2) 
       return { icon: Shield, color: 'text-cyan-400', label: 'Sr. Officer' }
-    if (profile?.officer_level === 1) 
+    if (hasOfficerLevel && profile.officer_level === 1) 
       return { icon: Shield, color: 'text-sky-400', label: 'Officer' }
     if (profile?.troller_level === 3) 
       return { icon: Skull, color: 'text-purple-400', label: 'Supreme Troll' }
@@ -96,7 +114,7 @@ export default function NeonGlowUsername({
         {avatarUrl && (
           <img src={avatarUrl} alt={username} className={`${sizes.avatar} rounded-full`} />
         )}
-        <span className={`font-bold ${sizes.text} ${getUsernameColor()}`}>
+        <span className={`font-bold ${sizes.text} ${getUsernameColor()} ${getSpecialClasses()}`}>
           @{username}
         </span>
       </div>
@@ -120,7 +138,7 @@ export default function NeonGlowUsername({
       {/* Username & Badges */}
       <div className="flex flex-col">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className={`font-bold ${sizes.text} ${getUsernameColor()}`}>
+          <span className={`font-bold ${sizes.text} ${getUsernameColor()} ${getSpecialClasses()}`}>
             @{username}
           </span>
           

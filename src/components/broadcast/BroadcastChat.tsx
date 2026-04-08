@@ -8,6 +8,7 @@ import { generateUUID } from '../../lib/uuid';
 import { toast } from 'sonner';
 import { useMissionProgress } from '../../hooks/useMissionProgress';
 import GiftBoxModal from './GiftBoxModal';
+import { shouldAutoHideMessage, canControlSlowMode, shouldShowGoldenBanner } from '../../lib/perkEffects';
 
 interface Message {
   id: string;
@@ -103,6 +104,7 @@ export default function BroadcastChat({
 }: BroadcastChatProps) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [disappearingMessages, setDisappearingMessages] = useState<Set<string>>(new Set());
   const [input, setInput] = useState('');
   const [streamMods, setStreamMods] = useState<string[]>([]);
   const { user, profile } = useAuthStore();
@@ -236,6 +238,112 @@ export default function BroadcastChat({
 
   // Realtime broadcast channel ref
   const broadcastChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  
+  // Check for disappearing chat perk on mount and periodically
+  const [hasDisappearingChat, setHasDisappearingChat] = useState(false);
+  
+  useEffect(() => {
+    const checkDisappearingChat = async () => {
+      if (!user?.id) {
+        setHasDisappearingChat(false);
+        return;
+      }
+      const shouldHide = await shouldAutoHideMessage(user.id);
+      setHasDisappearingChat(shouldHide);
+    };
+    
+    checkDisappearingChat();
+    // Check every 30 seconds in case perk is activated/deactivated
+    const interval = setInterval(checkDisappearingChat, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+  
+  // Handle message disappearing
+  useEffect(() => {
+    if (!hasDisappearingChat || messages.length === 0) return;
+    
+    const latestMsg = messages[messages.length - 1];
+    if (!latestMsg || disappearingMessages.has(latestMsg.id)) return;
+    
+    // Mark message as disappearing
+    setDisappearingMessages(prev => new Set(prev).add(latestMsg.id));
+    
+    // Hide after 10 seconds
+    const hideTimer = setTimeout(() => {
+      setMessages(prev => prev.filter(m => m.id !== latestMsg.id));
+      setDisappearingMessages(prev => {
+        const next = new Set(prev);
+        next.delete(latestMsg.id);
+        return next;
+      });
+    }, 10000);
+    
+    return () => clearTimeout(hideTimer);
+  }, [messages.length, hasDisappearingChat]);
+  
+  // Slow mode state and perk check
+  const [isSlowModeEnabled, setIsSlowModeEnabled] = useState(false);
+  const [canControlSlowModeLocal, setCanControlSlowModeLocal] = useState(false);
+  
+  useEffect(() => {
+    const checkSlowModePerk = async () => {
+      if (!user?.id) {
+        setCanControlSlowModeLocal(false);
+        return;
+      }
+      const canControl = await canControlSlowMode(user.id);
+      setCanControlSlowModeLocal(canControl);
+    };
+    
+    checkSlowModePerk();
+    const interval = setInterval(checkSlowModePerk, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+  
+  // Golden Flex Banner state
+  const [showGoldenBanner, setShowGoldenBanner] = useState(false);
+  
+  useEffect(() => {
+    const checkGoldenBanner = async () => {
+      if (!user?.id) {
+        setShowGoldenBanner(false);
+        return;
+      }
+      const shouldShow = await shouldShowGoldenBanner(user.id);
+      setShowGoldenBanner(shouldShow);
+    };
+    
+    checkGoldenBanner();
+    const interval = setInterval(checkGoldenBanner, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+  
+  // Toggle slow mode
+  const handleToggleSlowMode = async () => {
+    if (!canControlSlowModeLocal) return;
+    const newState = !isSlowModeEnabled;
+    setIsSlowModeEnabled(newState);
+    
+    // Update stream settings in database
+    const { error } = await supabase
+      .from('stream_settings')
+      .upsert({
+        stream_id: streamId,
+        slow_mode_enabled: newState,
+        slow_mode_seconds: newState ? 10 : 0,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'stream_id' });
+    
+    if (error) {
+      console.error('Failed to toggle slow mode:', error);
+      toast.error('Failed to toggle slow mode');
+      setIsSlowModeEnabled(!newState);
+    } else {
+      toast.success(newState ? 'Slow mode enabled (10s between messages)' : 'Slow mode disabled');
+    }
+  };
+  
+  // Check slow mode on send message
   
   // Challenge notifications in chat
   const [challengeNotifications, setChallengeNotifications] = useState<ChallengeNotification[]>([]);
@@ -879,6 +987,10 @@ export default function BroadcastChat({
         toast.error('Chat is disabled for this broadcaster by officer control');
         return;
     }
+    if (isSlowModeEnabled) {
+        toast.error('Slow mode is active. Please wait before sending another message.');
+        return;
+    }
 
     const content = input.trim();
     console.log('💬 [BroadcastChat] Preparing to send:', { content, userId: user.id });
@@ -1034,6 +1146,21 @@ export default function BroadcastChat({
                   </span>
                 )}
             </div>
+            {/* Slow Mode Toggle - Show for hosts/mods with perk */}
+            {(isHost || isModerator) && canControlSlowModeLocal && (
+                <button
+                    type="button"
+                    onClick={handleToggleSlowMode}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        isSlowModeEnabled
+                            ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    }`}
+                >
+                    <span className={`w-2 h-2 rounded-full ${isSlowModeEnabled ? 'bg-orange-500 animate-pulse' : 'bg-zinc-500'}`} />
+                    Slow Mode
+                </button>
+            )}
             {/* Challenge Button - Only show for viewers, when category supports battles */}
             {onChallengeBroadcaster && !PreflightStore.getBattlesDisabled() && (
                 <button
@@ -1327,8 +1454,12 @@ export default function BroadcastChat({
                     return (
                         <div 
                             key={msg.id}
-                            className="flex items-center gap-2 bg-black/50 backdrop-blur-sm p-2 rounded-lg animate-in slide-in-from-bottom-2 fade-in duration-300"
+                            className={`flex items-center gap-2 bg-black/50 backdrop-blur-sm p-2 rounded-lg animate-in slide-in-from-bottom-2 fade-in duration-300 ${disappearingMessages.has(msg.id) ? 'opacity-50 transition-opacity' : ''}`}
                         >
+                            {/* Golden Flex Banner indicator */}
+                            {showGoldenBanner && msg.user_id === user?.id && (
+                                <span className="text-yellow-400 text-xs">👑</span>
+                            )}
                             <div className="w-5 h-5 rounded-full bg-zinc-700 overflow-hidden flex-shrink-0">
                                 {msg.user_profiles?.avatar_url ? (
                                     <img src={msg.user_profiles.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -1340,7 +1471,7 @@ export default function BroadcastChat({
                                 <button
                                     type="button"
                                     onClick={() => openGiftForUser(msg.user_id)}
-                                    className="font-bold text-yellow-400 text-xs truncate hover:text-yellow-300 transition-colors"
+                                    className={`font-bold text-xs truncate hover:text-yellow-300 transition-colors ${showGoldenBanner && msg.user_id === user?.id ? 'text-yellow-400' : 'text-yellow-400'}`}
                                     title="Send gift"
                                 >
                                     {msg.user_profiles?.username || 'User'}:

@@ -96,64 +96,14 @@ export function GamingSetup({
         </div>
       )}
 
-      <div className="space-y-3 text-sm">
-        {/* OBS Option */}
-        <div className="border-t border-white/10 pt-3">
-          <p className="text-xs text-gray-400 mb-2">
-            Or use OBS Studio for advanced streaming:
-          </p>
-
-          {/* RTMP URL */}
-          <div>
-            <span className="text-gray-400 text-xs">RTMP Ingest URL:</span>
-            <div className="flex gap-2 mt-1">
-              <code className="flex-1 bg-black/50 p-2 rounded text-blue-300 text-xs break-all">
-                {livekitRTMPUrl}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyUrl}
-                className="px-3 py-1 bg-blue-600/80 hover:bg-blue-500 rounded text-xs text-white transition-colors"
-                title="Copy RTMP URL"
-              >
-                {copiedUrl ? <Check size={14} /> : <Copy size={14} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Stream Key */}
-          <div className="mt-2">
-            <span className="text-gray-400 text-xs">Stream Key (Channel):</span>
-            <div className="flex gap-2 mt-1">
-              <code className="flex-1 bg-black/50 p-2 rounded text-green-400 text-xs break-all">
-                {livekitStreamKey}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyKey}
-                className="px-3 py-1 bg-blue-600/80 hover:bg-blue-500 rounded text-xs text-white transition-colors"
-                title="Copy Stream Key"
-              >
-                {copiedKey ? <Check size={14} /> : <Copy size={14} />}
-              </button>
-            </div>
-          </div>
-
-          <p className="text-xs text-gray-500 mt-2">
-            Use these settings in OBS Studio → Settings → Stream
-          </p>
-        </div>
-
-        {/* Tips */}
-        <div className="border-t border-white/10 pt-3">
-          <p className="text-xs font-medium text-purple-300 mb-1">💡 Pro Tips:</p>
-          <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
-            <li>Click &quot;Start Screen Share&quot; to share your gameplay</li>
-            <li>Enable &quot;Camera Overlay&quot; to add a facecam you can drag around</li>
-            <li>OBS gives you more control over overlays and scenes</li>
-            <li>Test your audio levels before going live</li>
-          </ul>
-        </div>
+      {/* Tips */}
+      <div className="border-t border-white/10 pt-3">
+        <p className="text-xs font-medium text-purple-300 mb-1">💡 Pro Tips:</p>
+        <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
+          <li>Click &quot;Start Screen Share&quot; to share your gameplay</li>
+          <li>Enable &quot;Camera Overlay&quot; to add a facecam you can drag around</li>
+          <li>Test your audio levels before going live</li>
+        </ul>
       </div>
     </div>
   );

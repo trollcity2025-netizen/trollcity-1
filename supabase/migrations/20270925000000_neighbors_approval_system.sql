@@ -193,12 +193,30 @@ RETURNS TABLE (
   business_id UUID,
   status TEXT,
   created_at TIMESTAMPTZ,
+  approval_status TEXT,
   distance DOUBLE PRECISION
 ) AS $
 BEGIN
   RETURN QUERY
   SELECT
-    ne.*,
+    ne.id,
+    ne.title,
+    ne.description,
+    ne.category,
+    ne.latitude,
+    ne.longitude,
+    ne.city,
+    ne.state,
+    ne.start_time,
+    ne.end_time,
+    ne.duration_minutes,
+    ne.max_participants,
+    ne.reward_coins,
+    ne.created_by_user_id,
+    ne.business_id,
+    ne.status,
+    ne.created_at,
+    ne.approval_status,
     ST_Distance(
       ST_GeographyFromText('POINT(' || lng || ' ' || lat || ')'),
       ST_GeographyFromText('POINT(' || ne.longitude || ' ' || ne.latitude || ')')

@@ -575,22 +575,7 @@ export default function SetupPage() {
     }
   };
 
-  // Prevent page refresh/close when on setup page
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Only prevent if not currently starting the stream
-      if (!isStartingStream.current) {
-        e.preventDefault();
-        e.returnValue = '';
-        return '';
-      }
-    };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, []);
 
   // Cleanup session storage when component unmounts (user leaves setup page)
   useEffect(() => {
@@ -1009,28 +994,20 @@ export default function SetupPage() {
  
      // Check Gaming category requirements
  
-     // Check Gaming category requirements - 100 followers required (admin/roles bypass)
+     // Check Gaming category requirements - 10 followers required (admin/roles bypass)
      if (category === 'gaming') {
        const isAdminOrOfficer = profile?.role === 'admin' || profile?.role === 'superadmin' || 
          profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || 
          profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || 
          profile?.role === 'lead_troll_officer' || profile?.role === 'secretary';
        
-       if (!isAdminOrOfficer && followerCount < 100) {
-         toast.error('Gaming category requires 100 followers');
-         return;
-       }
+      if (!isAdminOrOfficer && followerCount < 10) {
+        toast.error('Gaming category requires 10 followers');
+        return;
+      }
      }
  
-     // Check follower requirement for ALL broadcast categories (admins/officers bypass)
-     const isAdminOrOfficer = profile?.role === 'admin' || profile?.role === 'superadmin' || 
-       profile?.is_admin || profile?.is_superadmin || profile?.is_troll_officer || 
-       profile?.is_lead_troll_officer || profile?.role === 'troll_officer' || 
-       profile?.role === 'lead_troll_officer' || profile?.role === 'secretary';
-     if (!isAdminOrOfficer && followerCount < 1) {
-       toast.error('You need at least 1 follower to start a broadcast');
-       return;
-     }
+
 
     // Check President Elections requirements - only admin, secretary, lead_troll_officer, troll_officer
     if (category === 'election') {
@@ -1736,27 +1713,15 @@ export default function SetupPage() {
             </div>
             <div>
               <label className="block text-[10px] font-medium text-gray-400 mb-1">Category</label>
-              <select
-                name="category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value as BroadcastCategoryId)}
-                className="w-full bg-zinc-900/80 border border-white/15 rounded-xl px-3 py-2.5 text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
-              >
-                <option value="general">💬 General Chat</option>
-                <option value="gaming">🎮 Gaming</option>
-                <option value="irl">📍 IRL / Lifestyle</option>
-                <option value="debate">⚖️ Debate & Discussion</option>
-                <option value="education">📚 Education</option>
-                <option value="fitness">💪 Fitness & Sports</option>
-                <option value="business">💼 Business & Finance</option>
-                <option value="spiritual">✝️ Spiritual / Church</option>
-                {canAccessElections() && (
-                  <option value="election">🗳️ President Elections</option>
-                )}
-                {canAccessTCNN() && (
-                  <option value="tcnn">📺 TCNN News</option>
-                )}
-              </select>
+               <select
+                 name="category"
+                 value={category}
+                 onChange={(e) => setCategory(e.target.value as BroadcastCategoryId)}
+                 className="w-full bg-zinc-900/80 border border-white/15 rounded-xl px-3 py-2.5 text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+               >
+                 <option value="general">💬 General Chat</option>
+                 <option value="gaming">🎮 Gaming</option>
+               </select>
             </div>
           </div>
           <div className="shrink-0">

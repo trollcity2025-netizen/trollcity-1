@@ -55,7 +55,7 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
 
       const { data, error } = await supabase
         .from('troll_wall_posts')
-        .select('*, user_profiles(username, avatar_url, is_admin, is_troll_officer, is_og_user, created_at)')
+        .select('*, user_profiles(username, avatar_url, is_admin, is_troll_officer, is_og_user, created_at, role, is_verified, is_gold, username_style, badge, empire_role, officer_level, troller_level, is_troller, rgb_username_expires_at, glowing_username_color)')
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .range(start, end)
@@ -101,6 +101,8 @@ export default function TrollWallFeed({ onRequireAuth }: TrollWallFeedProps) {
           officer_level: author.officer_level,
           troller_level: author.troller_level,
           is_troller: author.is_troller,
+          rgb_username_expires_at: author.rgb_username_expires_at,
+          glowing_username_color: author.glowing_username_color,
         } as WallPost
       })
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
+import { useEventTheme } from '../components/GlobalEventThemeLayer';
 
 const COUNTDOWN_STYLES = `
   @keyframes spin-slow {
@@ -37,6 +38,7 @@ const COUNTDOWN_STYLES = `
 `;
 
 const EventCountdown: React.FC = React.memo(() => {
+  const { isActive, primaryColor, secondaryColor } = useEventTheme()
   const [timeLeft, setTimeLeft] = useState<{
     hours: number;
     minutes: number;
@@ -92,10 +94,22 @@ const EventCountdown: React.FC = React.memo(() => {
     };
   }, []);
 
-  if (!eventActive || !timeLeft) return null;
+  if (!timeLeft) return null;
+
+  // Use event theme colors or fall back to default purple
+  const primary = primaryColor || '#9333ea';
+  const secondary = secondaryColor || '#06b6d4';
 
   return (
-    <div className="w-full bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-900 border-b border-white/10 overflow-hidden relative group">
+    <div 
+      className="w-full border-b overflow-hidden relative group"
+      style={{
+        background: isActive 
+          ? `linear-gradient(90deg, ${primary}30, ${primary}20, ${secondary}30)`
+          : 'linear-gradient-to-r from-purple-900 via-indigo-900 to-purple-900',
+        borderColor: isActive ? `${primary}40` : 'rgba(255,255,255,0.1)',
+      }}
+    >
       <div className="absolute inset-0 bg-white/5 animate-pulse" />
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="banner-rgb-title">Troll City</div>
@@ -103,12 +117,21 @@ const EventCountdown: React.FC = React.memo(() => {
       
       <div className="max-w-7xl mx-auto px-4 py-2 sm:py-3 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 relative z-10">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-purple-500/20 rounded-lg">
-            <Sparkles className="w-5 h-5 text-purple-400 animate-spin-slow" />
+          <div 
+            className="p-2 rounded-lg"
+            style={{ backgroundColor: `${primary}33` }}
+          >
+            <Sparkles 
+              className="w-5 h-5 animate-spin-slow" 
+              style={{ color: primary }}
+            />
           </div>
           <div>
-            <h3 className="text-white font-bold text-sm sm:text-base leading-tight">
-              48 hrs til we are fully ready for public
+            <h3 
+              className="text-white font-bold text-sm sm:text-base leading-tight"
+              style={{ textShadow: `0 0 20px ${primary}80` }}
+            >
+              {isActive ? '🐣 Happy Easter! Easter Event Active!' : '48 hrs til we are fully ready for public'}
             </h3>
             <p className="text-purple-200/70 text-xs">
               {signupsRemaining !== null && signupsRemaining > 0 

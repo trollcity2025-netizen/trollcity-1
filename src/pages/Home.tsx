@@ -1,15 +1,17 @@
 
 import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/lib/store'
 import { trollCityTheme } from '@/styles/trollCityTheme'
 import EventCountdown from '@/components/EventCountdown'
 import TrollWallFeed from '@/components/home/TrollWallFeed'
+import { FloatingUserBackground } from '@/components/home/FloatingUserBackground'
 import { supabase } from '@/lib/supabase'
-import { Radio, Mic, Users, Play, Eye, X, ChevronRight } from 'lucide-react'
+import { Radio, Mic, Users, Play, Eye, X, ChevronRight, Link2 } from 'lucide-react'
 import EasterEggOverlay from '@/components/easter/EasterEggOverlay'
 import EasterHuntBanner from '@/components/easter/EasterHuntBanner'
+import { useEventTheme } from '@/components/GlobalEventThemeLayer'
 
 const PWAInstallPrompt = lazy(() => import('../components/PWAInstallPrompt'))
 const TCNNPopupWidget = lazy(() => import('@/components/tcnn/TCNNPopupWidget'))
@@ -59,6 +61,7 @@ type TabType = 'live' | 'pods' | 'wall'
 export default function Home() {
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
+  const { isActive, primaryColor, secondaryColor, backgroundAccent } = useEventTheme()
   const [activeTab, setActiveTab] = useState<TabType>('wall')
   const [liveItems, setLiveItems] = useState<LiveItem[]>([])
   const [podItems, setPodItems] = useState<LiveItem[]>([])
@@ -172,11 +175,21 @@ export default function Home() {
   }
 
   return (
-    <div className={`relative h-dvh flex flex-col overflow-hidden ${trollCityTheme.backgrounds.primary}`}>
+    <div className={`relative h-dvh flex flex-col overflow-hidden ${isActive ? backgroundAccent : trollCityTheme.backgrounds.primary}`}>
       {/* TCNN Popup - Only shows when TCNN is live */}
       <Suspense fallback={null}>
         <TCNNPopupWidget onRequireAuth={requireAuth} />
       </Suspense>
+
+      {/* Event Theme Overlay - More visible for testing */}
+      {isActive && (
+        <div 
+          className="absolute inset-0 pointer-events-none z-30"
+          style={{
+            background: `linear-gradient(135deg, ${primaryColor}20 0%, ${secondaryColor}20 100%)`,
+          }}
+        />
+      )}
 
       {/* Event Countdown Banner */}
       <EventCountdown />
@@ -186,6 +199,7 @@ export default function Home() {
 
       {/* Animated Background */}
       <AnimatedGradient />
+      <FloatingUserBackground maxUsers={10} rotationInterval={15000} className="z-[1]" />
 
       {/* PWA Install Prompt - Only on Landing Page */}
       <Suspense fallback={null}>
@@ -199,26 +213,37 @@ export default function Home() {
 
         <div className="max-w-7xl mx-auto flex flex-col flex-1 min-h-0 w-full">
           {/* Header with Tabs */}
-          <section className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-2 flex-shrink-0`}>
+          <section 
+            className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-2 flex-shrink-0`}
+            style={isActive ? { borderColor: `${primaryColor}40` } : {}}
+          >
             {/* Tabs */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
               <button
                 onClick={() => setActiveTab('wall')}
-                className={`px-3 py-1 rounded-lg font-semibold text-xs transition-all ${
+                className={`px-2 py-1 rounded-lg font-semibold text-xs transition-all whitespace-nowrap ${
                   activeTab === 'wall'
-                    ? 'bg-purple-600 text-white'
+                    ? isActive ? '' : 'bg-purple-600 text-white'
                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
                 }`}
+                style={activeTab === 'wall' && isActive ? {
+                  backgroundColor: primaryColor,
+                  color: 'white',
+                } : {}}
               >
                 Troll Feed
               </button>
               <button
                 onClick={() => setActiveTab('live')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold text-xs transition-all ${
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg font-semibold text-xs transition-all whitespace-nowrap ${
                   activeTab === 'live'
-                    ? 'bg-red-600 text-white'
+                    ? isActive ? '' : 'bg-red-600 text-white'
                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
                 }`}
+                style={activeTab === 'live' && isActive ? {
+                  backgroundColor: primaryColor,
+                  color: 'white',
+                } : {}}
               >
                 <Radio className="w-3.5 h-3.5" />
                 Live Now
@@ -230,7 +255,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setActiveTab('pods')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-semibold text-xs transition-all ${
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg font-semibold text-xs transition-all whitespace-nowrap ${
                   activeTab === 'pods'
                     ? 'bg-cyan-600 text-white'
                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
@@ -419,6 +444,7 @@ export default function Home() {
                     </button>
                   </div>
                 </div>
+
                 <Suspense fallback={null}>
                   <PromoSlot placement="right_panel_featured" variant="featured" />
                 </Suspense>
@@ -427,6 +453,24 @@ export default function Home() {
           </div>
         </div>
         <div className="safe-bottom flex-shrink-0" />
+
+        {/* Footer Links */}
+        <div className="flex-shrink-0 px-4 py-6 bg-slate-950/80 border-t border-slate-800">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-wrap items-center justify-center gap-4 text-xs">
+              <Link to="/legal/terms" className="text-slate-400 hover:text-purple-400 transition-colors">Terms of Service</Link>
+              <span className="text-slate-600">•</span>
+              <Link to="/legal/privacy" className="text-slate-400 hover:text-purple-400 transition-colors">Privacy Policy</Link>
+              <span className="text-slate-600">•</span>
+              <Link to="/legal/safety" className="text-slate-400 hover:text-purple-400 transition-colors">Safety Guidelines</Link>
+              <span className="text-slate-600">•</span>
+              <Link to="/support" className="text-slate-400 hover:text-purple-400 transition-colors">Support</Link>
+            </div>
+            <div className="text-center mt-3 text-slate-500 text-xs">
+              © 2026 Troll City. All rights reserved.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

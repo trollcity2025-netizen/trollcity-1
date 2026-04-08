@@ -75,7 +75,7 @@ export default function TrollCityWall() {
       await new Promise(resolve => setTimeout(resolve, jitter));
       const { data, error } = await supabase
         .from('troll_wall_posts')
-        .select('*, user_profiles(username, avatar_url, is_admin, is_troll_officer, is_og_user, created_at)')
+        .select('*, user_profiles(username, avatar_url, is_admin, is_troll_officer, is_og_user, created_at, role, is_verified, is_gold, username_style, badge, empire_role, officer_level, troller_level, is_troller, rgb_username_expires_at, glowing_username_color)')
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(MAX_POSTS)
@@ -163,6 +163,18 @@ export default function TrollCityWall() {
             user_reaction: userReactionTypes[post.id],
             reactions: reactionsSummary[post.id] || {},
             gifts: giftsSummary[post.id] || {},
+            // Extended profile fields for username styling
+            user_role: profile.role,
+            is_verified: profile.is_verified,
+            is_gold: profile.is_gold,
+            username_style: profile.username_style,
+            badge: profile.badge,
+            empire_role: profile.empire_role,
+            officer_level: profile.officer_level,
+            troller_level: profile.troller_level,
+            is_troller: profile.is_troller,
+            rgb_username_expires_at: profile.rgb_username_expires_at,
+            glowing_username_color: profile.glowing_username_color,
           }
         })
 

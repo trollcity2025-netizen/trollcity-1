@@ -28,6 +28,7 @@ import {
   Waves,
   Car,
   BookOpen,
+  Megaphone,
   Radio,
   Warehouse,
   Landmark,
@@ -101,16 +102,57 @@ export default function Sidebar() {
           .maybeSingle()
         setCanSeeOfficer(!!officerData)
 
-        // Check if user has a family
+        // Check if user has a family - check both member tables
         const { data: familyData } = await supabase
           .from('troll_families')
-          .select('*, troll_family_members!inner(*)')
-          .eq('troll_family_members.user_id', profile.id)
+          .select('*')
+          .or(`leader_id.eq.${profile.id}`)
           .maybeSingle()
         
-        if (familyData) {
+        // If no direct leader match, check family members tables separately
+        let finalFamilyData = familyData;
+        if (!finalFamilyData) {
+          const { data: memberData } = await supabase
+            .from('family_members')
+            .select('family_id')
+            .eq('user_id', profile.id)
+            .limit(1)
+            .maybeSingle()
+          
+          if (memberData) {
+            const { data: familyFromMembers } = await supabase
+              .from('troll_families')
+              .select('*')
+              .eq('id', memberData.family_id)
+              .maybeSingle()
+            if (familyFromMembers) finalFamilyData = familyFromMembers;
+          }
+        }
+        
+        if (!finalFamilyData) {
+          const { data: trollMemberData } = await supabase
+            .from('troll_family_members')
+            .select('family_id')
+            .eq('user_id', profile.id)
+            .limit(1)
+            .maybeSingle()
+          
+          if (trollMemberData) {
+            const { data: familyFromTrollMembers } = await supabase
+              .from('troll_families')
+              .select('*')
+              .eq('id', trollMemberData.family_id)
+              .maybeSingle()
+            if (familyFromTrollMembers) finalFamilyData = familyFromTrollMembers;
+          }
+        }
+        
+        // Also grant family access if user has troll_family role (from approved application)
+        const hasFamilyRole = profile?.role === 'troll_family' || profile?.troll_role === 'troll_family';
+        
+        if (familyData || hasFamilyRole) {
           setHasFamily(true)
-          setIsFamilyLeader(familyData.leader_id === profile.id)
+          setIsFamilyLeader(familyData?.leader_id === profile.id)
           setIsFamilyMember(true)
         } else {
           setHasFamily(false)
@@ -119,7 +161,7 @@ export default function Sidebar() {
         }
 
         // Check if user can see Troll Family
-        setCanSeeTrollFamily(!!familyData || profile?.role === UserRole.ADMIN)
+        setCanSeeTrollFamily(!!familyData || hasFamilyRole || profile?.role === UserRole.ADMIN)
 
         // Check if user is secretary
         const { data: secData } = await supabase
@@ -163,7 +205,7 @@ export default function Sidebar() {
     }
 
     fetchUserData()
-  }, [profile?.id])
+  }, [profile?.id, profile])
 
   useEffect(() => {
     const path = location.pathname;
@@ -190,8 +232,13 @@ export default function Sidebar() {
 
   const mainPaths = ['/', '/trollstown', '/inventory', '/marketplace', '/leaderboard', '/credit-scores', '/store', '/creator-switch', '/troll-court', '/troll-games']
   const supportPaths = ['/support', '/safety']
-  const socialPaths = ['/tcps', '/pool', '/universe-event', '/family/browse']
-  if (canSeeTrollFamily) socialPaths.push('/family/home')
+  const socialPaths = ['/tcps', '/pool', '/universe-event']
+  if (profile?.role === 'troll_family') {
+    socialPaths.push('/family/home')
+  } else {
+    socialPaths.push('/family/browse')
+    if (canSeeTrollFamily) socialPaths.push('/family/home')
+  }
   const specialAccessPaths: string[] = []
   if (canSeeCourt) specialAccessPaths.push('/admin/court-dockets')
   if (canSeeOfficer) specialAccessPaths.push('/officer/dashboard')
@@ -532,6 +579,7 @@ export default function Sidebar() {
               <SidebarItem icon={Video} label="Interview Room" to="/interview-room" active={isActive('/interview-room')} collapsed={isSidebarCollapsed} highlight={isUpdated('/interview-room')} onClick={() => markAsViewed('/interview-room')} />
               <SidebarItem icon={Banknote} label="Wallet" to="/wallet" active={isActive('/wallet')} collapsed={isSidebarCollapsed} highlight={isUpdated('/wallet')} onClick={() => markAsViewed('/wallet')} />
               <SidebarItem icon={Scale} label="Appeals" to="/city-registry" active={isActive('/city-registry')} collapsed={isSidebarCollapsed} highlight={isUpdated('/city-registry')} onClick={() => markAsViewed('/city-registry')} />
+              <SidebarItem icon={Megaphone} label="Advertise" to="/city-registry/advertise" active={isActive('/city-registry/advertise')} collapsed={isSidebarCollapsed} highlight={isUpdated('/city-registry/advertise')} onClick={() => markAsViewed('/city-registry/advertise')} />
             </SidebarGroup>
           </>
         )}

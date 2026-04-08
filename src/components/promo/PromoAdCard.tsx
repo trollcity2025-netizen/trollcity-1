@@ -27,6 +27,12 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
   const isInternalLink = (url: string) => url.startsWith('/');
 
   // Handle click - track and navigate
+  // Preload image immediately to prevent flash when opening lightbox
+  React.useEffect(() => {
+    const img = new Image();
+    img.src = ad.image_url;
+  }, [ad.image_url]);
+
   const handleClick = async () => {
     // Track click using RPC function
     try {
@@ -197,8 +203,8 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
             <img
               src={ad.image_url}
               alt={ad.title}
-              className="max-h-[90vh] w-auto object-contain"
-              loading="lazy"
+              className="max-h-[90vh] w-auto object-contain transition-none"
+              style={{ opacity: 1 }}
             />
             {ad.title && (
               <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-3 text-white text-sm">

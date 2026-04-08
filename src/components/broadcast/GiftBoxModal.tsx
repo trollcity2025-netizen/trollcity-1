@@ -4,6 +4,7 @@ import { X, Search, Gift, Sparkles, Crown, Gem, Zap, Heart, Users, UserCircle, R
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { useGiftSystem, GiftItem } from '../../hooks/useGiftSystem';
+import { getActiveHolidayTheme } from '../../lib/holidayThemes';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 
@@ -68,11 +69,11 @@ const RARITY_LABELS: Record<Rarity, string> = {
   mythic: 'Mythic',
 };
 
-export default function GiftBoxModal({ 
-  isOpen, 
-  onClose, 
-  recipientId, 
-  streamId, 
+export default function GiftBoxModal({
+  isOpen,
+  onClose,
+  recipientId,
+  streamId,
   broadcasterId = recipientId,
   activeUserIds = [],
   userProfiles = {},
@@ -81,16 +82,19 @@ export default function GiftBoxModal({
 }: GiftBoxModalProps) {
   const { user, profile } = useAuthStore();
   const { sendGift, isSending } = useGiftSystem(recipientId, streamId, null, undefined, sharedChannel);
-  
+
   const [gifts, setGifts] = useState<GiftItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<GiftCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGift, setSelectedGift] = useState<GiftItem | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Gift target selection state
   const [giftTarget, setGiftTarget] = useState<GiftTarget>({ type: 'specific', userId: recipientId });
+
+  // Get active holiday theme
+  const activeHoliday = getActiveHolidayTheme();
 
   // Fetch gifts from database
   useEffect(() => {
@@ -273,8 +277,19 @@ export default function GiftBoxModal({
           {/* Header */}
           <div className="flex items-center justify-between p-3 sm:p-4 border-b border-white/10 bg-zinc-900/50 flex-shrink-0">
             <div className="flex items-center gap-2 sm:gap-3">
-              <Gift className="text-yellow-400" size={20} />
-              <h2 className="text-base sm:text-xl font-bold text-white">Send Gift</h2>
+              {activeHoliday ? (
+                <>
+                  <span className="text-2xl">{activeHoliday.icon}</span>
+                  <h2 className="text-base sm:text-xl font-bold text-white">
+                    Send {activeHoliday.name} Gift
+                  </h2>
+                </>
+              ) : (
+                <>
+                  <Gift className="text-yellow-400" size={20} />
+                  <h2 className="text-base sm:text-xl font-bold text-white">Send Gift</h2>
+                </>
+              )}
             </div>
             <button
               onClick={onClose}

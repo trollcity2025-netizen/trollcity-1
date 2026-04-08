@@ -195,14 +195,14 @@ export const prideEvent = createYearlyEvent(
 );
 
 // ============================================================================
-// Easter (May 5-7)
+// Easter (April 6-7, 2026) - Test dates
 // ============================================================================
 
 export const easterEvent = createYearlyEvent(
   'easter',
   'Easter',
   'Find hidden eggs across Troll City and earn springtime rewards!',
-  5, 5, 5, 7,
+  4, 6, 4, 7,
   {
     priority: 8,
     theme: {
@@ -894,20 +894,25 @@ export const isEventActive = (event: GlobalEventConfig): boolean => {
   const now = getServerTime();
   const start = new Date(event.startTimestamp);
   const end = new Date(event.endTimestamp);
-  return now >= start && now < end;
+  return now.getTime() >= start.getTime() && now.getTime() < end.getTime();
 };
 
 /**
  * Get all currently active events
  */
 export const getActiveEvents = (): GlobalEventConfig[] => {
-  return Object.values(GlobalEvents).filter(isEventActive);
+  const events = Object.values(GlobalEvents).filter(isEventActive);
+  // For testing: always include easter
+  return events;
 };
 
 /**
  * Get the highest priority active event
  */
 export const getPrimaryActiveEvent = (): GlobalEventConfig | null => {
+  // Force return easter event
+  return GlobalEvents.easter;
+  
   const active = getActiveEvents();
   if (active.length === 0) return null;
   

@@ -114,12 +114,12 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     showCoinBalanceInChat: true,
   },
 
-  // 3. Gaming - OBS streaming with RTMP
+  // 3. Gaming - Screen share streaming
   gaming: {
     id: 'gaming',
     name: 'Gaming',
     icon: '🎮',
-    description: 'Stream games via OBS with RTMP ingest',
+    description: 'Stream games via screen share',
     layoutMode: 'grid',
     defaultBoxCount: 1,
     maxBoxCount: 6,
@@ -130,7 +130,7 @@ export const BROADCAST_CATEGORIES: Record<BroadcastCategoryId, BroadcastCategory
     allowFrontCamera: true,
     allowRearCamera: true,
     forceRearCamera: false,
-    hasOBSIntegration: true,
+    hasOBSIntegration: false,
     hasYouTubePlayer: false,
     maxYouTubePlayerBoxes: 0,
     hasMatchingSystem: false,

@@ -14,7 +14,7 @@ import type { EventTheme } from '../lib/events/types';
 // CSS Custom Properties for Event Themes
 // ============================================================================
 
-const getEventCSSVariables = (theme: EventTheme | undefined): Record<string, string> => {
+export const getEventCSSVariables = (theme: EventTheme | undefined): Record<string, string> => {
   if (!theme) return {};
   
   const vars: Record<string, string> = {
@@ -45,6 +45,10 @@ export const GlobalEventThemeLayer: React.FC<GlobalEventThemeLayerProps> = ({
   selector = ':root',
 }) => {
   const { activeEvent, featureFlags } = useGlobalEvent();
+  
+  console.log('[ThemeLayer] activeEvent:', activeEvent?.id, activeEvent?.name);
+  console.log('[ThemeLayer] featureFlags:', { hasEventTheme: featureFlags.hasEventTheme });
+  console.log('[ThemeLayer] event theme:', activeEvent?.theme);
   
   // Apply CSS variables to document root
   useEffect(() => {
@@ -200,10 +204,42 @@ export const useEventTheme = (): UseEventThemeReturn => {
 let cssInjected = false;
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const injectEventThemeCSS = (): void => {
-  if (typeof document === 'undefined' || cssInjected) return;
+export const injectEventThemeCSS = (theme?: EventTheme): void => {
+  console.log('[injectEventThemeCSS] Called with theme:', theme?.primaryColor);
   
-  cssInjected = true;
+  if (typeof document === 'undefined') return;
+  
+  // Remove existing theme styles first
+  const existing = document.getElementById('event-theme-global-styles');
+  if (existing) existing.remove();
+  
+  // Build dynamic CSS based on theme
+  let customCss = '';
+  if (theme) {
+    customCss = `
+      :root {
+        --event-primary: ${theme.primaryColor};
+        --event-secondary: ${theme.secondaryColor};
+        --event-accent: ${theme.cssVariables?.['--event-accent'] || theme.primaryColor};
+        --event-green: ${theme.cssVariables?.['--event-green'] || '#98FB98'};
+      }
+      
+      /* Theme background overlay */
+      .event-theme-bg {
+        background: ${theme.primaryColor}15;
+      }
+      
+      /* Theme text highlight */
+      .event-theme-text {
+        color: ${theme.primaryColor};
+      }
+      
+      /* Theme border accent */
+      .event-theme-border {
+        border-color: ${theme.primaryColor}33;
+      }
+    `;
+  }
   
   const style = document.createElement('style');
   style.id = 'event-theme-global-styles';
@@ -252,27 +288,13 @@ export const injectEventThemeCSS = (): void => {
     }
     
     @keyframes shimmer {
-      100% {
-        left: 100%;
-      }
+      100% { left: 100%; }
     }
-    
-    /* Limited event badge pulse */
-    .limited-event-badge {
-      animation: pulse-glow 2s ease-in-out infinite;
-    }
-    
-    @keyframes pulse-glow {
-      0%, 100% {
-        box-shadow: 0 0 5px currentColor;
-      }
-      50% {
-        box-shadow: 0 0 20px currentColor, 0 0 30px currentColor;
-      }
-    }
+    ${customCss}
   `;
   
   document.head.appendChild(style);
+  cssInjected = true;
 };
 
 // ============================================================================

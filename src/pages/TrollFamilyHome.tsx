@@ -19,7 +19,8 @@ import {
   Crown, Users, Trophy, Target, Heart, 
   ChevronRight, Activity, Zap, Gift, MessageSquare,
   TrendingUp, Shield, Music, Video, Clock, AlertTriangle,
-  CheckCircle, Lock, Plus, Sparkles, RefreshCw, Eye
+  CheckCircle, Lock, Plus, Sparkles, RefreshCw, Eye,
+  Settings, LogOut
 } from 'lucide-react';
 
 // Types for aggregated family data from RPC
@@ -127,6 +128,8 @@ export default function TrollFamilyHome() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [showAllMembers, setShowAllMembers] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [leavingFamily, setLeavingFamily] = useState(false);
   
   // Ref for cleanup
   const channelsRef = useRef<ReturnType<typeof supabase.channel>[]>([]);
@@ -328,6 +331,39 @@ export default function TrollFamilyHome() {
     }
   };
 
+  const handleBanMember = async (targetUserId: string) => {
+    if (!user || !familyData?.family?.id) return;
+
+    const confirmed = window.confirm('Ban this member from the family? They will not be able to rejoin.');
+    if (!confirmed) return;
+
+    try {
+      const { data, error } = await supabase.rpc('ban_family_member', {
+        p_family_id: familyData.family.id,
+        p_target_user_id: targetUserId,
+        p_admin_user_id: user.id,
+        p_reason: 'Banned by family owner'
+      });
+
+      if (error) {
+        console.error('Error banning member:', error);
+        alert('Failed to ban member. You may not have permission.');
+        return;
+      }
+
+      const result = data as { success: boolean; error?: string };
+      if (result.success) {
+        familyCache.delete(user.id);
+        fetchFamilyData(true);
+      } else {
+        alert(result.error || 'Failed to ban member');
+      }
+    } catch (err) {
+      console.error('Error banning member:', err);
+      alert('Failed to ban member');
+    }
+  };
+
   // Handle promoting a member
   const handlePromoteMember = async (targetUserId: string, newRole: string) => {
     if (!user || !familyData?.family?.id) return;
@@ -357,6 +393,46 @@ export default function TrollFamilyHome() {
     } catch (err) {
       console.error('Error promoting member:', err);
       alert('Failed to promote member');
+    }
+  };
+
+  // Handle leaving the family
+  const handleLeaveFamily = async () => {
+    if (!user || !familyData?.family?.id) return;
+
+    const confirmed = window.confirm(
+      'Are you sure you want to leave the family? You will need to pay 10% of the family\'s total earnings to leave, which will be distributed to remaining members.'
+    );
+    
+    if (!confirmed) return;
+
+    setLeavingFamily(true);
+    try {
+      const { data, error } = await supabase.rpc('leave_family', {
+        p_user_id: user.id,
+        p_family_id: familyData.family.id
+      });
+
+      if (error) {
+        console.error('Error leaving family:', error);
+        alert('Failed to leave family. ' + error.message);
+        return;
+      }
+
+      const result = data as { success: boolean; error?: string; exit_fee?: number };
+      if (result.success) {
+        alert(`Successfully left the family. You paid ${result.exit_fee?.toLocaleString() || 0} Troll Coins as exit fee.`);
+        // Navigate away from family pages
+        navigate('/family/browse');
+      } else {
+        alert(result.error || 'Failed to leave family');
+      }
+    } catch (err) {
+      console.error('Error leaving family:', err);
+      alert('Failed to leave family');
+    } finally {
+      setLeavingFamily(false);
+      setShowSettingsModal(false);
     }
   };
 
@@ -401,6 +477,7 @@ export default function TrollFamilyHome() {
           memberCount={heartbeat?.total_members || members.length}
           streak={heartbeat?.current_streak || 0}
           vaultCoins={vault?.total_coins || 0}
+          onSettings={() => setShowSettingsModal(true)}
         />
 
         {/* Family Heartbeat Alert */}
@@ -452,6 +529,7 @@ export default function TrollFamilyHome() {
                 isLeader={isLeader}
                 onKick={handleKickMember}
                 onPromote={handlePromoteMember}
+                onBan={handleBanMember}
               />
             )}
             {activeTab === 'vault' && (
@@ -476,6 +554,52 @@ export default function TrollFamilyHome() {
           </div>
         </div>
       </div>
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-800 rounded-2xl border border-white/10 max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white">Family Settings</h2>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <span className="text-gray-400 hover:text-white">✕</span>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <LogOut className="w-5 h-5 text-red-400 mt-0.5" />
+                    <div>
+                      <h3 className="text-red-400 font-semibold mb-2">Leave Family</h3>
+                      <p className="text-gray-300 text-sm mb-3">
+                        Leaving the family requires paying 10% of the family's total earnings as an exit fee. 
+                        This amount will be distributed equally among all remaining family members.
+                      </p>
+                      {familyData?.vault?.total_coins && (
+                        <p className="text-yellow-400 text-sm font-semibold mb-3">
+                          Exit Fee: {Math.floor(familyData.vault.total_coins * 0.1).toLocaleString()} Troll Coins
+                        </p>
+                      )}
+                      <button
+                        onClick={handleLeaveFamily}
+                        disabled={leavingFamily}
+                        className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                      >
+                        {leavingFamily ? 'Leaving...' : 'Leave Family'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -489,12 +613,14 @@ function FamilyHeader({
   family, 
   memberCount, 
   streak, 
-  vaultCoins 
+  vaultCoins,
+  onSettings
 }: { 
   family: FamilyData;
   memberCount: number;
   streak: number;
   vaultCoins: number;
+  onSettings?: () => void;
 }) {
   const badgeEmoji = family.crest_url ? null : '👑';
   
@@ -546,6 +672,16 @@ function FamilyHeader({
               <p className="text-gray-400 text-xs">Vault</p>
             </div>
           </div>
+          
+          {onSettings && (
+            <button
+              onClick={onSettings}
+              className="p-2 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg transition-colors"
+              title="Family Settings"
+            >
+              <Settings className="w-5 h-5 text-gray-400 hover:text-white" />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -761,7 +897,8 @@ function MembersTab({
   onToggleShowAll,
   isLeader,
   onKick,
-  onPromote
+  onPromote,
+  onBan
 }: { 
   members: FamilyMember[];
   totalCount: number;
@@ -770,6 +907,7 @@ function MembersTab({
   isLeader: boolean;
   onKick?: (userId: string) => void;
   onPromote?: (userId: string, newRole: string) => void;
+  onBan?: (userId: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -795,6 +933,7 @@ function MembersTab({
             isLeader={isLeader}
             onKick={onKick}
             onPromote={onPromote}
+            onBan={onBan}
           />
         ))}
       </div>
@@ -1016,11 +1155,12 @@ function AchievementCard({ achievement }: { achievement: FamilyAchievement }) {
 }
 
 // Member Card
-function MemberCard({ member, isLeader, onKick, onPromote }: { 
+function MemberCard({ member, isLeader, onKick, onPromote, onBan }: { 
   member: FamilyMember; 
   isLeader: boolean;
   onKick?: (userId: string) => void;
   onPromote?: (userId: string, newRole: string) => void;
+  onBan?: (userId: string) => void;
 }) {
   const roleColors: Record<string, string> = {
     leader: 'text-amber-400',
@@ -1078,7 +1218,17 @@ function MemberCard({ member, isLeader, onKick, onPromote }: {
                 className="w-full px-3 py-2 text-left text-sm hover:bg-slate-700 text-red-400 flex items-center gap-2"
               >
                 <Shield className="w-3 h-3" />
-                Kick from Family
+                Remove from Family
+              </button>
+              <button
+                onClick={() => {
+                  onBan?.(member.user_id);
+                  setShowMenu(false);
+                }}
+                className="w-full px-3 py-2 text-left text-sm hover:bg-slate-700 text-red-500 flex items-center gap-2"
+              >
+                <Shield className="w-3 h-3" />
+                Ban from Family
               </button>
             </div>
           )}

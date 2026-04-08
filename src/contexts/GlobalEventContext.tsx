@@ -11,6 +11,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, ReactNode } from 'react';
+import { injectEventThemeCSS, getEventCSSVariables } from '../components/GlobalEventThemeLayer';
 // import { useAuthStore } from '../lib/store';
 // import { supabase } from '../lib/supabase';
 import { GlobalEvents, getServerTime, isEventActive, getPrimaryActiveEvent, getActiveEvents, calculateFeatureFlags } from '../lib/events/eventRegistry';
@@ -102,6 +103,15 @@ export const GlobalEventProvider: React.FC<GlobalEventProviderProps> = ({ childr
     // Normal event checking
     const primary = getPrimaryActiveEvent();
     const allActive = getActiveEvents();
+    
+    console.log('[Event Check] getActiveEvents returned:', allActive.length, 'events');
+    console.log('[Event Check] getPrimaryActiveEvent returned:', primary?.id, primary?.name);
+    
+    // Inject theme CSS when event activates
+    if (primary?.theme) {
+      console.log('[Event Check] Injecting theme for:', primary.name);
+      injectEventThemeCSS(primary.theme);
+    }
     
     // Only trigger re-renders if state actually changed
     setActiveEvent(prev => {

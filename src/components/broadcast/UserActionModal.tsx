@@ -1,9 +1,10 @@
 import React from 'react';
-import { User, Gift, MicOff, Ban, Shield, X, UserPlus, MessageSquare, Eye, AlertTriangle } from 'lucide-react';
+import { User, Gift, MicOff, Ban, Shield, X, UserPlus, MessageSquare, Eye, AlertTriangle, Wand2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import UserNameWithAge from '../UserNameWithAge';
 import { shouldBlockKick } from '../../lib/insuranceSystem';
+import { shouldBlockModeration } from '../../lib/perkEffects';
 import { useAuthStore } from '../../lib/store';
 import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../lib/chatStore';
@@ -126,6 +127,13 @@ export default function UserActionModal({
         return;
     }
 
+    // Check for ban shield perk
+    const hasBanShield = await shouldBlockModeration(userId, 'kick');
+    if (hasBanShield) {
+        toast.error("This user has Ban Shield active! They cannot be kicked.");
+        return;
+    }
+
     // Check for kick insurance
     const isProtected = await shouldBlockKick(userId);
     
@@ -172,6 +180,13 @@ export default function UserActionModal({
   const handleBan = async () => {
       if (isTargetStaff) {
           toast.error("Cannot ban staff members.");
+          return;
+      }
+
+      // Check for ban shield perk
+      const hasBanShield = await shouldBlockModeration(userId, 'ban');
+      if (hasBanShield) {
+          toast.error("This user has Ban Shield active! They cannot be banned.");
           return;
       }
 
@@ -321,6 +336,12 @@ export default function UserActionModal({
         toast.error("Cannot mute staff members.");
         return;
     }
+    // Check for ban shield perk
+    const hasBanShield = await shouldBlockModeration(userId, 'mute');
+    if (hasBanShield) {
+        toast.error("This user has Ban Shield active! They cannot be muted.");
+        return;
+    }
     if (!streamId || !streamId.trim()) {
       toast.error("Stream not found");
       return;
@@ -330,6 +351,24 @@ export default function UserActionModal({
     else {
         toast.success("User muted");
         onClose();
+    }
+  };
+
+  const handleTrollSpell = async () => {
+    const { user: currentUser } = useAuthStore.getState();
+    if (!currentUser) {
+        navigate('/auth?mode=signup');
+        return;
+    }
+    
+    const { applyTrollSpell } = await import('../../lib/perkEffects');
+    const result = await applyTrollSpell(currentUser.id, userId, displayName || 'User');
+    
+    if (result.success) {
+        toast.success(`Casted ${result.style?.emoji || '🎭'} ${result.style?.name || 'spell'} on ${displayName}!`);
+        onClose();
+    } else {
+        toast.error(result.error || 'Failed to cast spell');
     }
   };
 
@@ -524,12 +563,18 @@ export default function UserActionModal({
                    </div>
                )}
 
-               {isHost && !isTargetStaff && (
-                 <button onClick={handlePromote} className="w-full flex items-center justify-center gap-2 p-2 bg-blue-900/20 hover:bg-blue-900/40 text-blue-400 rounded-lg transition-colors border border-blue-500/20 mt-2">
-                    <Shield size={16} />
-                    <span>Promote to Officer</span>
-                 </button>
-               )}
+                {isHost && !isTargetStaff && (
+                  <button onClick={handlePromote} className="w-full flex items-center justify-center gap-2 p-2 bg-blue-900/20 hover:bg-blue-900/40 text-blue-400 rounded-lg transition-colors border border-blue-500/20 mt-2">
+                     <Shield size={16} />
+                     <span>Promote to Officer</span>
+                  </button>
+                )}
+                
+                {/* Troll Spell Button - Show if current user has the perk */}
+                <button onClick={handleTrollSpell} className="w-full flex items-center justify-center gap-2 p-2 bg-purple-900/20 hover:bg-purple-900/40 text-purple-400 rounded-lg transition-colors border border-purple-500/20 mt-2">
+                   <Wand2 size={16} />
+                   <span>Cast Troll Spell 🎭</span>
+                </button>
             </div>
           )}
         </div>

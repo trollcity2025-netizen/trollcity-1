@@ -1344,41 +1344,41 @@ export default function LivingPage() {
                         Create Property
                     </button>
                 )}
-                <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800">
+                <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800 overflow-x-auto scrollbar-hide">
                     <button 
                         onClick={() => setActiveTab('my_home')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'my_home' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`px-3 py-2 rounded-md text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'my_home' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                     >
                         My Home
                     </button>
                     <button 
                         onClick={() => setActiveTab('my_lease')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'my_lease' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`px-3 py-2 rounded-md text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'my_lease' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                     >
                         My Lease
                     </button>
                     <button 
                         onClick={() => setActiveTab('my_loans')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'my_loans' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`px-3 py-2 rounded-md text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'my_loans' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                     >
                         My Mortgages
                     </button>
                     <button 
                         onClick={() => setActiveTab('market')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'market' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`px-3 py-2 rounded-md text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'market' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                     >
                         Find Home
                     </button>
                     <button 
                         onClick={() => setActiveTab('landlord')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'landlord' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`px-3 py-2 rounded-md text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'landlord' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                     >
                         Landlord
                     </button>
                     {isLandlord && (
                         <button 
                             onClick={() => { setActiveTab('tenants'); fetchAllTenants(); }}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'tenants' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                            className={`px-3 py-2 rounded-md text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'tenants' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
                         >
                             Tenants
                         </button>

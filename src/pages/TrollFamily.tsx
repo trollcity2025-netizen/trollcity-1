@@ -122,7 +122,7 @@ export default function TrollFamily() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-white text-slate-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-6">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Troll Families</h1>
@@ -152,15 +152,13 @@ export default function TrollFamily() {
               <span>My Family</span>
             </button>
           )}
-          {!isLeader && (
-            <button
-              onClick={() => navigate('/apply/family')}
-              className="flex-1 flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-semibold py-3 px-6 rounded-xl transition-all"
-            >
-              <Users className="w-5 h-5" />
-              <span>Create Family</span>
-            </button>
-          )}
+          <button
+            onClick={() => navigate('/apply/family')}
+            className="flex-1 flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-semibold py-3 px-6 rounded-xl transition-all"
+          >
+            <Users className="w-5 h-5" />
+            <span>Create Family</span>
+          </button>
         </div>
 
         {/* Families Grid */}

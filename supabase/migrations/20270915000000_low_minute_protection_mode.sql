@@ -81,10 +81,9 @@ BEGIN
         END IF;
     END IF;
 
-    -- 4. Badge Check
-    IF NOT v_has_badge AND NOT v_is_admin THEN
-        RETURN jsonb_build_object('can_start', false, 'message', 'You do not have a valid broadcasting permit.');
-    END IF;
+    -- 4. Category/Gaming check
+    -- All users can broadcast normally without restrictions
+    -- Gaming/Trollmers streams require 100 followers (admins bypass)
 
     RETURN jsonb_build_object('can_start', true);
 END;

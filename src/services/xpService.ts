@@ -1,8 +1,10 @@
 import { supabase } from '../lib/supabase'
+import { getXPMultiplier } from '../lib/perkEffects'
 
 export const xpService = {
   /**
    * Grant XP to a user via RPC (secure backend function)
+   * Applies Double XP perk multiplier if active
    */
   grantXP: async (
     userId: string,
@@ -35,12 +37,16 @@ export const xpService = {
        // If amount is 0, we might want to skip or proceed. Let's proceed with 0.
     }
 
+    // Check for Double XP perk and apply multiplier
+    const xpMultiplier = await getXPMultiplier(userId);
+    const finalAmount = safeAmount * xpMultiplier;
+
     const { data, error } = await supabase.rpc('grant_xp', {
       p_user_id: userId,
-      p_amount: safeAmount,
+      p_amount: finalAmount,
       p_source_type: source,
       p_source_id: sourceId,
-      p_metadata: metadata
+      p_metadata: { ...metadata, xp_multiplier: xpMultiplier }
     })
     
     if (error) {

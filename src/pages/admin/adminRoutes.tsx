@@ -1,6 +1,8 @@
 import { lazy } from 'react'
-import { Database, Shield, RefreshCw, Settings, FileText, AlertTriangle, Phone, Gavel, Trophy, DollarSign, Lock, Zap, MapPin, ShoppingCart } from 'lucide-react'
+import { Database, Shield, RefreshCw, Settings, FileText, AlertTriangle, Phone, Gavel, Trophy, DollarSign, Lock, Zap, MapPin, ShoppingCart, Megaphone } from 'lucide-react'
 import { UserRole } from '../../lib/supabase'
+
+const AdminAdvertisements = lazy(() => import('./AdminAdvertisements'))
 
 const DatabaseBackup = lazy(() => import('./DatabaseBackup'))
 const CityControlCenter = lazy(() => import('./CityControlCenter'))
@@ -118,6 +120,19 @@ export const systemManagementRoutes: AdminRoute[] = [
     tileBgColor: 'bg-amber-500/10',
     tileBorderColor: 'border-amber-500/30',
     category: 'system'
+  },
+  {
+    id: 'advertisements',
+    title: 'Advertisements',
+    path: '/admin/advertisements',
+    component: AdminAdvertisements,
+    roles: [UserRole.ADMIN, UserRole.SECRETARY],
+    description: 'Manage user submitted advertisements',
+    icon: <Megaphone className="w-5 h-5 text-purple-200" />,
+    tileColor: 'text-purple-200',
+    tileBgColor: 'bg-purple-500/10',
+    tileBorderColor: 'border-purple-500/30',
+    category: 'economy'
   },
   {
     id: 'cache-clear',

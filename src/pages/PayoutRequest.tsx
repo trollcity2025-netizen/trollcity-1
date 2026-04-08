@@ -96,7 +96,7 @@ export default function PayoutRequest() {
         toast.info("This amount requires 3 day manual review and may take longer to process.");
       }
 
-      const { data, error } = await supabase.rpc('request_visa_redemption', {
+      const { data, error } = await supabase.rpc('request_paypal_payout', {
         p_user_id: user.id,
         p_coins: tier.coins,
         p_usd: tier.usd
@@ -107,7 +107,7 @@ export default function PayoutRequest() {
       
       if (refreshProfile) await refreshProfile();
       
-      toast.success(`Visa redemption created: ID ${String(data?.redemption_id || '')}`);
+      toast.success(`PayPal payout request created: ID ${String(data?.payout_request_id || '')}`);
       setCoins("");
     } catch (e: any) {
       console.error(e);
@@ -135,7 +135,7 @@ export default function PayoutRequest() {
         <div>
           <p className="text-sm opacity-70 mb-1">Redemption Method</p>
           <div>
-            <p className="text-xs text-green-400 mt-1">Visa eGift Card</p>
+            <p className="text-xs text-green-400 mt-1">PayPal</p>
           </div>
         </div>
 

@@ -130,6 +130,92 @@ export async function canCastTrollSpell(userId: string): Promise<boolean> {
   return await isPerkActive(userId, 'perk_troll_spell');
 }
 
+// Random styles for Troll Spell
+const TROLL_SPELL_STYLES = [
+  { name: 'zombie', emoji: '🧟', color: '#4ade80' },
+  { name: 'alien', emoji: '👽', color: '#22d3ee' },
+  { name: 'pirate', emoji: '🏴‍☠️', color: '#f97316' },
+  { name: 'robot', emoji: '🤖', color: '#94a3b8' },
+  { name: 'clown', emoji: '🤡', color: '#f43f5e' },
+  { name: 'ghost', emoji: '👻', color: '#e2e8f0' },
+];
+
+/**
+ * Apply Troll Spell to a target user
+ * This stores the spell effect in the user's perk metadata
+ */
+export async function applyTrollSpell(casterId: string, targetUserId: string, targetUsername: string): Promise<{ success: boolean; error?: string; style?: typeof TROLL_SPELL_STYLES[0] }> {
+  // Check if caster has the perk
+  const canCast = await canCastTrollSpell(casterId);
+  if (!canCast) {
+    return { success: false, error: 'You do not have the Troll Spell perk' };
+  }
+  
+  // Pick a random style
+  const randomStyle = TROLL_SPELL_STYLES[Math.floor(Math.random() * TROLL_SPELL_STYLES.length)];
+  
+  // Store the spell effect in user_perks metadata (using caster's perk as the source)
+  const { data: perkData, error: perkError } = await supabase
+    .from('user_perks')
+    .select('id, metadata')
+    .eq('user_id', casterId)
+    .eq('perk_id', 'perk_troll_spell')
+    .eq('is_active', true)
+    .gt('expires_at', new Date().toISOString())
+    .limit(1)
+    .maybeSingle();
+  
+  if (perkError || !perkData) {
+    return { success: false, error: 'Could not find active Troll Spell perk' };
+  }
+  
+  // Update metadata to store the target user transformation
+  const spellEffects = perkData.metadata?.spellEffects || {};
+  spellEffects[targetUserId] = {
+    style: randomStyle.name,
+    emoji: randomStyle.emoji,
+    color: randomStyle.color,
+    appliedAt: new Date().toISOString(),
+    targetUsername: targetUsername
+  };
+  
+  const { error: updateError } = await supabase
+    .from('user_perks')
+    .update({ metadata: { ...perkData.metadata, spellEffects } })
+    .eq('id', perkData.id);
+  
+  if (updateError) {
+    console.error('Failed to apply Troll Spell:', updateError);
+    return { success: false, error: 'Failed to apply spell effect' };
+  }
+  
+  return { success: true, style: randomStyle };
+}
+
+/**
+ * Get Troll Spell effect for a user (if any)
+ */
+export async function getTrollSpellEffect(userId: string): Promise<{ style: string; emoji: string; color: string; targetUsername: string } | null> {
+  // Query all active troll_spell perks that might have this user as a target
+  const { data: perks, error } = await supabase
+    .from('user_perks')
+    .select('metadata')
+    .eq('perk_id', 'perk_troll_spell')
+    .eq('is_active', true)
+    .gt('expires_at', new Date().toISOString());
+  
+  if (error || !perks) return null;
+  
+  for (const perk of perks) {
+    const spellEffects = perk.metadata?.spellEffects || {};
+    if (spellEffects[userId]) {
+      return spellEffects[userId];
+    }
+  }
+  
+  return null;
+}
+
 /**
  * UTILITY FUNCTIONS FOR PERK EFFECTS
  */

@@ -503,7 +503,7 @@ BEGIN
     FROM public.user_follows
     WHERE following_id = p_user_id;
 
-    RETURN v_followers_count >= 1;
+    RETURN v_followers_count >= 100;
 END;
 $$;
 

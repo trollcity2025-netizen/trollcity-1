@@ -82,7 +82,7 @@ export default function TrollWheel() {
                   spins: 0,
                 };
               }
-              aggregated[spin.user_id].total_winnings += spin.coins_awarded || 0;
+              aggregated[spin.user_id].total_winnings += spin.reward_amount || 0;
               aggregated[spin.user_id].spins += 1;
             });
 
@@ -92,12 +92,12 @@ export default function TrollWheel() {
             setTopSpinners(top);
 
             const winners = spinners
-              .filter((s: any) => s.reward_value >= 10)
+              .filter((s: any) => s.reward_amount >= 10)
               .slice(0, 10)
               .map((w: any) => ({
                 username: profileMap[w.user_id] || 'Unknown',
-                reward_value: w.reward_value,
-                coins_awarded: w.coins_awarded,
+                reward_value: w.reward_amount,
+                coins_awarded: w.reward_amount,
                 created_at: w.created_at,
               }));
             setBigWinners(winners);

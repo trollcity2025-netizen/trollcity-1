@@ -16,6 +16,11 @@ DECLARE
     v_recipient_id UUID;
     v_sender_name TEXT;
 BEGIN
+    -- Don't send notification to sender (admin or regular user sending to themselves)
+    IF NEW.sender_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
     -- Get the recipient (the other person in the conversation)
     SELECT user_id INTO v_recipient_id
     FROM public.conversation_members
@@ -23,8 +28,8 @@ BEGIN
     AND user_id != NEW.sender_id
     LIMIT 1;
 
-    -- If no recipient found (e.g. self-message?), exit
-    IF v_recipient_id IS NULL THEN
+    -- If no recipient found or recipient is the sender, exit
+    IF v_recipient_id IS NULL OR v_recipient_id = NEW.sender_id THEN
         RETURN NEW;
     END IF;
 

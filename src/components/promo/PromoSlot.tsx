@@ -26,12 +26,8 @@ export default function PromoSlot({ placement, variant = 'sidebar' }: PromoSlotP
       const now = new Date().toISOString();
       console.log('[PromoSlot] Fetching ads for placement:', placement);
       
-      // DEBUG: First check ALL ads in database
-      const { data: allAds } = await supabase.from('city_ads').select('*');
-      console.log('[PromoSlot] ALL ads in DB:', JSON.stringify(allAds, null, 2));
-      
-      // First try: with date filters
-      const { data, error } = await supabase
+      // Fetch official city ads
+      const { data: officialAds, error: officialError } = await supabase
         .from('city_ads')
         .select('*')
         .eq('placement', placement)
@@ -39,49 +35,30 @@ export default function PromoSlot({ placement, variant = 'sidebar' }: PromoSlotP
         .or(`start_at.is.null,start_at.lte.${now}`)
         .or(`end_at.is.null,end_at.gte.${now}`)
         .order('priority', { ascending: false })
-        .order('display_order', { ascending: true })
-        .order('created_at', { ascending: false });
+        .order('display_order', { ascending: true });
 
-      console.log('[PromoSlot] Query result (with date filters):', { count: data?.length, error });
+      // Fetch user submitted active ads
+      const { data: userAds, error: userError } = await supabase
+        .from('user_advertisements')
+        .select('*')
+        .eq('status', 'active')
+        .or('placement.is.null,placement.eq.' + placement)
+        .order('slot_start_time', { ascending: true });
 
-      // Fallback: if no ads with date filters, try getting all active ads
-      if ((!data || data.length === 0) && !error) {
-        console.log('[PromoSlot] No ads with date filters, trying fallback...');
-        const { data: fallbackData } = await supabase
-          .from('city_ads')
-          .select('*')
-          .eq('placement', placement)
-          .eq('is_active', true)
-          .order('priority', { ascending: false })
-          .order('display_order', { ascending: true })
-          .order('created_at', { ascending: false });
-        
-        console.log('[PromoSlot] Fallback result:', { count: fallbackData?.length });
-        
-        if (fallbackData && fallbackData.length > 0) {
-          setAds(fallbackData);
-          return;
-        }
-      }
+      // Combine ads with official ads taking priority
+      const combinedAds = [
+        ...(officialAds || []),
+        ...(userAds || []).map(ad => ({
+          ...ad,
+          cta_link: ad.link_url,
+          cta_text: 'Learn More',
+          priority: 0,
+          is_active: true,
+          label: 'Sponsored'
+        }))
+      ];
 
-      // Last resort: try without any filters except placement
-      if ((!data || data.length === 0) && !error) {
-        console.log('[PromoSlot] Trying without is_active filter...');
-        const { data: anyData } = await supabase
-          .from('city_ads')
-          .select('*')
-          .eq('placement', placement);
-        
-        console.log('[PromoSlot] Any ads for placement:', { count: anyData?.length });
-        
-        if (anyData && anyData.length > 0) {
-          setAds(anyData);
-          return;
-        }
-      }
-
-      if (error) throw error;
-      setAds(data || []);
+      setAds(combinedAds);
     } catch (e) {
       console.error('[PromoSlot] Failed to fetch ads:', e);
       setAds([]);
@@ -179,9 +156,23 @@ export default function PromoSlot({ placement, variant = 'sidebar' }: PromoSlotP
     );
   }
 
-  // Empty state - no ads
+  // Empty state - show advertise prompt when no ads
   if (ads.length === 0) {
-    return null; // Don't render anything if no ads
+    return (
+      <div className={`w-full ${variant === 'horizontal' ? 'h-[100px]' : variant === 'sidebar' ? 'h-[180px]' : 'h-[400px]'} 
+        bg-slate-900/50 rounded-xl border border-slate-800 flex flex-col items-center justify-center gap-2 p-4`}>
+        <div className="text-purple-400 text-lg font-semibold">Want to Advertise?</div>
+        <p className="text-slate-400 text-xs text-center">
+          Advertise on Troll City for 1000 Troll Coins • Lasts 7 days
+        </p>
+        <button 
+          className="mt-2 px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium transition-colors"
+          onClick={() => window.location.href = '/city-registry/advertise'}
+        >
+          Submit Your Ad
+        </button>
+      </div>
+    );
   }
 
   const currentAd = ads[currentIndex];
