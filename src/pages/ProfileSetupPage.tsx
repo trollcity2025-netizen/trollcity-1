@@ -10,7 +10,7 @@ const ProfileSetupPage: React.FC = () => {
   const { user, setProfile } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
-  const handleProfileSubmit = async (username: string, bio?: string, gender?: string) => {
+  const handleProfileSubmit = async (username: string, bio?: string, gender?: string, platform?: string) => {
     if (!user?.id) {
       toast.error('User not authenticated');
       return;
@@ -69,6 +69,7 @@ const ProfileSetupPage: React.FC = () => {
           username: username.trim(),
           bio: bio?.trim() || null,
           gender: gender,
+          platform: platform || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id)

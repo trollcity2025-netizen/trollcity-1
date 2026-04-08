@@ -968,6 +968,26 @@ function ProfileInner() {
               <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded-full font-bold" title="Minor">🔞 MINOR</span>
             )}
 
+            {profile.platform && (
+              <span 
+                className="text-xs px-2 py-0.5 rounded-full font-bold" 
+                style={{ 
+                  backgroundColor: profile.platform === 'trollcity' ? '#a855f7' : 
+                                   profile.platform === 'tiktok' ? '#00f2ea' : 
+                                   profile.platform === 'liveme' ? '#ff4d4f' : 
+                                   profile.platform === 'bigo' ? '#f59e0b' : 
+                                   profile.platform === 'favortied' ? '#10b981' : '#6b7280',
+                  color: profile.platform === 'tiktok' ? '#000' : '#fff'
+                }}
+              >
+                {profile.platform === 'trollcity' ? '🏙️ Troll City' : 
+                 profile.platform === 'tiktok' ? '🎵 TikTok' : 
+                 profile.platform === 'liveme' ? '📺 LiveMe' : 
+                 profile.platform === 'bigo' ? '🎥 Bigo Live' : 
+                 profile.platform === 'favortied' ? '⭐ Favortied' : profile.platform}
+              </span>
+            )}
+
             <UserBadge profile={profile} />
 
             {isOwnProfile && (

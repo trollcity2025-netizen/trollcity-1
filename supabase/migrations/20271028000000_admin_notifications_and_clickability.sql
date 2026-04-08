@@ -40,7 +40,8 @@ BEGIN
     'new_review_received', 'appeal_decision',
     'vehicle_auction', 'support_reply',
     'stream_live', 'pod_live',
-    'battle_result'
+    'battle_result',
+    'new_follower'
   ) THEN
     RETURN NEW;
   END IF;

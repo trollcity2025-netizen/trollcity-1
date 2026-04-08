@@ -28,6 +28,16 @@ export type UserTier = string // Now dynamic based on XP
 export type StreamStatus = 'live' | 'ended'
 export type TransactionType = 'purchase' | 'gift' | 'spin' | 'insurance' | 'cashout'
 
+export const PLATFORM_OPTIONS = [
+  { value: 'trollcity', label: 'Troll City', color: '#a855f7', icon: '🏙️' },
+  { value: 'tiktok', label: 'TikTok', color: '#00f2ea', icon: '🎵' },
+  { value: 'liveme', label: 'LiveMe', color: '#ff4d4f', icon: '📺' },
+  { value: 'bigo', label: 'Bigo Live', color: '#f59e0b', icon: '🎥' },
+  { value: 'favortied', label: 'Favortied', color: '#10b981', icon: '⭐' },
+] as const;
+
+export type Platform = typeof PLATFORM_OPTIONS[number]['value'];
+
 export interface UserProfile {
   id: string
   username: string
@@ -35,6 +45,7 @@ export interface UserProfile {
   banner_url?: string | null
   full_name?: string | null
   bio: string
+  platform?: Platform | null
   email?: string
   role: UserRole
   tier: UserTier

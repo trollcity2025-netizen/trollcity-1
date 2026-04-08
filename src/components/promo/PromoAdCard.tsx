@@ -3,6 +3,7 @@
  * Used in both sidebar and right panel slots
  */
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CityAd } from '../../types/cityAds';
 import { supabase } from '../../lib/supabase';
@@ -18,6 +19,7 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [showLightbox, setShowLightbox] = useState(false);
+  const [lightboxVisible, setLightboxVisible] = useState(false);
 
   const isSidebar = variant === 'sidebar';
   const isFeatured = variant === 'featured';
@@ -34,7 +36,14 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
   }, [ad.image_url]);
 
   const handleClick = async () => {
-    // Track click using RPC function
+    // Open lightbox immediately first - no delay for user
+    setShowLightbox(true);
+    onClick?.();
+    
+    // Animate in after render
+    setTimeout(() => setLightboxVisible(true), 10);
+
+    // Track click in background without blocking UI
     try {
       await supabase.rpc('increment_ad_clicks', { ad_id: ad.id });
     } catch (e) {
@@ -48,9 +57,11 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
         console.error('Failed to track ad click:', err);
       }
     }
-
-    setShowLightbox(true);
-    onClick?.();
+  };
+  
+  const closeLightbox = () => {
+    setLightboxVisible(false);
+    setTimeout(() => setShowLightbox(false), 300);
   };
 
   const baseClasses = `relative overflow-hidden rounded-xl transition-all duration-300 cursor-pointer`;
@@ -89,7 +100,7 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
             imageLoaded ? 'opacity-60' : 'opacity-0'
           }`}
           onLoad={() => setImageLoaded(true)}
-          loading="lazy"
+          loading="eager"
         />
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/50 to-transparent" />
@@ -182,38 +193,38 @@ export default function PromoAdCard({ ad, variant = 'sidebar', onClick }: PromoA
         <div className="absolute inset-0 rounded-xl border-2 border-purple-500/50 pointer-events-none" />
       )}
 
-      {/* Lightbox overlay */}
-      {showLightbox && (
+    {/* Lightbox portal - renders directly to body, no parent reflow */}
+    {showLightbox && createPortal(
+      <div
+        className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 transition-all duration-300 ease-out ${lightboxVisible ? 'bg-black/70' : 'bg-black/0'}`}
+        onClick={closeLightbox}
+      >
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setShowLightbox(false)}
+          className={`relative max-w-[95vw] max-h-[95vh] overflow-hidden rounded-xl bg-slate-900 transition-all duration-300 ease-out ${lightboxVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div
-            className="relative max-w-[95vw] max-h-[95vh] overflow-hidden rounded-xl bg-slate-900"
-            onClick={(e) => e.stopPropagation()}
+          <button
+            className="absolute top-2 right-2 z-20 rounded-full bg-slate-800/90 p-2 text-white hover:bg-slate-700 transition-colors duration-200"
+            onClick={closeLightbox}
+            aria-label="Close image preview"
           >
-            <button
-              className="absolute top-2 right-2 z-20 rounded-full bg-slate-800/90 p-2 text-white hover:bg-slate-700"
-              onClick={() => setShowLightbox(false)}
-              aria-label="Close image preview"
-            >
-              ✕
-            </button>
+            ✕
+          </button>
 
-            <img
-              src={ad.image_url}
-              alt={ad.title}
-              className="max-h-[90vh] w-auto object-contain transition-none"
-              style={{ opacity: 1 }}
-            />
-            {ad.title && (
-              <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-3 text-white text-sm">
-                {ad.title}
-              </div>
-            )}
-          </div>
+          <img
+            src={ad.image_url}
+            alt={ad.title}
+            className="max-h-[90vh] w-auto object-contain transition-opacity duration-300"
+          />
+          {ad.title && (
+            <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-3 text-white text-sm">
+              {ad.title}
+            </div>
+          )}
         </div>
-      )}
+      </div>,
+      document.body
+    )}
     </div>
   );
 }

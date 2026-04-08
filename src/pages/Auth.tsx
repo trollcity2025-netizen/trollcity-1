@@ -110,6 +110,7 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
   const [username, setUsername] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [platform, setPlatform] = useState('')
   const [showAlertAdmin, setShowAlertAdmin] = useState(false)
   const [alertEmail, setAlertEmail] = useState('')
   const [alertDetails, setAlertDetails] = useState('')
@@ -559,7 +560,8 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
           referral_code: referralCode || localStorage.getItem('recruited_by') || undefined,
           data: {
             terms_accepted: true,
-            accepted_at: new Date().toISOString()
+            accepted_at: new Date().toISOString(),
+            platform: platform || null
           }
         })
 
@@ -857,6 +859,23 @@ const Auth = ({ embedded = false, onClose: _onClose, initialMode }: AuthProps = 
                         autoComplete="username"
                         required
                       />
+                     </div>
+
+                    {/* Platform Selection */}
+                    <div className="relative group">
+                      <select
+                        value={platform}
+                        onChange={(e) => setPlatform(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400/40 focus:bg-slate-800/70 transition-all focus:shadow-[0_0_20px_rgba(34,211,238,0.2)] appearance-none"
+                        required
+                      >
+                        <option value="" disabled>Select platform you rep</option>
+                        <option value="trollcity">🏙️ Troll City</option>
+                        <option value="tiktok">🎵 TikTok</option>
+                        <option value="liveme">📺 LiveMe</option>
+                        <option value="bigo">🎥 Bigo Live</option>
+                        <option value="favortied">⭐ Favortied</option>
+                      </select>
                     </div>
 
                     {/* Terms Acceptance */}

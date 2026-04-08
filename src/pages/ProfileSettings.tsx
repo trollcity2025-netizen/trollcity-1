@@ -22,6 +22,7 @@ export default function ProfileSettings() {
   const [bio, setBio] = useState('')
   const [bannerNotifications, setBannerNotifications] = useState(true)
   const [isMinor, setIsMinor] = useState(false)
+  const [platform, setPlatform] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export default function ProfileSettings() {
       setUsername(profile.username || '')
       setFullName((profile as any).full_name || '')
       setBio(profile.bio || '')
+      setPlatform((profile as any).platform || '')
       if ((profile as any).banner_notifications_enabled !== undefined) {
           setBannerNotifications((profile as any).banner_notifications_enabled)
       }
@@ -78,6 +80,7 @@ export default function ProfileSettings() {
           bio: bio.trim(),
           banner_notifications_enabled: bannerNotifications,
           is_minor: isMinor,
+          platform: platform || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id)
@@ -155,7 +158,7 @@ export default function ProfileSettings() {
               />
               <p className={`text-xs ${trollCityTheme.text.muted}`}>Letters, numbers, and underscores only.</p>
             </div>
-            <div className="space-y-2">
+             <div className="space-y-2">
               <label className={`text-sm ${trollCityTheme.text.muted}`}>Bio</label>
               <input
                 type="text"
@@ -165,6 +168,22 @@ export default function ProfileSettings() {
                 placeholder="Tell us about yourself"
                 maxLength={160}
               />
+            </div>
+            <div className="space-y-2">
+              <label className={`text-sm ${trollCityTheme.text.muted}`}>Platform You Rep</label>
+              <select
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value)}
+                className={`w-full px-4 py-2 ${trollCityTheme.components.input} rounded-xl text-white focus:outline-none transition-colors`}
+              >
+                <option value="">Select platform</option>
+                <option value="trollcity">🏙️ Troll City</option>
+                <option value="tiktok">🎵 TikTok</option>
+                <option value="liveme">📺 LiveMe</option>
+                <option value="bigo">🎥 Bigo Live</option>
+                <option value="favortied">⭐ Favortied</option>
+              </select>
+              <p className={`text-xs ${trollCityTheme.text.muted}`}>Shown on profile and during battles</p>
             </div>
             <div className={`flex items-center justify-between p-4 ${trollCityTheme.backgrounds.glass} rounded-xl border ${trollCityTheme.borders.glass} md:col-span-2`}>
               <div>

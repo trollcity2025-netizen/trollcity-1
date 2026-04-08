@@ -30,7 +30,7 @@ const state: PreflightState = {
   isAudioEnabled: true,
   isInBattle: false,
   isInBroadcast: false,
-  battlesDisabled: true, // Default to disabled until further notice
+  battlesDisabled: false, // Battles enabled for all users
   livekitRoom: null,
   livekitTracks: null,
   isScreenShareMode: false,
@@ -141,7 +141,7 @@ export const PreflightStore = {
     state.isAudioEnabled = true;
     state.isInBattle = false;
     state.isInBroadcast = false;
-    state.battlesDisabled = true; // Keep battles disabled on clear
+    state.battlesDisabled = false; // Battles remain enabled on clear
     state.livekitRoom = null;
     state.livekitTracks = null;
     state.isScreenShareMode = false;
