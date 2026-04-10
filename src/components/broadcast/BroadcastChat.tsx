@@ -1331,7 +1331,7 @@ export default function BroadcastChat({
                         return (
                             <div 
                                 key={msg.id}
-                                className="flex items-center gap-2 text-zinc-400 text-xs italic bg-zinc-800/60 p-1.5 rounded-lg border border-white/5 animate-in slide-in-from-bottom-2 fade-in duration-300"
+                                className="flex items-center gap-2 text-zinc-400 text-xs italic bg-transparent p-1.5 rounded-lg border border-white/5 animate-in slide-in-from-bottom-2 fade-in duration-300"
                             >
                                 <Sparkles size={12} className="text-yellow-500 flex-shrink-0" />
                                 <button
@@ -1489,7 +1489,7 @@ export default function BroadcastChat({
             </div>
         </div>
 
-        <form onSubmit={sendMessage} className="p-4 border-t border-white/10 bg-zinc-900/80 relative">
+        <form onSubmit={sendMessage} className="p-4 border-t border-white/10 bg-transparent relative">
             <div className="relative w-full">
                 <input 
                     type="text" 
@@ -1508,7 +1508,7 @@ export default function BroadcastChat({
                     }
                     readOnly={isGuest || streamEnded || hostChatDisabledByOfficer}
                     disabled={hostChatDisabledByOfficer || streamEnded}
-                    className="w-full bg-zinc-800 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-500 text-sm"
+                    className="w-full bg-white/10 border-none rounded-full px-4 py-2.5 focus:ring-2 focus:ring-yellow-500 text-white placeholder:text-zinc-400 text-sm"
                 />
 
                 <button
