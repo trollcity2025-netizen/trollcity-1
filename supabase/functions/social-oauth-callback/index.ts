@@ -37,8 +37,10 @@ serve(async (req) => {
       const codeVerifier = stateParts[0] || "";
       const callbackClientId = Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
       const callbackClientSecret = Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";
+      // Use same redirect URI pattern as init function
+      const redirectUri = (Deno.env.get("SITE_URL") || "https://maitrollcity.com").replace(/\/$/, "") + "/admin/x-ads/oauth-callback";
 
-      console.log('X OAuth - using client_id:', callbackClientId, 'code_verifier:', codeVerifier ? 'yes' : 'none');
+      console.log('X OAuth - using client_id:', callbackClientId, 'code_verifier:', codeVerifier ? 'yes' : 'none', 'redirect_uri:', redirectUri);
 
       const tokenResponse = await fetch("https://api.twitter.com/2/oauth2/token", {
         method: "POST",
@@ -49,7 +51,7 @@ serve(async (req) => {
         body: new URLSearchParams({
           grant_type: "authorization_code",
           code: code,
-          redirect_uri: `${Deno.env.get("SITE_URL")}/admin/x-ads/oauth-callback`,
+          redirect_uri: redirectUri,
           code_verifier: codeVerifier,
         }),
       });
@@ -71,6 +73,7 @@ serve(async (req) => {
     } else if (platform === "instagram") {
       const igClientId = Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
       const igClientSecret = Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";
+      const redirectUri = (Deno.env.get("SITE_URL") || "https://maitrollcity.com").replace(/\/$/, "") + "/admin/x-ads/oauth-callback";
 
       const tokenResponse = await fetch("https://api.instagram.com/oauth/access_token", {
         method: "POST",
@@ -81,7 +84,7 @@ serve(async (req) => {
           client_id: igClientId,
           client_secret: igClientSecret,
           grant_type: "authorization_code",
-          redirect_uri: `${Deno.env.get("SITE_URL")}/admin/x-ads/oauth-callback`,
+          redirect_uri: redirectUri,
           code: code,
         }),
       });
@@ -97,8 +100,9 @@ serve(async (req) => {
     } else if (platform === "facebook") {
       const fbClientId = Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
       const fbClientSecret = Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";
-      
-      const tokenResponse = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token?client_id=${fbClientId}&redirect_uri=${encodeURIComponent(`${Deno.env.get("SITE_URL")}/admin/x-ads/oauth-callback`)}&client_secret=${fbClientSecret}&code=${code}`);
+      const redirectUri = (Deno.env.get("SITE_URL") || "https://maitrollcity.com").replace(/\/$/, "") + "/admin/x-ads/oauth-callback";
+
+      const tokenResponse = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token?client_id=${fbClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${fbClientSecret}&code=${code}`);
       
       tokenData = await tokenResponse.json();
       console.log('FB token response:', tokenData);

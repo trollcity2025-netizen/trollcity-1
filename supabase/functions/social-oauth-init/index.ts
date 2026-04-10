@@ -71,7 +71,7 @@ serve(async (req) => {
     // Use env vars for credentials
     const finalClientId = Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
     const finalClientSecret = Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";
-    const finalRedirectUri = Deno.env.get("SITE_URL") + '/admin/x-ads/oauth-callback';
+    const finalRedirectUri = (Deno.env.get("SITE_URL") || "https://maitrollcity.com").replace(/\/$/, "") + '/admin/x-ads/oauth-callback';
 
     log('Input', { platform, hasCodeChallenge: !!code_challenge });
 
