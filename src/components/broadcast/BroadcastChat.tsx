@@ -1120,8 +1120,8 @@ export default function BroadcastChat({
       return null;
   };
 
-  return (
-    <div ref={chatContainerRef} className="flex flex-col h-[94%] text-white relative">
+   return (
+     <div ref={chatContainerRef} className="flex flex-col h-full text-white relative bg-transparent">
         {/* Unread Message Notification Bubble */}
         {unreadCount > 0 && (
           <div className="absolute -top-2 -right-2 z-50">
@@ -1136,7 +1136,7 @@ export default function BroadcastChat({
           </div>
         )}
         
-        <div className="p-4 border-b border-white/10 font-bold bg-zinc-900/50 flex items-center justify-between gap-2">
+         <div className="p-4 border-b border-white/10 font-bold bg-transparent flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"/>
                 Live Chat
@@ -1208,7 +1208,7 @@ export default function BroadcastChat({
           if (seatUsers.length === 0) return null;
           
           return (
-            <div className="flex gap-1.5 px-3 py-2 overflow-x-auto border-b border-white/5 bg-zinc-900/30 scrollbar-hide">
+             <div className="flex gap-1.5 px-3 py-2 overflow-x-auto border-b border-white/5 bg-transparent scrollbar-hide">
               {seatUsers.map((seatUser) => (
                 <button
                   key={seatUser.id}
@@ -1246,7 +1246,7 @@ export default function BroadcastChat({
           );
         })()}
         
-        <div className="flex-1 min-h-0 relative overflow-hidden">
+         <div className="flex-1 min-h-0 relative overflow-y-auto">
             {/* Challenge Notifications Section - Show active challenges */}
             {challengeNotifications.length > 0 && (
                 <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-purple-900/80 to-transparent p-2 max-h-[180px] overflow-y-auto">
@@ -1318,8 +1318,8 @@ export default function BroadcastChat({
                 </div>
             )}
             
-            {/* Floating Messages - Show last 10 messages as floating bubbles */}
-            <div className={`absolute left-0 right-0 flex flex-col gap-1 p-2 overflow-hidden ${challengeNotifications.length > 0 ? 'bottom-0 max-h-[120px]' : 'bottom-0 max-h-[200px]'}`}>
+            {/* Floating Messages - Full scrollable chat history */}
+            <div className={`absolute left-0 right-0 top-0 flex flex-col gap-1 p-2 overflow-y-auto`}>
                 {messages.slice(-10).map((msg, index) => {
                     // Calculate animation delay based on index (newer messages appear on top)
                     const isSystem = msg.type === 'system';

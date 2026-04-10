@@ -53,7 +53,7 @@ export interface TickerTemplate {
 export const DEFAULT_TICKER_SETTINGS: Omit<TickerSettings, 'stream_id'> = {
   is_enabled: true,
   mode: 'manual',
-  position: 'top',
+  position: 'bottom',
   speed: 'medium',
   theme: 'neon',
   color_scheme: 'cyan',

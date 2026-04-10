@@ -34,9 +34,9 @@ export default function EarningsPayout() {
   const [loading, setLoading] = useState(false)
   const [recentRequests, setRecentRequests] = useState<any[]>([])
 
-  const raw_troll_coins = profile?.troll_coins || 0
+  const purchased_coins = profile?.purchased_coins || 0
   const reserved_coins = profile?.reserved_troll_coins || 0
-  const troll_coins = Math.max(0, raw_troll_coins - reserved_coins)
+  const troll_coins = Math.max(0, purchased_coins - reserved_coins)
   
   const freeCoins = profile?.free_coins || 0
 
@@ -188,7 +188,7 @@ export default function EarningsPayout() {
             Troll City Cashout
           </h1>
           <p className="text-sm text-gray-300 mb-4">
-            Only <span className="text-troll-gold">Troll Coins (troll_coins)</span> count toward payouts.
+            Only <span className="text-troll-gold">Gifted Coins</span> count toward payouts. Only coins that other users purchased and gifted to you are eligible for cashout. Coins you purchased directly cannot be cashed out.
             Free coins are for fun, wheel, and bonuses only.
           </p>
 

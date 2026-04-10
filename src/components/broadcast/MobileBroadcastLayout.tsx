@@ -29,6 +29,10 @@ interface MobileBroadcastLayoutProps {
   onShare?: () => void;
   isMicEnabled?: boolean;
   isCamEnabled?: boolean;
+  localTracks?: any;
+  onFiveVFiveBattle?: () => void;
+  fiveVFiveBattleActive?: boolean;
+  isLive?: boolean;
 }
 
 export default function MobileBroadcastLayout({
@@ -48,6 +52,10 @@ export default function MobileBroadcastLayout({
   onShare,
   isMicEnabled = true,
   isCamEnabled = true,
+  localTracks,
+  onFiveVFiveBattle,
+  fiveVFiveBattleActive,
+  isLive,
 }: MobileBroadcastLayoutProps) {
   const { isMobile } = useMobileLayout();
   const { headerHeight, dockHeight, safeArea } = useSafeAreaHeight();
@@ -116,6 +124,12 @@ export default function MobileBroadcastLayout({
           onGiftHost={handleGift}
           onLeave={handleLeave}
           onShare={onShare}
+          localTracks={localTracks}
+          toggleCamera={handleToggleCamera}
+          toggleMicrophone={handleToggleMic}
+          isLive={isLive}
+          onFiveVFiveBattle={onFiveVFiveBattle}
+          fiveVFiveBattleActive={fiveVFiveBattleActive}
         />
         {isChatOpen && (
           <ChatBottomSheet
@@ -310,7 +324,7 @@ export default function MobileBroadcastLayout({
                     !isCamEnabled 
                       ? "bg-red-500/20 text-red-500 border border-red-500/30" 
                       : "bg-white/10 text-white border border-white/10 hover:bg-white/20"
-                  }
+                  )}
                   title={isCamEnabled ? 'Camera Off' : 'Camera On'}
                 >
                   {!isCamEnabled ? '📷' : '📹'}

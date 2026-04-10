@@ -117,19 +117,52 @@ export function useBattleSubscriber(stream: any) {
               .in('status', ['active', 'pending'])
               .maybeSingle();
 
-            if (battle) {
-              isOneVOne = true;
-              battleData = battle;
-              // Build participants from challenger/opponent stream data
-              const [cStream, oStream] = await Promise.all([
-                supabase.from('streams').select('user_id').eq('id', battle.challenger_stream_id).maybeSingle(),
-                supabase.from('streams').select('user_id').eq('id', battle.opponent_stream_id).maybeSingle(),
-              ]);
-              initialParticipants = [
-                { userId: cStream?.data?.user_id, team: 'A', role: 'host' },
-                { userId: oStream?.data?.user_id, team: 'B', role: 'host' },
-              ].filter(p => p.userId);
-            }
+             if (battle) {
+               isOneVOne = true;
+               battleData = battle;
+               // Build participants from challenger/opponent stream data
+               const [cStream, oStream] = await Promise.all([
+                 supabase.from('streams').select('user_id').eq('id', battle.challenger_stream_id).maybeSingle(),
+                 supabase.from('streams').select('user_id').eq('id', battle.opponent_stream_id).maybeSingle(),
+               ]);
+               initialParticipants = [
+                 { userId: cStream?.data?.user_id, team: 'A', role: 'host' },
+                 { userId: oStream?.data?.user_id, team: 'B', role: 'host' },
+               ].filter(p => p.userId);
+               
+               // Calculate correct timer based on battle status
+               let timerSeconds = 5;
+               let phase: 'pre_battle' | 'active' = 'pre_battle';
+               
+               if (battle.status === 'pending' && battle.scheduled_start_at) {
+                 timerSeconds = Math.max(0, Math.floor((new Date(battle.scheduled_start_at).getTime() - Date.now()) / 1000));
+                 phase = 'pre_battle';
+               } else if (battle.status === 'active' && battle.started_at) {
+                 timerSeconds = Math.max(0, 180 - Math.floor((Date.now() - new Date(battle.started_at).getTime()) / 1000));
+                 phase = 'active';
+               }
+               
+               setState({
+                 active: true,
+                 battleId,
+                 phase,
+                 teamAScore: battle.score_challenger || 0,
+                 teamBScore: battle.score_opponent || 0,
+                 teamAGiftCount: 0,
+                 teamBGiftCount: 0,
+                 timerSeconds,
+                 totalDuration: 180,
+                 participants: initialParticipants,
+                 frozenTeams: { A: false, B: false },
+                 doubleXpTeams: { A: false, B: false },
+                 lastGiftUser: null,
+                 winner: null,
+                 rematchAccepted: { A: false, B: false },
+                 rematchCountdown: 0,
+                 abilityEffects: [],
+               });
+               return;
+             }
           } catch (e) {
             console.warn('[BattleSubscriber] Could not fetch 1v1 battle:', e);
           }
@@ -167,28 +200,28 @@ export function useBattleSubscriber(stream: any) {
         channel5v5.on('broadcast', { event: '*' }, (payload) => {
         const { event, payload: data } = payload;
         switch (event) {
-          case 'battle_found': {
-            setState({
-              active: true,
-              battleId: data.battleId,
-              phase: 'pre_battle',
-              teamAScore: 0,
-              teamBScore: 0,
-              teamAGiftCount: 0,
-              teamBGiftCount: 0,
-              timerSeconds: 5,
-              totalDuration: 180,
-              participants: data.participants || [],
-              frozenTeams: { A: false, B: false },
-              doubleXpTeams: { A: false, B: false },
-              lastGiftUser: null,
-              winner: null,
-              rematchAccepted: { A: false, B: false },
-              rematchCountdown: 0,
-            });
-            // No local timer - sync to host's timer_sync broadcasts
-            break;
-          }
+           case 'battle_found': {
+             setState(prev => ({
+               ...prev,
+               active: true,
+               battleId: data.battleId,
+               phase: 'pre_battle',
+               teamAScore: 0,
+               teamBScore: 0,
+               teamAGiftCount: 0,
+               teamBGiftCount: 0,
+               timerSeconds: data.countdownSeconds || 10,
+               totalDuration: 180,
+               participants: data.participants || [],
+               frozenTeams: { A: false, B: false },
+               doubleXpTeams: { A: false, B: false },
+               lastGiftUser: null,
+               winner: null,
+               rematchAccepted: { A: false, B: false },
+               rematchCountdown: 0,
+             }));
+             break;
+           }
           case 'battle_start': {
             setState(prev => ({
               ...prev,

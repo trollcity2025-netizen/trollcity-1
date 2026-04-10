@@ -16,8 +16,6 @@ import { generateUUID } from '../../lib/uuid';
 import {
   BROADCAST_CATEGORIES,
   getCategoryConfig,
-  supportsBattles,
-  getMatchingTerminology,
   requiresReligion,
   forceRearCamera,
   allowFrontCamera,
@@ -134,8 +132,6 @@ export default function SetupPage() {
   const categoryRequiresReligion = requiresReligion(category);
   const shouldForceRearCamera = forceRearCamera(category);
   const canUseFrontCamera = allowFrontCamera(category);
-  const categorySupportsBattles = supportsBattles(category);
-  const categoryMatchingTerm = getMatchingTerminology(category);
 
 
   // Media state - LiveKit tracks for preview
@@ -1286,46 +1282,6 @@ export default function SetupPage() {
     );
   };
 
-  // Render Battle/Match info for categories that support it
-  const renderBattleInfo = () => {
-    if (!categorySupportsBattles) return null;
-    
-    return (
-      <div className="bg-gradient-to-r from-amber-500/10 to-rose-500/10 border border-amber-500/30 rounded-xl p-4 space-y-2">
-        <div className="flex items-center gap-2 text-amber-400">
-          <Swords size={18} />
-          <span className="font-semibold">{categoryMatchingTerm} Available</span>
-        </div>
-        
-        {/* Follower requirement indicator for ALL categories */}
-        <div className="flex items-center justify-between text-sm border-t border-white/10 pt-2 mt-2">
-          <span className="text-gray-300">Followers Required:</span>
-          <span className={`font-bold ${followerCount >= 1 ? 'text-green-400' : 'text-red-400'}`}>
-            {followerCount} / 1
-          </span>
-        </div>
-        
-        {followerCount < 1 && (
-          <p className="text-xs text-amber-300 mt-2">
-            ⚠️ You need at least 1 follower to start any broadcast
-          </p>
-        )}
-        
-        {category === 'business' && (
-          <p className="text-xs text-gray-400">
-            Click the {categoryMatchingTerm} button during your broadcast to find other business broadcasters to connect with.
-          </p>
-        )}
-        
-        {category === 'spiritual' && (
-          <p className="text-xs text-gray-400">
-            Click the {categoryMatchingTerm} button during your broadcast to find other broadcasters of the same faith.
-          </p>
-        )}
-      </div>
-    );
-  };
-
   // Render category-specific info
   const renderCategoryInfo = () => {
     switch (category) {
@@ -1684,9 +1640,6 @@ export default function SetupPage() {
 
         {/* Religion Selector */}
         {renderReligionSelector()}
-
-        {/* Battle/Match Info */}
-        {renderBattleInfo()}
 
         {/* Permission Warning */}
         {showPermissionPrompt && (

@@ -1,30 +1,23 @@
 import React from 'react';
 import { useAuthStore } from '../../lib/store';
-import { PreflightStore } from '../../lib/preflightStore';
-import { Heart, Users, Swords } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { Heart, Users } from 'lucide-react';
 import { Stream } from '../../types/broadcast';
 import { cn } from '../../lib/utils';
-import { supabase } from '../../lib/supabase';
 
 interface BroadcastHeaderProps {
     stream: Stream;
-    onStartBattleBattle?: () => void;
-    categoryBattleTerm?: string;
     isHost: boolean;
     liveViewerCount?: number;
     handleLike: () => void;
-    onChallengeBroadcaster?: () => void;
     hasPendingChallenge?: boolean;
 }
 
 export default function BroadcastHeader({ 
     stream, 
-    onStartBattleBattle, 
-    categoryBattleTerm, 
     isHost, 
     liveViewerCount, 
     handleLike,
-    onChallengeBroadcaster,
     hasPendingChallenge
 }: BroadcastHeaderProps) {
     const { profile, setProfile } = useAuthStore();
@@ -102,38 +95,6 @@ export default function BroadcastHeader({
         <div className="absolute top-16 left-4 right-4 z-50 flex items-center justify-between gap-3 pointer-events-none">
             {/* Spacer for left side - Back button removed (using nav bubble instead) */}
             <div className="w-10" />
-
-            <div className="hidden items-center gap-3">
-                {isHost && onStartBattleBattle && (
-                    <button
-                        onClick={onStartBattleBattle}
-                        className="pointer-events-auto flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white rounded-full px-4 py-2 shadow-lg shadow-red-500/20 transition-all"
-                    >
-                        <Swords size={16} />
-                        <span className="text-xs font-bold">
-                            {categoryBattleTerm ? categoryBattleTerm.toUpperCase() : (stream.stream_kind === 'trollmers' ? 'HEAD TO HEAD' : 'BATTLE')}
-                        </span>
-                    </button>
-                )}
-                
-                {/* Challenge Button for Viewers */}
-                {!isHost && onChallengeBroadcaster && !PreflightStore.getBattlesDisabled() && (
-                    <button
-                        onClick={onChallengeBroadcaster}
-                        disabled={hasPendingChallenge}
-                        className={`pointer-events-auto flex items-center gap-2 rounded-full px-4 py-2 shadow-lg transition-all ${
-                            hasPendingChallenge
-                                ? 'bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-purple-600 to-red-600 hover:from-purple-500 hover:to-red-500 text-white shadow-purple-500/20'
-                        }`}
-                    >
-                        <Swords size={16} />
-                        <span className="text-xs font-bold">
-                            {hasPendingChallenge ? 'CHALLENGE SENT' : 'CHALLENGE'}
-                        </span>
-                    </button>
-                )}
-            </div>
 
             {/* Right: Stream Stats */}
             <div className="flex items-center gap-3">

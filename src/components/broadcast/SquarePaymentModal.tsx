@@ -237,44 +237,50 @@ export default function SquarePaymentModal({
     }
   };
 
-  const processStoredCardPayment = async () => {
-    if (!userId) {
-      toast.error('Please sign in to continue');
-      return;
-    }
+   const processStoredCardPayment = async () => {
+     if (!userId) {
+       toast.error('Please sign in to continue');
+       return;
+     }
 
-    const selectedMethod = savedPaymentMethods.find(pm => pm.id === selectedPaymentMethodId) || savedPaymentMethods.find(pm => pm.is_default) || savedPaymentMethods[0];
-    
-    setIsSubmitting(true);
-    setStep('processing');
+     const selectedMethod = savedPaymentMethods.find(pm => pm.id === selectedPaymentMethodId) || savedPaymentMethods.find(pm => pm.is_default) || savedPaymentMethods[0];
+     
+     if (!selectedMethod) {
+       // No saved cards - just switch to new card entry mode silently
+       setUseSavedCard(false);
+       return;
+     }
+     
+     setIsSubmitting(true);
+     setStep('processing');
 
-    try {
-      const { data, error } = await supabase.functions.invoke('charge-stored-card', {
-        body: {
-          userId,
-          amountUsd,
-          coins,
-          packageId,
-          packageName,
-          purchaseType,
-          paymentMethodId: selectedMethod?.id,
-        },
-      });
+     try {
+       const { data, error } = await supabase.functions.invoke('charge-stored-card', {
+         body: {
+           userId,
+           amountUsd,
+           coins,
+           packageId,
+           packageName,
+           purchaseType,
+           paymentMethodId: selectedMethod?.id,
+         },
+       });
 
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Payment failed');
+       if (error) throw new Error(error.message || 'Payment failed');
+       if (!data?.success) throw new Error(data?.error || 'Payment declined');
 
-      setPaymentResult(data);
-      setStep('success');
-      onPaymentSuccess?.(data);
-    } catch (err: any) {
-      console.error('Stored card payment error:', err);
-      toast.error(err?.message || 'Payment failed. Please try again.');
-      setStep('select');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+       setPaymentResult(data);
+       setStep('success');
+       onPaymentSuccess?.(data);
+     } catch (err: any) {
+       console.error('Stored card payment error:', err);
+       toast.error(err?.message || 'Payment declined. Please use a different card.');
+       setStep('select');
+     } finally {
+       setIsSubmitting(false);
+     }
+   };
 
   const handlePayment = async () => {
     if (!userId) {
@@ -328,44 +334,76 @@ export default function SquarePaymentModal({
         onProfileUpdate?.(updatedProfile);
       }
 
-      // Open Square payment page
-      if (checkoutData?.paymentUrl) {
-        const paymentWindow = window.open(checkoutData.paymentUrl, '_blank', 'width=600,height=700');
-        
-        const checkPayment = async () => {
-          try {
-            const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-square-payment', {
-              body: {
-                orderId: checkoutData.orderId,
-                userId,
-                expectedAmount: amountUsd,
-              },
-            });
+       // Open Square payment page
+       if (checkoutData?.paymentUrl) {
+         const paymentWindow = window.open(checkoutData.paymentUrl, '_blank', 'width=600,height=700');
+         
+         // Detect when user closes payment window
+         const closeChecker = setInterval(() => {
+           if (paymentWindow.closed) {
+             clearInterval(closeChecker);
+             clearInterval(pollInterval);
+             if (step !== 'success') {
+               toast.error('Payment cancelled or declined.');
+               setStep('select');
+               setIsSubmitting(false);
+             }
+           }
+         }, 500);
+         
+         const checkPayment = async () => {
+           try {
+             const { data: verifyData, error: verifyError } = await supabase.functions.invoke('verify-square-payment', {
+               body: {
+                 orderId: checkoutData.orderId,
+                 userId,
+                 expectedAmount: amountUsd,
+               },
+             });
 
-            if (!verifyError && verifyData?.verified) {
-              setPaymentResult(verifyData);
-              setStep('success');
-              onPaymentSuccess?.(verifyData);
-              return true;
-            }
-          } catch (e) {
-            console.error('Payment verification error:', e);
-          }
-          return false;
-        };
+             if (verifyError) {
+               clearInterval(pollInterval);
+               clearInterval(closeChecker);
+               toast.error('Payment failed. Please try again.');
+               setStep('select');
+               setIsSubmitting(false);
+               return false;
+             }
+             
+             if (verifyData?.verified) {
+               clearInterval(pollInterval);
+               clearInterval(closeChecker);
+               setPaymentResult(verifyData);
+               setStep('success');
+               onPaymentSuccess?.(verifyData);
+               return true;
+             }
+             
+             if (verifyData?.verified === false) {
+               clearInterval(pollInterval);
+               clearInterval(closeChecker);
+               toast.error(verifyData?.error || 'Payment declined.');
+               setStep('select');
+               setIsSubmitting(false);
+               return false;
+             }
+           } catch (e) {
+             console.error('Payment verification error:', e);
+             clearInterval(pollInterval);
+             clearInterval(closeChecker);
+             toast.error('Payment failed.');
+             setStep('select');
+             setIsSubmitting(false);
+             return false;
+           }
+           return false;
+         };
 
-        let attempts = 0;
-        const pollInterval = setInterval(async () => {
-          attempts++;
-          const success = await checkPayment();
-          if (success || attempts >= 30) {
-            clearInterval(pollInterval);
-            if (attempts >= 30 && step !== 'success') {
-              toast.error('Payment verification timed out. Please check your payment status.');
-              setStep('select');
-            }
-          }
-        }, 2000);
+         let attempts = 0;
+         const pollInterval = setInterval(async () => {
+           attempts++;
+           await checkPayment();
+         }, 500);
 
         setIsSubmitting(false);
         return;

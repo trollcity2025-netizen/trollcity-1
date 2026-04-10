@@ -745,14 +745,16 @@ export default function BroadcastGrid({
         'grid gap-2 w-full p-2 pb-20 min-w-0 overflow-hidden max-w-full h-full',
         isSingleBoxLayout ? 'grid-cols-1 grid-rows-1 auto-rows-fr items-stretch content-stretch' : 'auto-rows-fr',
         effectiveBoxCount === 1 && 'grid-cols-1 grid-rows-1',
-        effectiveBoxCount === 2 && 'grid-cols-2 grid-rows-1',
-        effectiveBoxCount === 3 && 'grid-cols-2 grid-rows-2',
-        effectiveBoxCount === 4 && 'grid-cols-2 grid-rows-2',
-        effectiveBoxCount === 5 && 'grid-cols-3 grid-rows-2',
-        effectiveBoxCount === 6 && 'grid-cols-3 grid-rows-2',
-        effectiveBoxCount === 7 && 'grid-cols-3 grid-rows-3',
-        effectiveBoxCount === 8 && 'grid-cols-3 grid-rows-3',
-        effectiveBoxCount === 9 && 'grid-cols-3 grid-rows-3'
+        effectiveBoxCount === 2 && 'grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1',
+        effectiveBoxCount === 3 && 'grid-cols-1 grid-rows-3 sm:grid-cols-2 sm:grid-rows-2',
+        effectiveBoxCount === 4 && 'grid-cols-1 grid-rows-4 sm:grid-cols-2 sm:grid-rows-2',
+        effectiveBoxCount === 5 && 'grid-cols-2 grid-rows-3 sm:grid-cols-3 sm:grid-rows-2',
+        effectiveBoxCount === 6 && 'grid-cols-2 grid-rows-3 sm:grid-cols-3 sm:grid-rows-2',
+        effectiveBoxCount === 7 && 'grid-cols-2 grid-rows-4 sm:grid-cols-3 sm:grid-rows-3',
+        effectiveBoxCount === 8 && 'grid-cols-2 grid-rows-4 sm:grid-cols-3 sm:grid-rows-3',
+        effectiveBoxCount === 9 && 'grid-cols-3 grid-rows-3',
+        // Force square boxes on mobile - use aspect ratio for grid items
+        '[&>*]:aspect-square sm:[&>*]:aspect-auto'
       )}
       style={enableStreamSwipe && canSwipe ? { touchAction: 'none' } : undefined}
       onTouchStart={handleTouchStart}

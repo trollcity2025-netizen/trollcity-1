@@ -100,10 +100,6 @@ export default function BattleControlsList({ currentStream, onBattleAccepted }: 
         
         if (error) throw error;
         
-        // rpc returns a single row if using maybeSingle or an array? 
-        // RETURNS TABLE returns rows. We used LIMIT 1.
-        // If no rows, data might be [] or null depending on client.
-        
         // Since we used RETURNS TABLE, it returns an array of objects.
         const opponent = Array.isArray(target) && target.length > 0 ? target[0] : null;
 
@@ -112,7 +108,7 @@ export default function BattleControlsList({ currentStream, onBattleAccepted }: 
         }
 
         // Challenge the found opponent
-        const { error: challengeError } = await supabase.rpc('create_battle_challenge', {
+        const { error: challengeError, data: battleData } = await supabase.rpc('create_battle_challenge', {
             p_challenger_id: currentStream.id,
             p_opponent_id: opponent.id
         });
@@ -121,6 +117,40 @@ export default function BattleControlsList({ currentStream, onBattleAccepted }: 
         
         toast.success(`Challenged ${opponent.title || 'Streamer'}! Waiting for accept...`);
         setMatchStatus('found');
+
+        // Get the created battle id from response
+        const createdBattle = Array.isArray(battleData) && battleData.length > 0 ? battleData[0] : battleData;
+        const battleId = createdBattle?.id;
+        
+        if (battleId) {
+            // Start polling for battle to become active
+            let attempts = 0;
+            const maxAttempts = 60; // 30 seconds max wait
+            
+            const checkStatus = async () => {
+                attempts++;
+                const { data: battle } = await supabase
+                    .from('battles')
+                    .select('status')
+                    .eq('id', battleId)
+                    .maybeSingle();
+                
+                if (battle?.status === 'active') {
+                    toast.success("Battle Accepted! Loading Arena...");
+                    if (onBattleAccepted) {
+                        onBattleAccepted();
+                    }
+                    return true;
+                }
+                return false;
+            };
+            
+            while (attempts < maxAttempts) {
+                const isActive = await checkStatus();
+                if (isActive) break;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
 
     } catch (e: any) {
         console.error("Matchmaking error:", e);
@@ -142,36 +172,32 @@ export default function BattleControlsList({ currentStream, onBattleAccepted }: 
         toast.success("Battle Accepted! Loading Arena...");
         
         // Poll for battle status to become active, then refresh the page
-        const pollBattleStatus = async () => {
-            let attempts = 0;
-            const maxAttempts = 20; // 10 seconds max wait
+        let attempts = 0;
+        const maxAttempts = 20; // 10 seconds max wait
+        
+        const checkStatus = async () => {
+            attempts++;
+            const { data: battle } = await supabase
+                .from('battles')
+                .select('status')
+                .eq('id', pendingBattle.id)
+                .maybeSingle();
             
-            const checkStatus = async () => {
-                attempts++;
-                const { data: battle } = await supabase
-                    .from('battles')
-                    .select('status')
-                    .eq('id', pendingBattle.id)
-                    .maybeSingle();
-                
-                if (battle?.status === 'active') {
-                    // Battle is active, refresh the page to show battle view
-                    if (onBattleAccepted) {
-                        onBattleAccepted();
-                    }
-                    return true;
+            if (battle?.status === 'active') {
+                // Battle is active, refresh the page to show battle view
+                if (onBattleAccepted) {
+                    onBattleAccepted();
                 }
-                return false;
-            };
-            
-            while (attempts < maxAttempts) {
-                const isActive = await checkStatus();
-                if (isActive) break;
-                await new Promise(resolve => setTimeout(resolve, 500));
+                return true;
             }
+            return false;
         };
         
-        pollBattleStatus();
+        while (attempts < maxAttempts) {
+            const isActive = await checkStatus();
+            if (isActive) break;
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
         
     } catch (e: any) {
         // Don't show "no suitable" errors - it means it actually connected

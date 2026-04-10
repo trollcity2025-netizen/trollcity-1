@@ -45,46 +45,123 @@ export const handler = async (req: Request): Promise<Response> => {
     }
 
     switch (action) {
+      case 'captain_click_battle': {
+        const { stream_id } = body;
+        
+        if (!stream_id) {
+          return withCors({ error: "stream_id is required" }, 400);
+        }
+        
+        // ✅ AUTHORITATIVE - Everything happens inside database transaction
+        // ✅ Auto collects current seated guests
+        // ✅ Finds waiting opponent
+        // ✅ Locks rosters
+        // ✅ Sets scheduled start time
+        const { data: result, error } = await supabase.rpc('captain_click_battle', {
+          p_stream_id: stream_id,
+          p_captain_id: user.id
+        });
+        
+        if (error) {
+          return withCors({ error: error.message }, 400);
+        }
+        
+        return withCors(result, 200);
+      }
+      
+      case 'cancel_battle_search': {
+        const { stream_id } = body;
+        await supabase.from('streams').update({
+          looking_for_battle: false,
+          looking_for_battle_since: null
+        }).eq('id', stream_id);
+        
+        return withCors({ success: true }, 200);
+      }
+      
       case 'start_battle': {
-        const { stream_id, host_id, opponent_id } = body;
-        const effectiveHostId = host_id || user.id;
+        // ❌ DEPRECATED - USE captain_click_battle INSTEAD
+        // Redirect all old start_battle calls to new handshake system
+        const { stream_id } = body;
+        const effectiveHostId = user.id;
 
         if (!stream_id) {
           return withCors({ error: "stream_id is required" }, 400);
         }
+        
+        // Redirect to new authoritative system
+        const { data: result, error } = await supabase.rpc('captain_click_battle', {
+          p_stream_id: stream_id,
+          p_captain_id: effectiveHostId
+        });
+        
+        if (error) {
+          return withCors({ error: error.message }, 400);
+        }
+        
+        return withCors(result, 200);
+      }
 
-        // Verify stream exists
-        const { data: stream, error: streamError } = await supabase
+        // Verify both streams exist and are live
+        const { data: hostStream, error: hostStreamError } = await supabase
           .from("streams")
           .select("broadcaster_id, status")
           .eq("id", stream_id)
           .single();
 
-        if (streamError || !stream) {
-          return withCors({ error: "Stream not found" }, 404);
+        if (hostStreamError || !hostStream) {
+          return withCors({ error: "Host stream not found" }, 404);
+        }
+        
+        const { data: opponentStream, error: opponentStreamError } = await supabase
+          .from("streams")
+          .select("broadcaster_id, status")
+          .eq("id", opponent_stream_id)
+          .single();
+
+        if (opponentStreamError || !opponentStream) {
+          return withCors({ error: "Opponent stream not found" }, 404);
+        }
+        
+        // Verify both streams are live
+        if (hostStream.status !== 'live' || opponentStream.status !== 'live') {
+          return withCors({ error: "Both streams must be live to start battle" }, 400);
         }
 
-        // Check for existing active battle
-        const { data: existingBattle } = await supabase
+        // Check for existing active battle on either stream
+        const { data: existingHostBattle } = await supabase
           .from("battles")
           .select("id")
-          .eq("stream_id", stream_id)
+          .or(`stream_id=eq.${stream_id},opponent_stream_id=eq.${stream_id}`)
+          .eq("status", "active")
+          .maybeSingle();
+          
+        const { data: existingOpponentBattle } = await supabase
+          .from("battles")
+          .select("id")
+          .or(`stream_id=eq.${opponent_stream_id},opponent_stream_id=eq.${opponent_stream_id}`)
           .eq("status", "active")
           .maybeSingle();
 
-        if (existingBattle) {
-          return withCors({ error: "Battle already active for this stream" }, 400);
+        if (existingHostBattle || existingOpponentBattle) {
+          return withCors({ error: "Battle already active for one of the streams" }, 400);
         }
 
-        // Create battle
+        // Create battle with pending status first - wait for both broadcasters to confirm ready
+        const battleStartTime = new Date();
+        battleStartTime.setSeconds(battleStartTime.getSeconds() + 10); // 10 second countdown
+        
         const { data: battle, error: battleError } = await supabase
           .from("battles")
           .insert({
             stream_id,
+            opponent_stream_id,
             host_id: effectiveHostId,
-            opponent_id: opponent_id || null,
-            status: "active",
-            started_at: new Date().toISOString(),
+            opponent_id: opponent_id,
+            status: "pending",
+            scheduled_start_at: battleStartTime.toISOString(),
+            host_ready: false,
+            opponent_ready: false,
           })
           .select()
           .single();
@@ -214,6 +291,121 @@ export const handler = async (req: Request): Promise<Response> => {
         return withCors({ success: true }, 200);
       }
 
+      case 'cancel_battle_search': {
+        const { stream_id } = body;
+        await supabase.from('streams').update({
+          looking_for_battle: false,
+          looking_for_battle_since: null
+        }).eq('id', stream_id);
+        
+        await supabase.from('battles').update({
+          status: 'cancelled'
+        }).or(`team_a_stream_id=eq.${stream_id},team_b_stream_id=eq.${stream_id}`)
+          .eq('status', 'waiting_for_opponent');
+        
+        return withCors({ success: true }, 200);
+      }
+        
+        const { data: updatedBattle, error: updateError } = await supabase
+          .from("battles")
+          .update(updateData)
+          .eq("id", battle_id)
+          .select()
+          .single();
+          
+        if (updateError) {
+          return withCors({ error: updateError.message }, 400);
+        }
+        
+        return withCors({ battle: updatedBattle, both_ready: hostWillBeReady && opponentWillBeReady }, 200);
+      }
+      
+      case 'forfeit_battle': {
+        const { battle_id } = body;
+        
+        if (!battle_id) {
+          return withCors({ error: "battle_id is required" }, 400);
+        }
+        
+        // Get battle
+        const { data: battle, error: battleError } = await supabase
+          .from("battles")
+          .select("*")
+          .eq("id", battle_id)
+          .single();
+          
+        if (battleError || !battle) {
+          return withCors({ error: "Battle not found" }, 404);
+        }
+        
+        // Determine forfeit side
+        const forfeitingSide = user.id === battle.host_id ? 'A' : 'B';
+        const winningSide = forfeitingSide === 'A' ? 'B' : 'A';
+        
+        // End battle with forfeit
+        const { data: updatedBattle } = await supabase
+          .from("battles")
+          .update({
+            status: "finished",
+            ended_at: new Date().toISOString(),
+            winner_side: winningSide,
+            forfeit: true,
+            forfeiting_side: forfeitingSide
+          })
+          .eq("id", battle_id)
+          .select()
+          .single();
+        
+        // Award 2 crowns to winning host
+        const winningHostId = winningSide === 'A' ? battle.host_id : battle.opponent_id;
+        await supabase.rpc('award_battle_crowns', { user_id: winningHostId, amount: 2 });
+        
+        // Clear battle flags on both streams
+        await Promise.all([
+          supabase.from('streams').update({
+            is_battle: false,
+            battle_id: null
+          }).eq('id', battle.stream_id),
+          supabase.from('streams').update({
+            is_battle: false,
+            battle_id: null
+          }).eq('id', battle.opponent_stream_id),
+        ]);
+        
+        // Broadcast forfeit event to ALL connected clients
+        const battleChannel = supabase.channel(`battle:${battle.id}`);
+        await battleChannel.send({
+          type: 'broadcast',
+          event: 'battle_forfeited',
+          payload: {
+            winner: winningSide,
+            forfeiter: forfeitingSide,
+            crownsAwarded: 2,
+            endBattle: true,
+            redirectToBroadcast: true
+          }
+        });
+        
+        // Also send to both individual stream channels
+        await supabase.channel(`stream:${battle.stream_id}`).send({
+          type: 'broadcast',
+          event: 'battle_ended',
+          payload: { winner: winningSide, victory: winningSide === 'A' }
+        });
+        
+        await supabase.channel(`stream:${battle.opponent_stream_id}`).send({
+          type: 'broadcast',
+          event: 'battle_ended',
+          payload: { winner: winningSide, victory: winningSide === 'B' }
+        });
+        
+        return withCors({ 
+          battle: updatedBattle, 
+          winner: winningSide, 
+          forfeiter: forfeitingSide 
+        }, 200);
+      }
+      
       case 'end_battle': {
         const { battle_id } = body;
 

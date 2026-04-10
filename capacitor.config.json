@@ -15,9 +15,10 @@
       "releaseType": "APK"
     },
     "backgroundColor": "#06030e",
-    "allowMixedContent": false,
+    "allowMixedContent": true,
     "captureInput": true,
-    "webContentsDebuggingEnabled": true
+    "webContentsDebuggingEnabled": true,
+    "allowCleartext": true
   },
   "plugins": {
     "SplashScreen": {

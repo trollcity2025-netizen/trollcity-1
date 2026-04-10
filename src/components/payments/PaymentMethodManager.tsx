@@ -253,7 +253,6 @@ export default function PaymentMethodManager({
       toast.error(err?.message || 'Failed to set default')
     }
   }
-  }
 
   return (
     <div className="space-y-6">

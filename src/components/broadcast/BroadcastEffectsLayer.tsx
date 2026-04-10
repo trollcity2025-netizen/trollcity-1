@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import { EffectConfig } from '../../lib/entranceEffects';
-import GiftAnimationOverlay from './GiftAnimationOverlay';
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime';
 import EnhancedJoinExperience from '../live/EnhancedJoinExperience';
 import AudioQueueManager from '../live/AudioQueueManager';
@@ -143,10 +142,6 @@ export default function BroadcastEffectsLayer({ streamId, recentGifts = [], onGi
       <EnhancedJoinExperience
         streamId={streamId}
         isVisible={showEnhancedJoin}
-      />
-      <GiftAnimationOverlay 
-        gifts={recentGifts}
-        onAnimationComplete={onGiftAnimationComplete}
       />
       <AnimatePresence>
         {activeEffects.map(({ id, username, effect }) => (

@@ -176,36 +176,32 @@ export default function BattleControls({ currentStream, onBattleAccepted }: Batt
         toast.success("Battle Accepted! Loading Arena...");
         
         // Poll for battle status to become active, then refresh the page
-        const pollBattleStatus = async () => {
-            let attempts = 0;
-            const maxAttempts = 20; // 10 seconds max wait
+        let attempts = 0;
+        const maxAttempts = 20; // 10 seconds max wait
+        
+        const checkStatus = async () => {
+            attempts++;
+            const { data: battle } = await supabase
+                .from('battles')
+                .select('status')
+                .eq('id', pendingBattle.id)
+                .maybeSingle();
             
-            const checkStatus = async () => {
-                attempts++;
-                const { data: battle } = await supabase
-                    .from('battles')
-                    .select('status')
-                    .eq('id', pendingBattle.id)
-                    .maybeSingle();
-                
-                if (battle?.status === 'active') {
-                    // Battle is active, refresh the page to show battle view
-                    if (onBattleAccepted) {
-                        onBattleAccepted();
-                    }
-                    return true;
+            if (battle?.status === 'active') {
+                // Battle is active, refresh the page to show battle view
+                if (onBattleAccepted) {
+                    onBattleAccepted();
                 }
-                return false;
-            };
-            
-            while (attempts < maxAttempts) {
-                const isActive = await checkStatus();
-                if (isActive) break;
-                await new Promise(resolve => setTimeout(resolve, 500));
+                return true;
             }
+            return false;
         };
         
-        pollBattleStatus();
+        while (attempts < maxAttempts) {
+            const isActive = await checkStatus();
+            if (isActive) break;
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
         
     } catch (e: any) {
         // Don't show "no suitable" errors - it means it actually connected

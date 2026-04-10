@@ -9,6 +9,8 @@ interface Trollcoins {
   total_earned_coins: number
   total_spent_coins: number
   battle_crowns: number
+  cashout_coins: number
+  cashout_reserved_coins: number
 }
 
 interface SpendCoinsParams {
@@ -39,6 +41,8 @@ export function useCoins() {
     total_earned_coins: profile?.total_earned_coins || 0,
     total_spent_coins: profile?.total_spent_coins || 0,
     battle_crowns: profile?.battle_crowns ?? 0,
+    cashout_coins: profile?.cashout_coins ?? 0,
+    cashout_reserved_coins: profile?.cashout_reserved_coins ?? 0,
   })
   const [optimisticUntil, setOptimisticUntil] = useState<number | null>(null)
   const [optimisticTroll, setOptimisticTroll] = useState<number | null>(null)
@@ -52,9 +56,11 @@ export function useCoins() {
         total_earned_coins: profile.total_earned_coins || 0,
         total_spent_coins: profile.total_spent_coins || 0,
         battle_crowns: profile.battle_crowns ?? 0,
+        cashout_coins: profile.cashout_coins ?? 0,
+        cashout_reserved_coins: profile.cashout_reserved_coins ?? 0,
       })
     }
-  }, [profile, profile?.troll_coins, profile?.paid_coins, profile?.total_earned_coins, profile?.total_spent_coins, profile?.battle_crowns])
+  }, [profile, profile?.troll_coins, profile?.paid_coins, profile?.total_earned_coins, profile?.total_spent_coins, profile?.battle_crowns, profile?.cashout_coins, profile?.cashout_reserved_coins])
 
   /**
    * Refresh coin balances from database
@@ -71,7 +77,7 @@ export function useCoins() {
 
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
-        .select('troll_coins, paid_coins, total_earned_coins, total_spent_coins, battle_crowns')
+        .select('troll_coins, paid_coins, total_earned_coins, total_spent_coins, battle_crowns, cashout_coins, cashout_reserved_coins')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -107,13 +113,15 @@ export function useCoins() {
           0,
       }
 
-      const nextBalances = {
-        troll_coins: mergedPaid,
-        paid_coins: profileData?.paid_coins ?? currentProfile?.paid_coins ?? 0,
-        total_earned_coins: nextTotals.total_earned_coins,
-        total_spent_coins: nextTotals.total_spent_coins,
-        battle_crowns: profileData?.battle_crowns ?? currentProfile?.battle_crowns ?? 0,
-      }
+       const nextBalances = {
+         troll_coins: mergedPaid,
+         paid_coins: profileData?.paid_coins ?? currentProfile?.paid_coins ?? 0,
+         total_earned_coins: nextTotals.total_earned_coins,
+         total_spent_coins: nextTotals.total_spent_coins,
+         battle_crowns: profileData?.battle_crowns ?? currentProfile?.battle_crowns ?? 0,
+         cashout_coins: profileData?.cashout_coins ?? currentProfile?.cashout_coins ?? 0,
+         cashout_reserved_coins: profileData?.cashout_reserved_coins ?? currentProfile?.cashout_reserved_coins ?? 0,
+       }
 
       setBalances((prev) => {
         const isSame =
@@ -371,6 +379,34 @@ export function useCoins() {
     setOptimisticUntil(Date.now() + 8000)
   }, [user?.id, balances.troll_coins])
 
+  const depositToCashout = useCallback(async (amount: number): Promise<boolean> => {
+    if (!user?.id) {
+      toast.error('You must be logged in')
+      return false
+    }
+
+    setLoading(true)
+    try {
+      const { data, error } = await supabase.rpc('deposit_to_cashout_escrow', {
+        p_amount: amount
+      })
+
+      if (error) {
+        toast.error(error.message)
+        return false
+      }
+
+      toast.success(`Deposited ${amount.toLocaleString()} coins to cashout escrow`)
+      await refreshCoins()
+      return true
+    } catch (err: any) {
+      toast.error(err.message || 'Deposit failed')
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }, [user?.id, refreshCoins])
+
   return {
     balances,
     loading,
@@ -379,11 +415,14 @@ export function useCoins() {
     spendCoins,
     optimisticCredit,
     optimisticDebit,
+    depositToCashout,
     // Convenience getters
     troll_coins: balances.troll_coins,
     paidBalance: balances.paid_coins,
     totalEarned: balances.total_earned_coins,
     totalSpent: balances.total_spent_coins,
     crowns: balances.battle_crowns,
+    cashout_coins: balances.cashout_coins,
+    cashout_reserved_coins: balances.cashout_reserved_coins,
   }
 }

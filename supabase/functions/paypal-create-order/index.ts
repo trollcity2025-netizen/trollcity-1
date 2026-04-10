@@ -9,7 +9,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders(req.headers.get('origin')) })
   }
 
   try {
@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     if (!allowed) {
       return new Response(
         JSON.stringify({ error: 'Too many requests. Please try again later.' }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 429, headers: { ...corsHeaders(req.headers.get('origin')), 'Content-Type': 'application/json' } }
       )
     }
 

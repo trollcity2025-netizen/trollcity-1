@@ -2,19 +2,12 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime';
 import { OFFICIAL_GIFTS } from '../../lib/giftConstants';
-import { Gift3DOverlay } from './Gift3DAnimations';
-import { getGiftDuration } from '../../lib/giftAnimationRegistry';
 
 interface GiftAnimationOverlayProps {
   gifts?: BroadcastGift[];
   onAnimationComplete?: (giftId: string) => void;
-  userPositions?: Record<string, { top: number; left: number; width: number; height: number }>;
-  getUserPositions?: () => Record<string, { top: number; left: number; width: number; height: number }>;
   participantNames?: Record<string, string>;
-  participantCount?: number;
 }
-
-const MAX_VISIBLE_GIFTS = 3;
 
 const getGiftDetails = (gift: BroadcastGift): { id: string; name: string; icon: string; cost: number } => {
   let officialGift = OFFICIAL_GIFTS.find(g => g.id === gift.gift_id);
@@ -42,94 +35,52 @@ const getGiftDetails = (gift: BroadcastGift): { id: string; name: string; icon: 
 export default function GiftAnimationOverlay({
   gifts = [],
   onAnimationComplete,
+  participantNames = {},
 }: GiftAnimationOverlayProps) {
-  const [visibleGifts, setVisibleGifts] = useState<BroadcastGift[]>([]);
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [visibleGift, setVisibleGift] = useState<BroadcastGift | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!gifts || gifts.length === 0) {
-      setVisibleGifts([]);
+      setVisibleGift(null);
       return;
     }
 
-    setVisibleGifts(prev => {
-      const existingIds = new Set(prev.map(g => g.id));
-      const newGifts = gifts.filter(g => !existingIds.has(g.id));
-      if (newGifts.length === 0) return gifts.slice(-MAX_VISIBLE_GIFTS);
-      const combined = [...prev, ...newGifts];
-      return combined.slice(-MAX_VISIBLE_GIFTS);
-    });
-  }, [gifts]);
+    const latestGift = gifts[gifts.length - 1];
+    setVisibleGift(latestGift);
 
-  useEffect(() => {
-    if (visibleGifts.length === 0) {
-      timersRef.current.forEach(timer => clearTimeout(timer));
-      timersRef.current.clear();
-      return;
-    }
-
-    visibleGifts.forEach(gift => {
-      if (timersRef.current.has(gift.id)) return;
-      const details = getGiftDetails(gift);
-      const dur = getGiftDuration(details.cost, details.name);
-      const timer = setTimeout(() => {
-        timersRef.current.delete(gift.id);
-        setVisibleGifts(prev => {
-          const remaining = prev.filter(g => g.id !== gift.id);
-          if (remaining.length !== prev.length) onAnimationComplete?.(gift.id);
-          return remaining;
-        });
-      }, (dur + 1) * 1000);
-      timersRef.current.set(gift.id, timer);
-    });
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setVisibleGift(null);
+      onAnimationComplete?.(latestGift.id);
+    }, 2500);
 
     return () => {
-      const currentIds = new Set(visibleGifts.map(g => g.id));
-      timersRef.current.forEach((timer, giftId) => {
-        if (!currentIds.has(giftId)) {
-          clearTimeout(timer);
-          timersRef.current.delete(giftId);
-        }
-      });
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [visibleGifts, onAnimationComplete]);
+  }, [gifts, onAnimationComplete]);
 
-  useEffect(() => {
-    return () => {
-      timersRef.current.forEach(timer => clearTimeout(timer));
-      timersRef.current.clear();
-    };
-  }, []);
+  if (!visibleGift) return null;
 
-  const dismissGift = useCallback((giftId: string) => {
-    const timer = timersRef.current.get(giftId);
-    if (timer) { clearTimeout(timer); timersRef.current.delete(giftId); }
-    setVisibleGifts(prev => {
-      const remaining = prev.filter(g => g.id !== giftId);
-      if (remaining.length !== prev.length) onAnimationComplete?.(giftId);
-      return remaining;
-    });
-  }, [onAnimationComplete]);
-
-  if (visibleGifts.length === 0) return null;
+  const senderName = participantNames[visibleGift.sender_id] || 'Someone';
+  const giftDetails = getGiftDetails(visibleGift);
+  const formattedCost = giftDetails.cost.toLocaleString();
 
   return (
-    <>
-      {visibleGifts.map(gift => {
-        const details = getGiftDetails(gift);
-        const dur = getGiftDuration(details.cost, details.name);
-
-        return (
-          <Gift3DOverlay
-            key={gift.id}
-            giftName={details.name}
-            giftIcon={details.icon}
-            giftValue={details.cost}
-            duration={dur}
-            onComplete={() => dismissGift(gift.id)}
-          />
-        );
-      })}
-    </>
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-down duration-300">
+      <div className="bg-gradient-to-r from-amber-500/90 to-yellow-400/90 text-black px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+        <span className="text-xl">{giftDetails.icon}</span>
+        <span className="font-bold text-sm">
+          {senderName}
+        </span>
+        <span className="text-xs">sent</span>
+        <span className="font-bold text-sm">
+          {giftDetails.name}
+        </span>
+        <span className="text-xs bg-black/20 px-1.5 py-0.5 rounded">
+          {formattedCost}
+        </span>
+      </div>
+    </div>
   );
 }

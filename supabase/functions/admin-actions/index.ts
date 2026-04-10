@@ -193,11 +193,11 @@ Deno.serve(async (req) => {
             .from('payout_requests')
             .select(`
                 *,
-                user_profiles!user_id (
+                user_profiles!payout_requests_user_id_fkey (
                     username,
                     email
                 ),
-                processor:user_profiles!processed_by (
+                processor:user_profiles!payout_requests_processed_by_fkey (
                     username
                 )
             `)

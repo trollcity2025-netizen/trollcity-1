@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
           paymentAmount = (payment.amount_money?.amount || 0) / 100
         }
       }
-    } else if (orderId) {
+    } else     if (orderId) {
       // Check order status
       const orderRes = await fetch(`${baseUrl}/v2/orders/${orderId}`, {
         headers: {
@@ -74,9 +74,19 @@ Deno.serve(async (req) => {
       if (orderRes.ok) {
         const orderData = await orderRes.json()
         const order = orderData.order
+        
         if (order?.state === 'COMPLETED') {
           paymentVerified = true
           paymentAmount = (order.total_money?.amount || 0) / 100
+        }
+        
+        // Explicit payment failure detection
+        if (order?.state === 'CANCELED' || order?.state === 'DECLINED' || order?.state === 'FAILED') {
+          return withCors({ 
+            success: false, 
+            verified: false,
+            error: 'Payment declined' 
+          }, 400)
         }
       }
     }

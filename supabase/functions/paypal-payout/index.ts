@@ -4,11 +4,17 @@ import { corsHeaders } from "../_shared/cors.ts"
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders(req.headers.get('origin')) })
   }
 
   try {
-    const { payoutRequestId, adminId } = await req.json()
+    const { payoutRequestId, adminId, force = false } = await req.json()
+    
+    // Only allow payouts on Fridays unless forced
+    const today = new Date().getDay()
+    if (today !== 5 && !force) {
+      throw new Error('Payouts are only processed on Fridays')
+    }
 
     if (!payoutRequestId) {
       throw new Error('payoutRequestId is required')
@@ -33,7 +39,7 @@ Deno.serve(async (req) => {
     if (request.status === 'paid') {
       return new Response(
         JSON.stringify({ success: true, message: 'Already paid' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders(req.headers.get('origin')), 'Content-Type': 'application/json' } }
       )
     }
 
@@ -138,7 +144,7 @@ Deno.serve(async (req) => {
         } else {
              return new Response(
               JSON.stringify({ success: true, batchId }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              { headers: { ...corsHeaders(req.headers.get('origin')), 'Content-Type': 'application/json' } }
             )
         }
     }
@@ -176,13 +182,13 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, batchId }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders(req.headers.get('origin')), 'Content-Type': 'application/json' } }
     )
 
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      { headers: { ...corsHeaders(req.headers.get('origin')), 'Content-Type': 'application/json' }, status: 400 }
     )
   }
 })

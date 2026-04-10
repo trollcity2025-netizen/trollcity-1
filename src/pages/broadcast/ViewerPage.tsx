@@ -24,6 +24,7 @@ import {
 import { useBattleSubscriber } from '../../hooks/useBattleSubscriber'
 import FiveVFiveBattleOverlay from '../../components/broadcast/FiveVFiveBattleOverlay'
 import BattleGiftPanel from '../../components/broadcast/BattleGiftPanel'
+import BattleView from '../../components/broadcast/BattleView'
 
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -971,60 +972,73 @@ function ViewerPage() {
           />
         }
         
-        video={
-          // Viewers use LiveKit - subscribe to remote tracks
-          <div className="relative w-full h-full bg-black">
-            {remoteParticipants.length > 0 ? (
-              remoteParticipants.map((participant) => {
-                const videoTrack = getParticipantVideoTrack(participant);
-                return (
-                  <div key={participant.identity} className="absolute inset-0">
-                    {videoTrack ? (
-                      <div
-                        ref={(el) => {
-                          if (el && videoTrack) {
-                            const mediaElement = (videoTrack as any).attach?.();
-                            if (mediaElement && el.firstChild === null) {
-                              el.appendChild(mediaElement);
-                            }
-                          }
-                        }}
-                        className="w-full h-full"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center w-full h-full text-white/50">
-                        <p>Broadcaster camera is off</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="flex items-center justify-center w-full h-full text-white/50">
-                <div className="text-center">
-                  <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" />
-                  <p>Connecting to stream...</p>
-                </div>
-              </div>
-            )}
-            {/* 5v5 Battle Overlay - inside video slot so chat stays visible */}
-            {battleSubscriberState.phase !== 'idle' && (
-              <FiveVFiveBattleOverlay
-                state={battleSubscriberState}
-                currentUserId={user?.id || ''}
-                onUseAbility={() => {}}
-                onRequestRematch={() => {}}
-                TEAM_FREEZE_COOLDOWN={30}
-                REVERSE_COOLDOWN={20}
-                DOUBLE_XP_COOLDOWN={25}
-                userAbilities={[]}
-                currentUsername={profile?.username || 'Viewer'}
-                remoteParticipants={remoteParticipants}
-                isHost={false}
-              />
-            )}
-          </div>
-        }
+         video={
+           // Viewers use LiveKit - subscribe to remote tracks
+           (stream?.is_battle || stream?.battle_handshake) && stream?.battle_id ? (
+             <BattleView
+               battleId={stream.battle_id || stream.battle_handshake}
+               currentStreamId={streamId || ''}
+               viewerId={user?.id}
+               remoteUsers={remoteParticipants}
+               userIdToLiveKitIdentity={Object.fromEntries(
+                 Object.entries(userIdToParticipant).map(([k, v]) => [k, v.identity])
+               )}
+             />
+           ) : (
+             <div className="relative w-full h-full bg-black">
+               {remoteParticipants.length > 0 ? (
+                 remoteParticipants.map((participant) => {
+                   const videoTrack = getParticipantVideoTrack(participant);
+                   return (
+                     <div key={participant.identity} className="absolute inset-0">
+                       {videoTrack ? (
+                         <div
+                           ref={(el) => {
+                             if (el && videoTrack) {
+                               const mediaElement = (videoTrack as any).attach?.();
+                               if (mediaElement && el.firstChild === null) {
+                                 el.appendChild(mediaElement);
+                               }
+                             }
+                           }}
+                           className="w-full h-full"
+                         />
+                       ) : (
+                         <div className="flex items-center justify-center w-full h-full text-white/50">
+                           <p>Broadcaster camera is off</p>
+                         </div>
+                       )}
+                     </div>
+                   );
+                 })
+               ) : (
+                 <div className="flex items-center justify-center w-full h-full text-white/50">
+                   <div className="text-center">
+                     <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" />
+                     <p>Connecting to stream...</p>
+                   </div>
+                 </div>
+               )}
+               {/* 5v5 Battle Overlay - inside video slot so chat stays visible */}
+           {/* Battle overlay always shows when in battle mode */}
+           {stream?.is_battle && battleSubscriberState.phase !== 'idle' && (
+             <FiveVFiveBattleOverlay
+               state={battleSubscriberState}
+               currentUserId={user?.id || ''}
+               onUseAbility={() => {}}
+               onRequestRematch={() => {}}
+               TEAM_FREEZE_COOLDOWN={30}
+               REVERSE_COOLDOWN={20}
+               DOUBLE_XP_COOLDOWN={25}
+               userAbilities={[]}
+               currentUsername={profile?.username || 'Viewer'}
+               remoteParticipants={remoteParticipants}
+               isHost={false}
+             />
+           )}
+             </div>
+           )
+         }
         
         controls={
           <div className="flex items-center justify-between p-4 bg-gray-900">
@@ -1073,7 +1087,7 @@ function ViewerPage() {
             {pinnedProducts.length > 0 && (
               <PinnedProductOverlay pinnedProducts={pinnedProducts} />
             )}
-            <GiftAnimationOverlay 
+            <GiftAnimationOverlay
               gifts={recentGifts}
               participantNames={{
                 ...(stream?.user_id && broadcasterProfile?.username
@@ -1082,7 +1096,6 @@ function ViewerPage() {
                 ...giftNameMap,
               }}
               onAnimationComplete={(giftId) => {
-                // Remove the gift from recentGifts after animation
                 setRecentGifts(prev => prev.filter(g => g.id !== giftId));
               }}
             />

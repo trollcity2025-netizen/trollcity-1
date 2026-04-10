@@ -475,7 +475,16 @@ export default function BroadcastControls({
         {onFiveVFiveBattle && isHost && isLive && !fiveVFiveBattleActive && categoryConfig.id === 'general' && (
           <OrbBtn
             active={false}
-            onClick={onFiveVFiveBattle}
+            onClick={async () => {
+              // Add loading state temporarily
+              const btn = event?.currentTarget as HTMLButtonElement;
+              if (btn) btn.disabled = true;
+              try {
+                await onFiveVFiveBattle();
+              } finally {
+                if (btn) btn.disabled = false;
+              }
+            }}
             icon={Swords}
             label="Battle"
             glow="red"

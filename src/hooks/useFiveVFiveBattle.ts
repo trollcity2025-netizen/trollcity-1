@@ -128,14 +128,20 @@ export function useFiveVFiveBattle({ streamId, isHost, category }: UseFiveVFiveB
 
   // ─── MATCHMAKING ───
   const findMatch = useCallback(async (customTeamA?: string, customTeamB?: string) => {
-    if (!user || !streamId || !isGeneralChat) return;
-    if (state.phase !== 'idle') return;
+    if (!user || !streamId || !isGeneralChat) {
+      toast.error('Battle only available in General Chat category');
+      return;
+    }
+    if (state.phase !== 'idle') {
+      toast.error('Battle already in progress');
+      return;
+    }
 
     const teamA = customTeamA?.trim() || 'Team A';
     const teamB = customTeamB?.trim() || 'Team B';
 
     setState(prev => ({ ...prev, phase: 'matchmaking' }));
-    toast.loading('Searching for opponent...', { id: 'battle-matchmaking' });
+    toast.loading('Searching for opponent...', { id: 'battle-matchmaking', duration: 30000 });
 
     try {
       let opponent: { id: string; user_id: string; title: string; category: string; current_viewers: number } | null = null;

@@ -90,6 +90,7 @@ const BroadcastLayoutPreview = lazyWithRetry(() => import("./pages/dev/Broadcast
 const SetupPreview = lazyWithRetry(() => import("./pages/dev/SetupPreview"));
 const MobileLayoutPreview = lazyWithRetry(() => import("./pages/dev/MobileLayoutPreview"));
 const JailPreviewPage = lazyWithRetry(() => import("./pages/dev/JailPreviewPage"));
+const BroadcastLayoutSelector = lazyWithRetry(() => import("./pages/dev/BroadcastLayoutSelector"));
 const BadgePopup = lazyWithRetry(() => import("./components/BadgePopup"));
 
 // Live Streaming System
@@ -976,34 +977,6 @@ function AppContent() {
           return;
         }
         
-        // Also check if user has any active battles in the database
-        try {
-          // First get the user's stream IDs
-          const { data: userStreams } = await supabase
-            .from('streams')
-            .select('id')
-            .eq('user_id', userId);
-            
-          const streamIds = userStreams?.map(s => s.id) || [];
-          
-          if (streamIds.length > 0) {
-            const { data: activeBattles } = await supabase
-              .from('battles')
-              .select('id, status')
-              .or(`challenger_stream_id.in.(${streamIds.join(',')}),opponent_stream_id.in.(${streamIds.join(',')})`)
-              .eq('status', 'active')
-              .limit(1);
-              
-            if (activeBattles && activeBattles.length > 0) {
-              console.log('⚔️ User has active battle - skipping visibility refresh');
-              return;
-            }
-          }
-        } catch (e) {
-          console.error('Failed to check battle status:', e);
-          // Continue with refresh if check fails
-        }
-        
         // Tab became visible, refresh data
         console.log('Tab became visible, refreshing data...')
         refreshProfile()
@@ -1157,6 +1130,7 @@ function AppContent() {
                 <Route path="/dev/broadcast-layout" element={<BroadcastLayoutPreview />} />
                 <Route path="/dev/setup-preview" element={<SetupPreview />} />
                 <Route path="/dev/mobile-layouts" element={<MobileLayoutPreview />} />
+                <Route path="/dev-preview/layouts" element={<BroadcastLayoutSelector />} />
 
                 {/* 🔐 Protected Routes */}
                 <Route element={<RequireAuth />}>

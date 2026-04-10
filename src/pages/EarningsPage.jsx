@@ -60,6 +60,7 @@ export default function EarningsPage() {
       setEarningsData({
         ...earningsProfile,
         troll_coins: paidBalance,
+        purchased_coins: earningsProfile.purchased_coins || 0,
         payoutHistory: payoutHistory || [],
         totalCoins,
       });
@@ -104,9 +105,8 @@ export default function EarningsPage() {
       }
 
       // Validate that user has enough coins
-    const totalCoins = calculateTotalCoins(profile.troll_coins || 0, 0);
-      if (totalCoins < tier.coins) {
-        toast.error(`You need at least ${formatCoins(tier.coins)} coins for this tier`);
+      if (profile.troll_coins < tier.coins) {
+        toast.error(`You need at least ${formatCoins(tier.coins)} withdrawable coins for this tier`);
         return;
       }
 
@@ -196,7 +196,16 @@ export default function EarningsPage() {
   }
 
   const totalCoins = earningsData.totalCoins;
-  const eligibleTier = getEligibleTier(totalCoins);
+  const paidCoins = earningsData.purchased_coins || 0;
+  const eligibleTier = getEligibleTier(paidCoins);
+  
+  // Cashout window check: Fridays 2:00 PM - 3:00 PM MST (America/Denver)
+  const now = new Date();
+  const mtDateString = now.toLocaleString("en-US", {timeZone: "America/Denver"});
+  const mtDate = new Date(mtDateString);
+  const day = mtDate.getDay();
+  const hour = mtDate.getHours();
+  const isCashoutWindowOpen = day === 5 && hour === 14;
 
   return (
     <RequireRole roles={['broadcaster', 'admin']} fallbackPath="/dashboard">
@@ -285,7 +294,7 @@ export default function EarningsPage() {
             {/* All Tiers Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {cashoutTiers.map((tier) => {
-                const isEligible = totalCoins >= tier.coins;
+                const isEligible = paidCoins >= tier.coins;
                 const isCurrentEligible = eligibleTier?.id === tier.id;
 
                 return (
@@ -327,21 +336,27 @@ export default function EarningsPage() {
 
                     {!isEligible ? (
                       <div className="text-xs text-gray-500 mt-2">
-                        <p>Need {formatCoins(tier.coins - totalCoins)} more coins</p>
+                        <p>Need {formatCoins(tier.coins - paidCoins)} more withdrawable coins</p>
                         <div className="w-full bg-gray-700 rounded-full h-1 mt-1">
                           <div
                             className="h-1 rounded-full bg-purple-500"
-                            style={{ width: `${Math.min(100, (totalCoins / tier.coins) * 100)}%` }}
+                            style={{ width: `${Math.min(100, (paidCoins / tier.coins) * 100)}%` }}
                           />
                         </div>
                       </div>
                     ) : !isCurrentEligible ? (
                       <button
                         onClick={() => handleCashoutRequest(tier)}
-                        disabled={processing}
-                        className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                        disabled={processing || !isCashoutWindowOpen}
+                        className={`w-full px-3 py-2 rounded-lg text-sm font-semibold transition-colors mt-2 ${
+                          isCashoutWindowOpen 
+                            ? 'bg-gray-700 hover:bg-gray-600' 
+                            : 'bg-gray-800 cursor-not-allowed opacity-70'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
-                        Request {formatUSD(tier.payout)}
+                        {isCashoutWindowOpen 
+                          ? `Request ${formatUSD(tier.payout)}` 
+                          : 'Cashouts open Fridays 2-3PM MST'}
                       </button>
                     ) : null}
                   </div>

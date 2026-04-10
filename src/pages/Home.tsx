@@ -67,7 +67,7 @@ export default function Home() {
   const [podItems, setPodItems] = useState<LiveItem[]>([])
   const [totalViewers, setTotalViewers] = useState(0)
   const [loadingLive, setLoadingLive] = useState(true)
-  const [showLiveGrid, setShowLiveGrid] = useState(false)
+  const [showLiveGrid, setShowLiveGrid] = useState<boolean | null>(null)
 
   // Auto-scroll to top on page load
   useEffect(() => {
@@ -293,15 +293,17 @@ export default function Home() {
                   </div>
                 )}
 
-                <button
-                  onClick={() => setShowLiveGrid(!showLiveGrid)}
-                  className={`w-full py-2 ${trollCityTheme.gradients.primary} rounded-xl font-semibold text-white text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity`}
-                >
-                  {showLiveGrid ? 'Hide All Broadcasts' : 'Explore All Broadcasts'}
-                  <ChevronRight className={`w-4 h-4 transition-transform ${showLiveGrid ? 'rotate-90' : ''}`} />
-                </button>
+                {liveItems.length > 0 && (
+                  <button
+                    onClick={() => setShowLiveGrid(showLiveGrid === null ? false : !showLiveGrid)}
+                    className={`w-full py-2 ${trollCityTheme.gradients.primary} rounded-xl font-semibold text-white text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity`}
+                  >
+                    {(showLiveGrid ?? true) ? 'Hide Broadcasts' : 'Show Broadcasts'}
+                    <ChevronRight className={`w-4 h-4 transition-transform ${(showLiveGrid ?? true) ? 'rotate-90' : ''}`} />
+                  </button>
+                )}
 
-                {showLiveGrid && (
+                {(showLiveGrid ?? true) && (
                   <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {loadingLive ? (
                       Array.from({ length: 6 }).map((_, i) => (

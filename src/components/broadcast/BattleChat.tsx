@@ -124,11 +124,6 @@ export default function BattleChat({
     e.preventDefault();
     if (!newMessage.trim() || !currentUserId) return;
 
-    // Determine which stream to send to based on user's team
-    const targetStreamId = getUserTeam(currentUserId) === 'opponent' 
-      ? opponentStream.id 
-      : challengerStream.id;
-
     const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     // Get sender's username from the current messages or use a default
@@ -137,7 +132,7 @@ export default function BattleChat({
     
     const chatMessage = {
       id: messageId,
-      stream_id: targetStreamId,
+      stream_id: battleId,
       user_id: currentUserId,
       username: senderUsername,
       message: newMessage.trim(),
@@ -156,12 +151,19 @@ export default function BattleChat({
       });
     }
 
-    // Then insert to database for persistence
-    const { error } = await supabase.from('stream_chat').insert({
-      stream_id: targetStreamId,
-      user_id: currentUserId,
-      message: newMessage.trim(),
-    });
+    // Insert to BOTH streams' chat channels so all viewers see it
+    await Promise.all([
+      supabase.from('stream_chat').insert({
+        stream_id: challengerStream.id,
+        user_id: currentUserId,
+        message: newMessage.trim(),
+      }),
+      supabase.from('stream_chat').insert({
+        stream_id: opponentStream.id,
+        user_id: currentUserId,
+        message: newMessage.trim(),
+      }),
+    ]);
 
     if (error) {
       console.error('Error sending message:', error);

@@ -114,18 +114,38 @@ export default function CashoutRequestsList({ viewMode: _viewMode }: CashoutRequ
   return (
     <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 relative">
       
-      {/* Schedule Banner */}
-      <div className="mb-6 bg-blue-900/20 border border-blue-800 rounded-lg p-3 flex items-center gap-3">
-        <div className="bg-blue-900/50 p-2 rounded-full">
-            <DollarSign className="w-5 h-5 text-blue-400" />
-        </div>
-        <div>
-            <h4 className="text-sm font-bold text-blue-200">Payout Schedule</h4>
-            <p className="text-xs text-blue-300/80">
-                Payouts are processed once a week on <span className="text-white font-bold">Fridays</span>.
-            </p>
-        </div>
-      </div>
+       {/* Schedule Banner */}
+       <div className="mb-6 bg-blue-900/20 border border-blue-800 rounded-lg p-3 flex items-center justify-between">
+         <div className="flex items-center gap-3">
+           <div className="bg-blue-900/50 p-2 rounded-full">
+               <DollarSign className="w-5 h-5 text-blue-400" />
+           </div>
+           <div>
+               <h4 className="text-sm font-bold text-blue-200">Payout Schedule</h4>
+               <p className="text-xs text-blue-300/80">
+                   Payouts are processed once a week on <span className="text-white font-bold">Fridays</span>.
+               </p>
+           </div>
+         </div>
+         <button
+           onClick={async () => {
+             if (!window.confirm('Force run all pending payouts now? This will bypass the Friday schedule.')) return
+             try {
+               const { error } = await supabase.functions.invoke('paypal-payout', {
+                 body: { payoutRequestId: 'batch', adminId: user?.id, force: true }
+               })
+               if (error) throw error
+               toast.success('Payout batch executed successfully')
+               fetchRequests()
+             } catch (e) {
+               toast.error('Failed to run payout batch')
+             }
+           }}
+           className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors"
+         >
+           🔓 Force Run Payouts Now
+         </button>
+       </div>
 
       <div className="flex justify-between items-center gap-4 mb-6 flex-wrap">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">

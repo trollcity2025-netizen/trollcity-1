@@ -11,7 +11,6 @@ import { Loader2, Coins, User, MicOff, VideoOff, Plus, Minus, Crown, Flame, Arro
 import { useCoins } from '../../lib/hooks/useCoins';
 import BattleChat from './BattleChat';
 import MuteHandler from './MuteHandler';
-import GiftAnimationOverlay from './GiftAnimationOverlay';
 import GiftTray from './GiftTray';
 import TrollBattleArena from './TrollBattleArena';
 import { toast } from 'sonner';

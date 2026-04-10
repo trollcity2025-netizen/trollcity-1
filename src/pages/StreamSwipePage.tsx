@@ -100,7 +100,8 @@ export default function StreamSwipePage({ initialCategory = 'top' }: StreamSwipe
           broadcaster:user_profiles!streams_user_id_fkey(
             username,
             avatar_url,
-            level
+            level,
+            troll_coins
           )
         `)
         .eq('is_live', true)
@@ -118,7 +119,8 @@ export default function StreamSwipePage({ initialCategory = 'top' }: StreamSwipe
             broadcaster:user_profiles!streams_user_id_fkey(
               username,
               avatar_url,
-              level
+              level,
+              troll_coins
             )
           `)
           .eq('is_live', true)
@@ -393,6 +395,7 @@ export default function StreamSwipePage({ initialCategory = 'top' }: StreamSwipe
                   isActive={isActive}
                   isMuted={isMuted && isActive}
                   onClose={handleClose}
+                  broadcasterCoins={stream.broadcaster?.troll_coins}
                 />
               ) : (
                 <StreamSwipeCard
@@ -400,6 +403,7 @@ export default function StreamSwipePage({ initialCategory = 'top' }: StreamSwipe
                   isActive={isActive}
                   isMuted={isMuted && isActive}
                   onClose={handleClose}
+                  broadcasterCoins={stream.broadcaster?.troll_coins}
                 />
               )}
             </div>

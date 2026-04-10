@@ -9,9 +9,10 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { Stream } from '../../types/broadcast';
 import { toast } from 'sonner';
-import { Eye, Heart, MessageCircle, Gift, Share2, Users, Sword, Shield, Trophy } from 'lucide-react';
+import { Eye, Heart, MessageCircle, Gift, Share2, Users, Sword, Shield, Trophy, Coins } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Room, RoomEvent, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
+import ShareModal from './ShareModal';
 
 interface BattleSwipeCardProps {
   stream: Stream & {
@@ -24,6 +25,7 @@ interface BattleSwipeCardProps {
   isActive: boolean;
   isMuted: boolean;
   onClose: () => void;
+  broadcasterCoins?: number;
 }
 
 interface BattleData {
@@ -45,7 +47,7 @@ interface BattleData {
   };
 }
 
-export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: BattleSwipeCardProps) {
+export default function BattleSwipeCard({ stream, isActive, isMuted, onClose, broadcasterCoins }: BattleSwipeCardProps) {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
   
@@ -53,6 +55,7 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
   const [viewerCount, setViewerCount] = useState(stream.current_viewers || stream.viewer_count || 0);
   const [battleData, setBattleData] = useState<BattleData | null>(null);
   const [isJoining, setIsJoining] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   
   const roomRef = useRef<Room | null>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -380,12 +383,18 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
       
       {/* Stream info overlay - Bottom left */}
       <div className="absolute bottom-16 left-3 right-16 z-10 sm:bottom-20 sm:left-4 sm:right-20">
-        {/* Title */}
+{/* Title */}
         <h3 className="text-white font-medium text-base line-clamp-2 mb-1 sm:text-lg sm:mb-2">
           {stream.title || 'Battle Arena'}
         </h3>
         
-        <div className="flex items-center gap-2 text-white/70">
+        <div className="flex items-center gap-3">
+          {broadcasterCoins !== undefined && broadcasterCoins > 0 && (
+            <div className="flex items-center gap-1 text-amber-400 text-xs sm:text-sm">
+              <Coins className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="font-bold">{broadcasterCoins.toLocaleString()}</span>
+            </div>
+          )}
           {battleData && (
             <span className="text-red-400 text-xs sm:text-sm flex items-center gap-1">
               <Trophy className="w-3 h-3" />
@@ -429,7 +438,7 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
         
         {/* Share button */}
         <button
-          onClick={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); setIsShareModalOpen(true); }}
           className="flex flex-col items-center gap-1"
         >
           <div className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors sm:w-12 sm:h-12">
@@ -447,6 +456,14 @@ export default function BattleSwipeCard({ stream, isActive, isMuted, onClose }: 
           </div>
         </div>
       )}
+
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        streamTitle={stream.title}
+        streamUrl={`${window.location.origin}/watch/${stream.id}`}
+        broadcasterName={stream.broadcaster?.username}
+      />
     </div>
   );
 }

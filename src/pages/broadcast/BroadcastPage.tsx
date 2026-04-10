@@ -4,9 +4,11 @@ import { Room, RoomEvent, LocalVideoTrack, LocalAudioTrack, RemoteParticipant, R
 
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../lib/store'
+import { getCategoryConfig } from '../../config/broadcastCategories'
 import { useStreamStore } from '../../lib/streamStore'
 import { PreflightStore } from '../../lib/preflightStore'
 import { emitEvent } from '../../lib/events'
+import { useIsMobile } from '../../hooks/useIsMobile'
 // import { useAnimationStore, type GiftType } from '../../lib/animationManager'
 
 import { Stream } from '../../types/broadcast'
@@ -27,17 +29,7 @@ import { BroadcastGift } from '../../hooks/useBroadcastRealtime'
 import { useBroadcastPinnedProducts } from '../../hooks/useBroadcastPinnedProducts'
 import { useBoxCount } from '../../hooks/useBoxCount'
 import { useBattleState } from '../../hooks/useBattleState'
-import {
-  getCategoryConfig,
-  supportsBattles,
-  getMatchingTerminology,
-} from '../../config/broadcastCategories'
-import ChallengeManager from '../../components/broadcast/ChallengeManager'
-import { useFiveVFiveBattle } from '../../hooks/useFiveVFiveBattle'
-import { useBattleSubscriber } from '../../hooks/useBattleSubscriber'
-import FiveVFiveBattleOverlay from '../../components/broadcast/FiveVFiveBattleOverlay'
-import BattleStartModal from '../../components/broadcast/BattleStartModal'
-import BattleGiftPanel from '../../components/broadcast/BattleGiftPanel'
+import CoinStoreModal from '../../components/broadcast/CoinStoreModal'
 
 import { Loader2, Shield, Zap } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -47,6 +39,7 @@ import { useBroadcastAbilities } from '../../hooks/useBroadcastAbilities'
 import AbilityBox from '../../components/broadcast/AbilityBox'
 import BroadcastAbilityEffects from '../../components/broadcast/BroadcastAbilityEffects'
 import BroadcastTicker from '../../components/broadcast/BroadcastTicker'
+import ShareModal from '../../components/broadcast/ShareModal'
 import TickerControlPanel from '../../components/broadcast/TickerControlPanel'
 import { useBroadcastTicker } from '../../hooks/useBroadcastTicker'
 import { useTickerStore } from '../../stores/tickerStore'
@@ -62,6 +55,7 @@ function BroadcastPage() {
   const { user, profile } = useAuthStore()
   const navigate = useNavigate()
   const { clearTracks, screenTrack } = useStreamStore()
+  const { isMobileWidth } = useIsMobile()
 
   // Determine if user is admin for video quality (1080p admin, 720p regular)
   const isStreamAdmin = !!(profile && (
@@ -114,12 +108,9 @@ function BroadcastPage() {
   const [remoteParticipants, setRemoteParticipants] = useState<Map<string, RemoteParticipant>>(new Map())
   const [isJoining, setIsJoining] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(true)
-  const [isBattleMode, setIsBattleMode] = useState(false)
   const [canSwipe, setCanSwipe] = useState(false)
   const [viewerCount, setViewerCount] = useState(0)
   const [hostMicMutedByOfficer, setHostMicMutedByOfficer] = useState(false)
-  const [battleData, setBattleData] = useState<any>(null)
-  const [isBattleLoading, setIsBattleLoading] = useState(false)
   
   const hasJoinedRef = useRef(false)
   const roomRef = useRef<Room | null>(null)
@@ -136,6 +127,7 @@ function BroadcastPage() {
   }, [remoteParticipants])
   
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const [giftRecipientId, setGiftRecipientId] = useState<string | null>(null)
   const [recentGifts, setRecentGifts] = useState<BroadcastGift[]>([])
   const [giftNameMap, setGiftNameMap] = useState<Record<string, string>>({})
@@ -322,123 +314,10 @@ function BroadcastPage() {
     
     setStream(data)
   }, [streamId, supabase])
-
+ 
   const [isPinProductModalOpen, setIsPinProductModalOpen] = useState(false)
-  const [hasPendingChallenge, setHasPendingChallenge] = useState(false)
 
-  // Direct send challenge - no popup
-  const handleDirectChallenge = async () => {
-    if (!user || !streamId || isHost) return;
-    
-    try {
-      // Get user profile for username
-      const { data: profileData } = await supabase
-        .from('user_profiles')
-        .select('username, avatar_url, battle_crowns')
-        .eq('id', user.id)
-        .maybeSingle();
-      
-      if (!profileData?.username) {
-        toast.error('Please set a username in your profile first');
-        return;
-      }
-      
-      // Check if there's already a pending challenge
-      const { data: existingChallenge } = await supabase
-        .from('broadcast_challenges')
-        .select('id, status')
-        .eq('stream_id', streamId)
-        .eq('challenger_id', user.id)
-        .eq('status', 'pending')
-        .maybeSingle();
-
-      if (existingChallenge) {
-        toast.error('You already have a pending challenge');
-        return;
-      }
-
-      // Check if broadcaster is in battle
-      const { data: activeBattle } = await supabase
-        .from('battles')
-        .select('id, status')
-        .eq('opponent_id', stream?.user_id)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (activeBattle) {
-        toast.error('Broadcaster is currently in a battle');
-        return;
-      }
-
-      // Create challenge
-      const { data, error } = await supabase
-        .from('broadcast_challenges')
-        .insert({
-          stream_id: streamId,
-          challenger_id: user.id,
-          challenger_username: profileData.username,
-          status: 'pending',
-          expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Notify via realtime
-      const streamChannel = supabase.channel(`chat-challenges-${streamId}`);
-      await streamChannel.subscribe();
-      await streamChannel.send({
-        type: 'broadcast',
-        event: 'new_challenge',
-        payload: {
-          challenge_id: data.id,
-          challenger_id: user.id,
-          challenger_username: profileData.username,
-          challenger_avatar: profileData.avatar_url,
-          challenger_crowns: profileData.battle_crowns || 0,
-          stream_id: streamId,
-          expires_at: data.expires_at,
-          timestamp: new Date().toISOString()
-        }
-      });
-
-      toast.success('Challenge sent!');
-      setHasPendingChallenge(true);
-      setTimeout(() => setHasPendingChallenge(false), 5 * 60 * 1000);
-    } catch (err) {
-      console.error('Direct challenge error:', err);
-      toast.error('Failed to send challenge');
-    }
-  };
-  
-  // State for incoming challenges (broadcaster view)
-  const [incomingChallenges, setIncomingChallenges] = useState<any[]>([])
-  
-  // State for tracking outgoing challenge (for viewers who sent challenge)
-  const [outgoingChallengeId, setOutgoingChallengeId] = useState<string | null>(null);
-  const [pendingBattleId, setPendingBattleId] = useState<string | null>(null);
-
-  // Handler for accepting a challenge
-  const handleAcceptChallenge = useCallback(async (challengeId: string, challengerId: string) => {
-    console.log('[BroadcastPage] Challenge accepted:', challengeId, challengerId);
-    // Clear incoming challenges immediately
-    setIncomingChallenges(prev => prev.filter(c => c.challenge_id !== challengeId));
-    
-    // Show feedback that battle is starting
-    toast.success('Challenge accepted! Battle starting...');
-    
-    // The battle mode will be activated via the database update
-    // The existing useEffect for stream changes will detect is_battle=true and show BattleGridOverlay
-  }, []);
-
-  // Handler for denying a challenge
-  const handleDenyChallenge = useCallback(async (challengeId: string) => {
-    console.log('[BroadcastPage] Challenge denied:', challengeId);
-    setIncomingChallenges(prev => prev.filter(c => c.challenge_id !== challengeId));
-  }, []);
-
-  const isHost = stream?.user_id === user?.id
+const isHost = stream?.user_id === user?.id
 
   // Broadcast Global Ticker
   const {
@@ -467,6 +346,9 @@ function BroadcastPage() {
   // Game picker state
   const [gamePickerOpen, setGamePickerOpen] = useState(false)
   const [activeGame, setActiveGame] = useState<'troll_toe' | null>(null)
+  
+  // Quick Coin Store
+  const [isCoinStoreOpen, setIsCoinStoreOpen] = useState(false)
 
   // getTrackForUser - maps userId to LiveKit video/audio tracks for Troll Toe board
   const getTrackForUser = useCallback((userId: string) => {
@@ -542,340 +424,37 @@ function BroadcastPage() {
     isHost,
   });
 
-  // Fetch incoming challenges for broadcaster
-  useEffect(() => {
-    if (!isHost || !streamId) return;
+  const { seats, mySession: userSeat, joinSeat, leaveSeat } = useStreamSeats(streamId, user?.id, broadcasterProfile, stream);
 
-    const fetchChallenges = async () => {
-      const { data } = await supabase
-        .from('broadcast_challenges')
-        .select('*')
-        .eq('stream_id', streamId)
-        .eq('status', 'pending')
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false });
-
-      if (data && data.length > 0) {
-        // Transform to ChallengeManager format
-        const challenges = data.map(c => ({
-          challenge_id: c.id,
-          challenger_id: c.challenger_id,
-          challenger_username: c.challenger_username,
-          challenger_avatar: c.challenger_avatar,
-          challenger_crowns: c.challenger_crowns || 0,
-          stream_id: c.stream_id,
-          expires_at: c.expires_at
-        }));
-        setIncomingChallenges(challenges);
-      }
-    };
-
-    fetchChallenges();
-
-    // Subscribe to new challenges
-    const challengesChannel = supabase
-      .channel(`broadcast-challenges:${streamId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'broadcast_challenges',
-          filter: `stream_id=eq.${streamId}`
-        },
-        (payload) => {
-          if (payload.new && payload.new.status === 'pending') {
-            const newChallenge = {
-              challenge_id: payload.new.id,
-              challenger_id: payload.new.challenger_id,
-              challenger_username: payload.new.challenger_username,
-              challenger_avatar: payload.new.challenger_avatar,
-              challenger_crowns: payload.new.challenger_crowns || 0,
-              stream_id: payload.new.stream_id,
-              expires_at: payload.new.expires_at
-            };
-            setIncomingChallenges(prev => [newChallenge, ...prev]);
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'broadcast_challenges',
-          filter: `stream_id=eq.${streamId}`
-        },
-        (payload) => {
-          // Remove challenges that are no longer pending
-          if (payload.new && payload.new.status !== 'pending') {
-            setIncomingChallenges(prev => prev.filter(c => c.challenge_id !== payload.new.id));
-          }
-        }
-      )
-      .subscribe();
-
-    // Poll for new challenges every 10 seconds
-    const pollInterval = setInterval(fetchChallenges, 10000);
-
-    return () => {
-      clearInterval(pollInterval);
-      supabase.removeChannel(challengesChannel);
-    };
-  }, [isHost, streamId, supabase]);
-
-  // For viewers: check if they have sent a challenge and listen for acceptance - AUTO JOIN
-  // Uses joinSeat directly from the hook - will auto-trigger when challenge is accepted
-  useEffect(() => {
-    if (isHost || !user?.id || !streamId) return;
-
-    // Check if user has an outgoing pending challenge
-    const checkOutgoingChallenge = async () => {
-      const { data } = await supabase
-        .from('broadcast_challenges')
-        .select('id, status, seat_index')
-        .eq('challenger_id', user.id)
-        .eq('stream_id', streamId)
-        .eq('status', 'pending')
-        .maybeSingle();
-
-      if (data) {
-        setOutgoingChallengeId(data.id);
-      }
-    };
-
-    checkOutgoingChallenge();
-
-    // Listen for challenge_accepted broadcast events - AUTO JOIN
-    const challengeChannel = supabase.channel(`challenge-viewer-${streamId}`)
-      .on(
-        'broadcast',
-        { event: 'challenge_accepted' },
-        async (payload) => {
-          const data = payload.payload;
-          console.log('[BroadcastPage] Challenge accepted, auto-joining:', data);
-          
-          if (data.challenger_id === user.id && data.seat_index !== undefined) {
-            // AUTO JOIN - no prompt!
-            toast.message('Challenge accepted! Joining stage...');
-            
-            // Trigger a custom event that will be handled after components are mounted
-            // This avoids the issue of using joinSeat before it's defined
-            window.dispatchEvent(new CustomEvent('challenge-accepted', { 
-              detail: { seatIndex: data.seat_index } 
-            }));
-          }
-        }
-      )
-      .subscribe();
-
-    // Also poll for challenge status if user has outgoing challenge - AUTO JOIN
-    const pollChallengeStatus = async () => {
-      if (!outgoingChallengeId) return;
-      
-      const { data: challenge } = await supabase
-        .from('broadcast_challenges')
-        .select('status, seat_index')
-        .eq('id', outgoingChallengeId)
-        .maybeSingle();
-
-      if (challenge?.status === 'accepted' && challenge?.seat_index !== undefined) {
-        console.log('[BroadcastPage] Challenge accepted via poll, auto-joining seat:', challenge.seat_index);
-        toast.message('Challenge accepted! Joining stage...');
-        
-        // AUTO JOIN - no prompt!
-        window.dispatchEvent(new CustomEvent('challenge-accepted', { 
-          detail: { seatIndex: challenge.seat_index } 
-        }));
-      }
-    };
-
-    const pollInterval = setInterval(pollChallengeStatus, 3000);
-
-    return () => {
-      clearInterval(pollInterval);
-      supabase.removeChannel(challengeChannel);
-    };
-  }, [isHost, user?.id, streamId, supabase]);
-
-  const { seats, mySession: userSeat, joinSeat, leaveSeat, handleParticipantDisconnected } =
-    useStreamSeats(stream?.id, user?.id, broadcasterProfile, stream)
-
-  // Battle state hook - integrates with existing BroadcastGrid
+  // Battle State - placed after userSeat is defined
   const { 
-    battleState, 
-    supporters, 
-    userTeam, 
+    battleState: rawBattleState,
+    pickSide,
+    supporters,
+    userTeam,
     joinWindowOpen,
     remainingTime,
-    startBattle, 
-    pickSide, 
-    endBattle,
-    canGift: battleCanGift,
+    shouldShowSidePicker,
     sendBattleGift,
-    shouldShowSidePicker 
   } = useBattleState({
-    streamId: stream?.id || '',
-    localUserId: user?.id || userSeat?.guest_id || '',
+    streamId: streamId || '',
+    localUserId: user?.id || userSeat?.guest_id || anonymousViewerIdRef.current || '',
     isHost,
     hostId: stream?.user_id,
-  });
+  })
 
-  // 5v5 Battle system
-  const {
-    state: fiveVFiveState,
-    findMatch: fiveVFiveFindMatch,
-    useAbility: fiveVFiveUseAbility,
-    processGift: fiveVFiveProcessGift,
-    requestRematch: fiveVFiveRequestRematch,
-    forfeitBattle: fiveVFiveForfeit,
-    resetBattle: fiveVFiveReset,
-    isGeneralChat: fiveVFiveIsGeneralChat,
-    TEAM_FREEZE_COOLDOWN,
-    REVERSE_COOLDOWN,
-    DOUBLE_XP_COOLDOWN,
-  } = useFiveVFiveBattle({
-    streamId: stream?.id || '',
-    isHost,
-    category: stream?.category || 'general',
-  });
-
-  // Battle subscriber for non-host viewers on this stream
-  const { state: subscriberBattleState, resetBattle: subscriberResetBattle } = useBattleSubscriber(stream);
-
-  // Use host's battle state if host, otherwise use subscriber state
-  const effectiveBattleState = isHost ? fiveVFiveState : subscriberBattleState;
-  const effectiveResetBattle = isHost ? fiveVFiveReset : subscriberResetBattle;
-
-  // ─── BATTLE ROOM SWITCHING ───
-  // When stream enters battle mode, switch LiveKit to shared battle room
-  // so both broadcasters and all viewers see the same video
-  const prevBattleIdRef = useRef<string | null>(null);
-  const originalRoomRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const isBattle = stream?.is_battle;
-    const battleId = stream?.battle_id;
-
-    if (isBattle && battleId && battleId !== prevBattleIdRef.current) {
-      // Entering battle mode - switch to shared battle room
-      prevBattleIdRef.current = battleId;
-      if (!originalRoomRef.current) {
-        originalRoomRef.current = stream.id; // Save original room name
-      }
-
-      const battleRoomName = `battle-${battleId}`;
-      const currentRoom = roomRef.current;
-      const wasConnected = currentRoom && currentRoom.state === 'connected';
-
-      const switchRoom = async () => {
-        try {
-          // Disconnect from current room
-          if (currentRoom) {
-            try { currentRoom.disconnect().catch(() => {}); } catch {}
-          }
-
-          // Get token for battle room
-          const userIdentity = user?.id || userSeat?.guest_id || anonymousViewerIdRef.current;
-          const shouldPublish = isHost || !!userSeat;
-          const { data, error } = await supabase.functions.invoke('livekit-token', {
-            body: {
-              room: battleRoomName,
-              identity: shouldPublish ? userIdentity : `viewer-${userIdentity.substring(0, 12)}`,
-              name: profile?.username || user?.email || 'User',
-              role: shouldPublish ? 'publisher' : 'audience',
-              isHost: shouldPublish
-            }
-          });
-          if (error || !data?.token) {
-            console.warn('[BattleRoom] Could not get battle room token:', error);
-            return;
-          }
-
-          // Create new room and connect
-          const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud';
-          const newRoom = shouldPublish
-            ? new Room({ adaptiveStream: true, dynacast: true })
-            : new Room({ adaptiveStream: true, dynacast: true });
-
-          // Set up event listeners for battle room (do NOT call handleParticipantDisconnected - that's for seat management)
-          newRoom.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => {
-            console.log('[BattleRoom] Participant connected:', p.identity);
-            setRemoteParticipants(prev => new Map(prev).set(p.identity, p));
-          });
-          newRoom.on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => {
-            console.log('[BattleRoom] Participant disconnected:', p.identity);
-            setRemoteParticipants(prev => {
-              const next = new Map(prev);
-              next.delete(p.identity);
-              return next;
-            });
-          });
-          newRoom.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
-            console.log('[BattleRoom] Track subscribed:', track.kind, 'from', participant.identity);
-            setRemoteParticipants(prev => new Map(prev).set(participant.identity, participant));
-          });
-          newRoom.on(RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
-            console.log('[BattleRoom] Track unsubscribed:', track.kind, 'from', participant.identity);
-            setRemoteParticipants(prev => new Map(prev).set(participant.identity, participant));
-          });
-
-          await newRoom.connect(livekitUrl, data.token);
-          roomRef.current = newRoom;
-
-          // If publisher, publish local tracks to battle room
-          // Small delay to ensure connection is fully established before publishing
-          if (shouldPublish && localTracksRef.current) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-            const [audioTrack, videoTrack] = localTracksRef.current;
-            if (audioTrack && typeof audioTrack.getMediaStreamTrack === 'function') {
-              const mediaTrack = audioTrack.getMediaStreamTrack();
-              if (mediaTrack && mediaTrack.readyState === 'live') {
-                try { await newRoom.localParticipant.publishTrack(audioTrack); } catch (e) { console.warn('[BattleRoom] Failed to publish audio:', e); }
-              } else {
-                console.warn('[BattleRoom] Audio track not live, skipping publish');
-              }
-            }
-            if (videoTrack && typeof videoTrack.getMediaStreamTrack === 'function') {
-              const mediaTrack = videoTrack.getMediaStreamTrack();
-              if (mediaTrack && mediaTrack.readyState === 'live') {
-                try { await newRoom.localParticipant.publishTrack(videoTrack); } catch (e) { console.warn('[BattleRoom] Failed to publish video:', e); }
-              } else {
-                console.warn('[BattleRoom] Video track not live, skipping publish');
-              }
-            }
-          }
-
-          console.log('[BattleRoom] Switched to battle room:', battleRoomName);
-        } catch (err) {
-          console.error('[BattleRoom] Error switching to battle room:', err);
-        }
-      };
-
-      switchRoom();
-
-    } else if (!isBattle && prevBattleIdRef.current && originalRoomRef.current) {
-      // Battle ended - switch back to original room
-      prevBattleIdRef.current = null;
-      const originalRoom = originalRoomRef.current;
-      originalRoomRef.current = null;
-
-      const currentRoom = roomRef.current;
-      if (currentRoom) {
-        try { currentRoom.disconnect().catch(() => {}); } catch {}
-      }
-
-      // Clear PreflightStore so re-init creates fresh tracks instead of reusing stale ones
-      PreflightStore.setLivekitRoom(null);
-      PreflightStore.setLivekitTracks(null);
-
-      // Re-initialize LiveKit connection to original stream room
-      hasJoinedRef.current = false;
-      setLocalTracks(null);
-      setRemoteParticipants(new Map());
-      setStream((prev: any) => prev ? { ...prev } : prev); // Trigger re-init
-    }
-  }, [stream?.is_battle, stream?.battle_id]);
+  // Transform battleState to match BroadcastGrid's expected interface
+  const battleState = useMemo(() => ({
+    active: rawBattleState.active,
+    battleId: rawBattleState.battleId,
+    hostId: rawBattleState.teamACaptain,
+    challengerId: rawBattleState.teamBCaptain,
+    broadcasterScore: rawBattleState.teamAScore,
+    challengerScore: rawBattleState.teamBScore,
+    startedAt: rawBattleState.startedAt,
+    endsAt: rawBattleState.endsAt,
+    suddenDeath: rawBattleState.suddenDeath,
+  }), [rawBattleState])
 
   const canPublish = isHost || !!userSeat
 
@@ -892,32 +471,6 @@ function BroadcastPage() {
   // Handle leaving seat with instant track cleanup
   const handleLeaveSeat = useCallback(async () => {
     const room = roomRef.current
-    
-    // Check if battle is active and user is on a team
-    const isUserOnBroadcasterTeam = userSeat && (
-      userSeat.user_id === stream.user_id || 
-      supporters.get(userSeat.user_id || userSeat.guest_id || '')?.team === 'broadcaster'
-    );
-    const isUserOnChallengerTeam = userSeat && (
-      userSeat.user_id === battleState.challengerId || 
-      supporters.get(userSeat.user_id || userSeat.guest_id || '')?.team === 'challenger'
-    );
-    
-    // If user leaves during battle, their team loses and other team gets 2 crowns each
-    if (battleState.active && battleState.battleId && (isUserOnBroadcasterTeam || isUserOnChallengerTeam)) {
-      const leavingTeam = isUserOnBroadcasterTeam ? 'broadcaster' : 'challenger';
-      console.log(`[BattleState] User leaving during battle from ${leavingTeam} team - awarding win to other team`);
-      
-      // Call end battle with the other team as winner
-      try {
-        await supabase.rpc('end_battle_early', {
-          p_battle_id: battleState.battleId,
-          p_leaving_team: leavingTeam,
-        });
-      } catch (err) {
-        console.error('[BattleState] Error ending battle early:', err);
-      }
-    }
     
     // Instantly stop publishing tracks before clearing seat
     if (room && room.localParticipant) {
@@ -956,32 +509,12 @@ function BroadcastPage() {
     // Call the seat leave function
     await leaveSeat()
     console.log('[BroadcastPage] Left seat with instant track cleanup')
-  }, [leaveSeat, localTracks, battleState, userSeat, stream, supporters])
+  }, [leaveSeat, localTracks])
 
   const handleJoinSeat = useCallback(async (index: number, price: number) => {
     justJoinedSeatRef.current = true
     return joinSeat(index, price)
   }, [joinSeat])
-
-  // Listen for challenge-accepted event to auto-join seat
-  useEffect(() => {
-    const handleChallengeAccepted = (e: Event) => {
-      const customEvent = e as CustomEvent<{ seatIndex: number }>;
-      const seatIndex = customEvent.detail?.seatIndex;
-      if (seatIndex !== undefined) {
-        console.log('[BroadcastPage] Handling challenge-accepted event, seat:', seatIndex);
-        toast.message('Joining stage...');
-        handleJoinSeat(seatIndex, 0).then(success => {
-          if (success) {
-            toast.success('You are now live on stage!');
-          }
-        });
-      }
-    };
-
-    window.addEventListener('challenge-accepted', handleChallengeAccepted);
-    return () => window.removeEventListener('challenge-accepted', handleChallengeAccepted);
-  }, [handleJoinSeat]);
 
   const getSeatPrice = useCallback((seatIndex: number): number => {
     if (stream?.seat_prices && stream.seat_prices.length > seatIndex) {
@@ -1050,56 +583,6 @@ function BroadcastPage() {
 
     fetchStream()
   }, [streamId, navigate, user?.id])
-
-  // Fetch battle data when stream enters battle mode
-  useEffect(() => {
-    // Only fetch if we don't have battle data yet and we have the necessary info
-    if (!stream?.is_battle || !stream.battle_id) {
-      return;
-    }
-    
-    // Skip if we already have data for this battle
-    if (battleData && battleData.id === stream.battle_id) {
-      return;
-    }
-
-    setIsBattleLoading(true);
-    const fetchBattleData = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('battles')
-          .select('*')
-          .eq('id', stream.battle_id)
-          .maybeSingle();
-        
-        if (error) {
-          console.error('Error fetching battle data:', error);
-          return;
-        }
-        
-        if (data) {
-          // Also fetch the stream user IDs for both challengers
-          const [challengerStream, opponentStream] = await Promise.all([
-            supabase.from('streams').select('user_id').eq('id', data.challenger_stream_id).maybeSingle(),
-            supabase.from('streams').select('user_id').eq('id', data.opponent_stream_id).maybeSingle(),
-          ]);
-          
-          // Add user IDs to battle data
-          setBattleData({
-            ...data,
-            challenger_user_id: challengerStream?.data?.user_id,
-            opponent_user_id: opponentStream?.data?.user_id,
-          });
-        }
-      } catch (err) {
-        console.error('Error in battle data fetch:', err);
-      } finally {
-        setIsBattleLoading(false);
-      }
-    };
-
-    fetchBattleData();
-  }, [stream?.is_battle, stream?.battle_id]);
 
   // Emit stream_watch_time events for troll system
   useEffect(() => {
@@ -1176,24 +659,9 @@ function BroadcastPage() {
           // Battle ended
           setStream((prev: any) => {
             if (!prev) return prev;
-            return { ...prev, is_battle: false, battle_id: null };
+            return { ...prev, status: data.status };
           });
-          // Clear battle data when battle ends
-          setBattleData(null);
           return;
-        }
-        
-        if (stream.is_battle !== data.is_battle || stream.battle_id !== data.battle_id) {
-          // Battle mode changed - update state
-          setStream((prev: any) => {
-            if (!prev) return prev;
-            return { ...prev, is_battle: data.is_battle, battle_id: data.battle_id };
-          });
-          
-          // Clear battle data if no longer in battle mode
-          if (!data.is_battle) {
-            setBattleData(null);
-          }
         }
         
         if (data?.box_count !== undefined && data.box_count !== streamRef.current?.box_count) {
@@ -2390,10 +1858,11 @@ function BroadcastPage() {
   const checkClickRate = () => {
     const now = Date.now();
     clickHistoryRef.current = clickHistoryRef.current.filter(
-      timestamp => now - timestamp < 2000
+      timestamp => now - timestamp < 1000
     );
     clickHistoryRef.current.push(now);
-    if (clickHistoryRef.current.length > 5) {
+    // Allow 10 clicks per second for rapid spam clicking
+    if (clickHistoryRef.current.length > 10) {
       return false;
     }
     return true;
@@ -2410,36 +1879,32 @@ function BroadcastPage() {
     }
 
     if (isClickBlocked) {
-        toast.error('Clicking too fast! Please wait a moment.');
-        return;
+        return; // Silent fail for rapid clicking
     }
 
     if (!checkClickRate()) {
-        setIsClickBlocked(true);
-        toast.error('🛑 Autoclicker detected! You are blocked from liking for 30 seconds.');
-        
-        setTimeout(() => {
-            setIsClickBlocked(false);
-            clickHistoryRef.current = [];
-            toast.info('You can now like again.');
-        }, 30000);
-        return;
+        return; // Silent fail for rapid clicking
     }
+
+    // Optimistic UI update - add 10 likes instantly
+    setStream((prev: any) => {
+        if (!prev) return prev;
+        return { ...prev, total_likes: (prev.total_likes || 0) + 10 };
+    });
 
     try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-            toast.error('Please sign in to like');
             return;
         }
 
         if (!stream?.id) {
-            toast.error('Stream not found');
             return;
         }
 
         const edgeUrl = `${import.meta.env.VITE_EDGE_FUNCTIONS_URL}/send-like`;
         
+        // Send 10 likes in batch
         const response = await fetch(edgeUrl, {
             method: 'POST',
             headers: {
@@ -2447,7 +1912,8 @@ function BroadcastPage() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                stream_id: stream.id
+                stream_id: stream.id,
+                count: 10
             })
         });
 
@@ -2485,7 +1951,12 @@ function BroadcastPage() {
 
         setStream((prev: any) => {
             if (!prev) return prev;
-            return { ...prev, total_likes: result.total_likes };
+            const serverTotal = result.total_likes;
+            const prevTotal = prev.total_likes || 0;
+            if (typeof serverTotal === 'number' && serverTotal > 0 && serverTotal >= prevTotal) {
+                return { ...prev, total_likes: serverTotal };
+            }
+            return { ...prev, total_likes: prevTotal + 10 };
         });
 
         if (result.coins_awarded > 0) {
@@ -2524,7 +1995,17 @@ function BroadcastPage() {
     }
   };
 
+  const isStaff = profile?.is_troll_officer || profile?.troll_role === 'admin' || profile?.troll_role === 'mod'
+
   const handleStreamEnd = async () => {
+    // For staff, skip confirmation and skip summary page
+    if (isStaff || stream?.status === 'ended') {
+      // Allow immediate end without confirmation
+    } else {
+      // For regular hosts, show confirmation
+      const confirmed = window.confirm('Are you sure you want to end this stream? This cannot be undone.');
+      if (!confirmed) return;
+    }
     // Stop local tracks first
     if (localTracks) {
       localTracks.forEach((track) => {
@@ -2547,35 +2028,6 @@ function BroadcastPage() {
     if (room) {
       room.disconnect().catch(console.error)
       roomRef.current = null
-    }
-    
-    // Handle battle if needed
-    if (stream?.battle_id && isHost) {
-      try {
-        const { data: battleData } = await supabase
-          .from('battles')
-          .select('id, status, challenger_stream_id, opponent_stream_id')
-          .eq('id', stream.battle_id)
-          .eq('status', 'active')
-          .maybeSingle();
-        
-        if (battleData) {
-          const opponentStreamId = battleData.challenger_stream_id === stream.id
-            ? battleData.opponent_stream_id
-            : battleData.challenger_stream_id;
-          
-          const { error: leaveError } = await supabase.rpc('leave_battle', {
-            p_battle_id: battleData.id,
-            p_user_id: user.id
-          });
-          
-          if (leaveError) {
-            console.warn('Failed to leave battle:', leaveError);
-          }
-        }
-      } catch (battleErr) {
-        console.warn('Error handling battle on stream end:', battleErr);
-      }
     }
     
     // Update database
@@ -2623,14 +2075,28 @@ function BroadcastPage() {
     }
     
     setStream((prev: any) => prev ? { ...prev, status: 'ended', is_live: false } : null);
-    navigate(`/broadcast/summary/${stream?.id}`);
+    
+    // For staff, don't show summary page - go to government streams instead
+    if (isStaff) {
+      navigate('/government/streams');
+    } else {
+      navigate(`/broadcast/summary/${stream?.id}`);
+    }
   };
 
   const swipeNavigateLockRef = useRef(false);
 
   // Check if there are adjacent streams to swipe to
   useEffect(() => {
-    if (!stream?.id || isHost) {
+    if (!stream?.id) {
+      setCanSwipe(false);
+      return;
+    }
+
+    // Enable swipe only for mobile viewers (not host, not on seat)
+    const shouldEnableSwipe = !isHost && !userSeat && isMobileWidth;
+    
+    if (!shouldEnableSwipe) {
       setCanSwipe(false);
       return;
     }
@@ -2655,12 +2121,12 @@ function BroadcastPage() {
 
     checkAdjacentStreams();
 
-    const channel = supabase.channel(`swipe-check-${stream.id}`)
+    const channel = supabase.channel(`swipe-check-${stream?.id}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'streams',
-        filter: `category=eq.${stream.category || 'general'}`
+        filter: `category=eq.${stream?.category || 'general'}`
       }, () => {
         checkAdjacentStreams();
       })
@@ -2696,7 +2162,7 @@ function BroadcastPage() {
       const liveStreams = (data || []).filter((item) => item?.id);
       if (liveStreams.length <= 1) return;
 
-      const currentIndex = liveStreams.findIndex((item) => item.id === stream.id);
+      const currentIndex = liveStreams.findIndex((item) => item.id === stream?.id);
       if (currentIndex === -1) return;
 
       const nextIndex = direction === 'up' ? currentIndex + 1 : currentIndex - 1;
@@ -2821,25 +2287,19 @@ function BroadcastPage() {
   }
 
   const categoryConfig = getCategoryConfig(stream.category || 'general')
-  const categorySupportsBattles = supportsBattles(stream.category || 'general')
-  const categoryMatchingTerm = getMatchingTerminology(stream.category || 'general');
 
-  // INSTANT JOIN: Show battle content immediately, load battle data in background
-  // Don't show loading screen - content will appear when data arrives via realtime
+  // INSTANT JOIN: Show broadcast content immediately
 
-  // Handle battle mode: show overlay for anyone in a battle (broadcaster or participant)
-  const shouldShowBattleOverlay = stream.is_battle && battleData;
-
-  // INSTANT JOIN: Don't block UI while joining LiveKit
-  // Show the page immediately and let LiveKit connect in background
-  // User can see video/audio appear when ready without waiting for spinner
+  const isMobileViewer = isMobileWidth && !isHost && !userSeat;
 
   return (
     <ErrorBoundary>
       <StreamLayout
         isChatOpen={isChatOpen}
         onToggleChat={() => setIsChatOpen(!isChatOpen)}
-        hideHeader={effectiveBattleState.phase !== 'idle' || !!(stream.is_battle && battleData)}
+        onLike={handleLike}
+        hideHeader={false}
+        forceViewMode={isMobileViewer ? 'vertical' : 'fullscreen'}
         
           header={
           <BroadcastHeader
@@ -2847,10 +2307,6 @@ function BroadcastPage() {
             isHost={isHost}
             liveViewerCount={viewerCount > 0 ? viewerCount : remoteParticipants.size}
             handleLike={handleLike}
-            onStartBattle={isHost && categorySupportsBattles ? () => setIsBattleMode(true) : undefined}
-            categoryBattleTerm={categorySupportsBattles ? categoryMatchingTerm : undefined}
-            onChallengeBroadcaster={!isHost && categorySupportsBattles ? handleDirectChallenge : undefined}
-            hasPendingChallenge={hasPendingChallenge}
           />
         }
         
@@ -2893,7 +2349,7 @@ function BroadcastPage() {
                 remainingTime={remainingTime}
                 shouldShowSidePicker={shouldShowSidePicker}
                 onBattleGift={sendBattleGift}
-                enableStreamSwipe={!isHost}
+                enableStreamSwipe={isMobileViewer}
                 canSwipe={canSwipe}
                 onSwipeUp={() => navigateToAdjacentStream('up')}
                 onSwipeDown={() => navigateToAdjacentStream('down')}
@@ -2907,28 +2363,7 @@ function BroadcastPage() {
                 canTrollToeFog={!isHost && trollToe.match?.fogEnabled && trollToe.match?.phase === 'live' && trollToe.canUseFog(user?.id || anonymousViewerIdRef.current)}
               />
             </>
-            {/* 5v5 Battle Overlay - inside video slot so chat stays visible */}
-            {effectiveBattleState.phase !== 'idle' && (
-              <FiveVFiveBattleOverlay
-                state={effectiveBattleState}
-                currentUserId={user?.id || ''}
-                onUseAbility={isHost ? fiveVFiveUseAbility : () => {}}
-                onRequestRematch={isHost ? fiveVFiveRequestRematch : () => {}}
-                onForfeit={isHost ? fiveVFiveForfeit : undefined}
-                onDismiss={isHost ? fiveVFiveReset : undefined}
-                TEAM_FREEZE_COOLDOWN={TEAM_FREEZE_COOLDOWN}
-                REVERSE_COOLDOWN={REVERSE_COOLDOWN}
-                DOUBLE_XP_COOLDOWN={DOUBLE_XP_COOLDOWN}
-                userAbilities={userAbilities}
-                currentUsername={profile?.username || 'Someone'}
-                localTracks={localTracks}
-                remoteParticipants={Array.from(remoteParticipants.values())}
-                isHost={isHost}
-                teamAName={effectiveBattleState.teamAName || 'Team A'}
-                teamBName={effectiveBattleState.teamBName || 'Team B'}
-              />
-            )}
-
+            
             {/* Troll Toe game lives on the broadcast grid tiles - no separate overlay needed */}
           </div>
         }
@@ -2942,6 +2377,7 @@ function BroadcastPage() {
             chatOpen={isChatOpen}
             toggleChat={() => setIsChatOpen(!isChatOpen)}
             onGiftHost={() => onGift(stream.user_id)}
+            onShare={() => setIsShareModalOpen(true)}
             onLeave={handleLeaveSeat}
             onBoxCountUpdate={updateBoxCount}
             onStreamEnd={handleStreamEnd}
@@ -2954,10 +2390,7 @@ function BroadcastPage() {
             boxCount={boxCount}
             setBoxCount={updateBoxCount}
             onRefreshStream={refreshStream}
-            onChallengeBroadcaster={undefined}
-            hasPendingChallenge={false}
-            onFiveVFiveBattle={isHost && stream.status === 'live' && fiveVFiveIsGeneralChat ? fiveVFiveFindMatch : undefined}
-            fiveVFiveBattleActive={effectiveBattleState.active}
+            fiveVFiveBattleActive={false}
             isLive={stream.status === 'live'}
             onTrollToeController={isHost && stream.status === 'live' ? () => setGamePickerOpen(!gamePickerOpen) : undefined}
             trollToeActive={gamePickerOpen || trollToe.isControllerOpen}
@@ -2971,11 +2404,6 @@ function BroadcastPage() {
             isHost={isHost}
             isViewer={!userSeat && !isHost}
             isGuest={!user}
-            onChallengeBroadcaster={!isHost && categorySupportsBattles ? handleDirectChallenge : undefined}
-            hasPendingChallenge={hasPendingChallenge}
-            pendingChallenges={incomingChallenges}
-            onAcceptChallenge={handleAcceptChallenge}
-            onDenyChallenge={handleDenyChallenge}
             isBattleActive={stream.is_battle}
             isChatOpen={isChatOpen}
             seats={seats}
@@ -3054,7 +2482,7 @@ function BroadcastPage() {
               <BroadcastTicker />
             )}
 
-            <GiftAnimationOverlay 
+            <GiftAnimationOverlay
               gifts={recentGifts}
               participantNames={Object.fromEntries(
                 [
@@ -3063,10 +2491,10 @@ function BroadcastPage() {
                 ]
               )}
               onAnimationComplete={(giftId) => {
-                // Remove the gift from recentGifts after animation
                 setRecentGifts(prev => prev.filter(g => g.id !== giftId));
               }}
             />
+
             {/* Broadcast Ability Effects Overlay */}
             <BroadcastAbilityEffects activeEffects={abilityActiveEffects} />
             
@@ -3127,29 +2555,12 @@ function BroadcastPage() {
           </>
         }
         
-        battleGiftPanel={
-          effectiveBattleState.phase !== 'idle' && battleData ? (
-            <BattleGiftPanel
-              streamId={streamId || ''}
-              battleId={battleData.id}
-              challengerStreamId={battleData.challenger_stream_id || ''}
-              opponentStreamId={battleData.opponent_stream_id || ''}
-              challengerHostId={battleData.challenger_user_id || ''}
-              opponentHostId={battleData.opponent_user_id || ''}
-              challengerTitle="Side A"
-              opponentTitle="Side B"
-              onGiftSent={(gift, side) => {
-                const giftAmount = gift.coinCost;
-                if (effectiveBattleState.active && effectiveBattleState.phase === 'active') {
-                  fiveVFiveProcessGift(user?.id || '', side === 'A' ? (battleData.challenger_user_id || '') : (battleData.opponent_user_id || ''), giftAmount, gift.name);
-                }
-              }}
-            />
-          ) : undefined
-        }
-        
         modals={
           <>
+            <CoinStoreModal
+              isOpen={isCoinStoreOpen}
+              onClose={() => setIsCoinStoreOpen(false)}
+            />
             <GiftBoxModal
               isOpen={isGiftModalOpen}
               onClose={() => {
@@ -3166,110 +2577,39 @@ function BroadcastPage() {
                 const quantity = target.quantity || 1;
                 const totalAmount = giftData.coinCost * quantity;
                 
-                // 5v5 Battle gift processing
-                if (effectiveBattleState.active && effectiveBattleState.phase === 'active' && isHost) {
-                  const giftAmount = giftData.coinCost * quantity;
-                  if (target.type === 'all') {
-                    const allRecipients = [stream.user_id, ...activeUserIds];
-                    allRecipients.forEach(rid => {
-                      fiveVFiveProcessGift(user?.id || '', rid, giftAmount, giftData.name);
+                // Record gift to recipient
+                if (target.type === 'all') {
+                  const allRecipients = [stream.user_id, ...activeUserIds];
+                  for (const rid of allRecipients) {
+                    if (rid !== user?.id) {
+                      await supabase.from('stream_gifts').insert({
+                        stream_id: streamId,
+                        sender_id: user?.id,
+                        recipient_id: rid,
+                        gift_id: giftData.id,
+                        amount: giftData.coinCost,
+                        coins_spent: giftData.coinCost,
+                        metadata: { gift_name: giftData.name, gift_icon: giftData.icon }
+                      });
+                    }
+                  }
+                } else {
+                  const recipientId = target.userId || giftRecipientId || stream?.user_id || '';
+                  if (recipientId !== user?.id) {
+                    await supabase.from('stream_gifts').insert({
+                      stream_id: streamId,
+                      sender_id: user?.id,
+                      recipient_id: recipientId,
+                      gift_id: giftData.id,
+                      amount: giftData.coinCost,
+                      coins_spent: giftData.coinCost,
+                      metadata: { gift_name: giftData.name, gift_icon: giftData.icon }
                     });
-                  } else {
-                    const recipientId = target.userId || giftRecipientId || stream?.user_id || '';
-                    fiveVFiveProcessGift(user?.id || '', recipientId, giftAmount, giftData.name);
                   }
                 }
 
-                // Record battle gift if battle is active
-                if (battleState.active && battleState.battleId) {
-                  const giftAmount = giftData.coinCost * quantity;
-                  
-                  // Determine which team to credit based on recipient
-                  const creditTeam = (recipientId: string) => {
-                    if (recipientId === stream.user_id) return 'broadcaster';
-                    if (recipientId === battleState.challengerId) return 'challenger';
-                    // Default to broadcaster for untracked recipients
-                    return 'broadcaster';
-                  };
-                  
-                  if (target.type === 'all') {
-                    const allRecipients = [stream.user_id, ...activeUserIds];
-                    // Credit the broadcaster team for gifts to all
-                    await sendBattleGift?.('broadcaster', giftAmount);
-                  } else {
-                    const recipientId = target.userId || giftRecipientId || stream?.user_id || '';
-                    const team = creditTeam(recipientId);
-                    await sendBattleGift?.(team, giftAmount);
-                  }
-                }
-                
-                if (target.type === 'all') {
-                  const allRecipients = [stream.user_id, ...activeUserIds];
-                  allRecipients.forEach((recipientId, index) => {
-                    setTimeout(() => {
-                      const localGiftId = `local-${Date.now()}-${index}-${giftData.id}`;
-                      const newGift: BroadcastGift = {
-                        id: localGiftId,
-                        gift_id: giftData.id,
-                        gift_name: giftData.name,
-                        gift_icon: giftData.icon || '🎁',
-                        amount: giftData.coinCost * quantity,
-                        quantity,
-                        sender_id: user?.id || '',
-                        sender_name: profile?.username || 'You',
-                        receiver_id: recipientId,
-                        created_at: new Date().toISOString(),
-                      };
-                      setRecentGifts(prev => {
-                        if (prev.some(g => g.gift_id === giftData.id && g.receiver_id === recipientId && g.sender_id === user?.id)) {
-                          return prev;
-                        }
-                        return [...prev, newGift];
-                      });
-                      
-                      // Dispatch balance update event for each recipient
-                      window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
-                        detail: {
-                          senderId: user?.id || '',
-                          receiverId: recipientId,
-                          amount: giftData.coinCost * quantity,
-                          timestamp: Date.now()
-                        }
-                      }));
-                    }, index * 200);
-                  });
-                } else {
-                  const recipientId = target.userId || giftRecipientId || stream?.user_id || '';
-                  const localGiftId = `local-${Date.now()}-${giftData.id}`;
-                  const newGift: BroadcastGift = {
-                    id: localGiftId,
-                    gift_id: giftData.id,
-                    gift_name: giftData.name,
-                    gift_icon: giftData.icon || '🎁',
-                    amount: giftData.coinCost * quantity,
-                    quantity,
-                    sender_id: user?.id || '',
-                    sender_name: profile?.username || 'You',
-                    receiver_id: recipientId,
-                    created_at: new Date().toISOString(),
-                  };
-                  setRecentGifts(prev => {
-                    if (prev.some(g => g.gift_id === giftData.id && g.receiver_id === recipientId && g.sender_id === user?.id)) {
-                      return prev;
-                    }
-                    return [...prev, newGift];
-                  });
-                  
-                  // Dispatch balance update event for the recipient
-                  window.dispatchEvent(new CustomEvent('broadcast-balance-update', {
-                    detail: {
-                      senderId: user?.id || '',
-                      receiverId: recipientId,
-                      amount: giftData.coinCost * quantity,
-                      timestamp: Date.now()
-                    }
-                  }));
-                }
+                // Deduct coins
+                await supabase.rpc('deduct_coins', { amount: totalAmount });
               }}
             />
             
@@ -3284,28 +2624,6 @@ function BroadcastPage() {
               }}
             />
             
-
-            
-            {/* Challenge Manager - Show for broadcaster when there are incoming challenges */}
-            {isHost && incomingChallenges.length > 0 && (
-              <div className="fixed bottom-24 left-4 z-50 w-80">
-                <ChallengeManager
-                  challenges={incomingChallenges}
-                  onAccept={handleAcceptChallenge}
-                  onDeny={handleDenyChallenge}
-                />
-              </div>
-            )}
-
-            {/* 5v5 Battle Start Modal */}
-            <BattleStartModal
-              isOpen={effectiveBattleState.phase === 'pre_battle'}
-              participants={effectiveBattleState.participants}
-              countdown={effectiveBattleState.timerSeconds}
-              currentUserId={user?.id || ''}
-              onClose={effectiveResetBattle}
-              userAbilities={userAbilities}
-            />
 
             {/* Ability Box Modal */}
             <AbilityBox
@@ -3327,74 +2645,16 @@ function BroadcastPage() {
           </>
         }
       />
+
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          streamTitle={stream?.title}
+          streamUrl={`${window.location.origin}/watch/${stream?.id}`}
+          broadcasterName={broadcasterProfile?.username}
+        />
     </ErrorBoundary>
   )
-}
-
-// ─── DRAGGABLE WRAPPER ───
-
-function DraggableWrapper({
-  children,
-  initialPos,
-}: {
-  children: React.ReactNode;
-  initialPos: { x: number; y: number };
-}) {
-  const [pos, setPos] = useState(initialPos);
-  const [dragging, setDragging] = useState(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    // Only drag from the header bar area
-    const target = e.target as HTMLElement;
-    if (target.closest('input, button, textarea, select')) return;
-
-    setDragging(true);
-    dragOffset.current = {
-      x: e.clientX - pos.x,
-      y: e.clientY - pos.y,
-    };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!dragging) return;
-    const newX = Math.max(0, Math.min(window.innerWidth - 320, e.clientX - dragOffset.current.x));
-    const newY = Math.max(0, Math.min(window.innerHeight - 200, e.clientY - dragOffset.current.y));
-    setPos({ x: newX, y: newY });
-  };
-
-  const handlePointerUp = () => {
-    setDragging(false);
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2 }}
-      className="fixed z-[55] pointer-events-auto"
-      style={{
-        left: pos.x,
-        top: pos.y,
-        cursor: dragging ? 'grabbing' : 'default',
-        touchAction: 'none',
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-    >
-      {/* Drag handle bar */}
-      <div
-        className="flex items-center justify-center py-1 mb-0.5 rounded-t-xl bg-white/5 cursor-grab active:cursor-grabbing"
-        onPointerDown={handlePointerDown}
-      >
-        <div className="w-8 h-1 rounded-full bg-white/20" />
-      </div>
-      {children}
-    </motion.div>
-  );
 }
 
 export default BroadcastPage

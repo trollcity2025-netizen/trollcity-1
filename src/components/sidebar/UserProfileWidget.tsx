@@ -5,13 +5,15 @@ import { useCoins } from '@/lib/hooks/useCoins';
 import { getRoleDisplayName } from '@/lib/supabase';
 import { Crown, Coins, Gem } from 'lucide-react';
 import { getGlowingTextStyle } from '@/lib/perkEffects';
+import CashoutDepositModal from '../modals/CashoutDepositModal';
 
 const UserProfileWidget = () => {
   const { profile } = useAuthStore();
   const { level, progress, xpTotal, xpToNext, fetchXP, subscribeToXP, unsubscribe } = useXPStore();
-  const { troll_coins, crowns, loading: coinsLoading } = useCoins();
+  const { troll_coins, crowns, cashout_coins, cashout_reserved_coins, loading: coinsLoading } = useCoins();
   // Get trollmonds from profile (not returned by useCoins hook)
   const displayTrollmonds = profile?.trollmonds ?? 0;
+  const [showDepositModal, setShowDepositModal] = useState(false);
   const prevXPData = useRef({ level: 0, xpTotal: 0, progress: 0 });
 
   // RGB and Glowing Username checks
@@ -90,13 +92,25 @@ const UserProfileWidget = () => {
           </div>
                     <span className="font-mono text-purple-400">{coinsLoading ? '...' : (displayTrollmonds ?? 0).toLocaleString()}</span>
         </div>
-        <div className="flex items-center justify-between text-[10px]">
-          <div className="flex items-center gap-1.5 text-slate-300">
-            <Crown size={11} />
-            <span className="font-bold">Crowns</span>
-          </div>
-                    <span className="font-mono text-slate-300">{coinsLoading ? '...' : (crowns ?? 0).toLocaleString()}</span>
-        </div>
+         <div className="flex items-center justify-between text-[10px]">
+           <div className="flex items-center gap-1.5 text-slate-300">
+             <Crown size={11} />
+             <span className="font-bold">Crowns</span>
+           </div>
+                     <span className="font-mono text-slate-300">{coinsLoading ? '...' : (crowns ?? 0).toLocaleString()}</span>
+         </div>
+         <div className="flex items-center justify-between text-[10px]" onClick={() => setShowDepositModal(true)}>
+           <div className="flex items-center gap-1.5 text-emerald-400 cursor-pointer hover:text-emerald-300" title="Click to deposit gifted coins into non-reversible cashout escrow">
+             <Coins size={11} />
+             <span className="font-bold">Cashout Coins</span>
+           </div>
+           <span className="font-mono text-emerald-400 cursor-pointer">
+             {coinsLoading ? '...' : (cashout_coins ?? 0).toLocaleString()}
+             {cashout_reserved_coins > 0 && <span className="text-xs text-emerald-500 ml-1">+{cashout_reserved_coins.toLocaleString()} reserved</span>}
+           </span>
+         </div>
+
+         <CashoutDepositModal isOpen={showDepositModal} onClose={() => setShowDepositModal(false)} />
       </div>
     </div>
   );

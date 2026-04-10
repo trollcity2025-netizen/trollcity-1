@@ -35,7 +35,7 @@ export default function AdminAdvertisements() {
         .from('user_advertisements')
         .select(`
           *,
-          user_profiles (username)
+          user_profiles!user_advertisements_user_id_fkey (username)
         `)
         .order('submitted_at', { ascending: false });
 

@@ -9,9 +9,10 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { Stream } from '../../types/broadcast';
 import { toast } from 'sonner';
-import { Eye, Heart, MessageCircle, Gift, Share2, Users, UserPlus } from 'lucide-react';
+import { Eye, Heart, MessageCircle, Gift, Share2, Users, UserPlus, Coins } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Room, RoomEvent, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
+import ShareModal from './ShareModal';
 
 interface StreamSwipeCardProps {
   stream: Stream & {
@@ -24,6 +25,7 @@ interface StreamSwipeCardProps {
   isActive: boolean;
   isMuted: boolean;
   onClose: () => void;
+  broadcasterCoins?: number;
 }
 
 // Extended stream type with broadcaster info
@@ -35,7 +37,7 @@ type StreamWithProfile = Stream & {
   };
 };
 
-export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: StreamSwipeCardProps) {
+export default function StreamSwipeCard({ stream, isActive, isMuted, onClose, broadcasterCoins }: StreamSwipeCardProps) {
   const navigate = useNavigate();
   const { user, profile } = useAuthStore();
   
@@ -44,6 +46,7 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
   const [likeCount, setLikeCount] = useState(stream.total_likes || 0);
   const [isJoining, setIsJoining] = useState(false);
   const [showJoinPrompt, setShowJoinPrompt] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   
   const roomRef = useRef<Room | null>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -220,30 +223,9 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
     navigate(`/watch/${stream.id}?from=swipe`);
   };
   
-  // Handle share
-  const handleShare = async () => {
-    // Use username for personalized URL if available, otherwise fall back to stream ID
-    const shareUrl = broadcaster?.username 
-      ? `${window.location.origin}/watch/${broadcaster.username}`
-      : `${window.location.origin}/watch/${stream.id}`;
-    
-    const shareData = {
-      title: stream.title || 'Live Stream',
-      text: `Check out this live stream by @${broadcaster?.username || 'someone'}!`,
-      url: shareUrl
-    };
-    
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (error) {
-        // User cancelled or error
-      }
-    } else {
-      // Fallback to clipboard
-      await navigator.clipboard.writeText(shareData.url);
-      toast.success('Link copied to clipboard!');
-    }
+  // Handle share - open modal
+  const handleShare = () => {
+    setIsShareModalOpen(true);
   };
   
   // Handle join as guest (on stage)
@@ -340,7 +322,13 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
                 </span>
               )}
             </div>
-            <span className="text-white/60 text-xs capitalize sm:text-sm">{stream.category}</span>
+<span className="text-white/60 text-xs capitalize sm:text-sm">{stream.category}</span>
+            {broadcasterCoins !== undefined && broadcasterCoins > 0 && (
+              <div className="flex items-center gap-1 text-amber-400 text-xs sm:text-sm">
+                <Coins className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="font-bold">{broadcasterCoins.toLocaleString()}</span>
+              </div>
+            )}
           </div>
         </div>
         
@@ -428,6 +416,14 @@ export default function StreamSwipeCard({ stream, isActive, isMuted, onClose }: 
           </div>
         </div>
       )}
+
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        streamTitle={stream.title}
+        streamUrl={`${window.location.origin}/watch/${stream.id}`}
+        broadcasterName={broadcaster?.username}
+      />
     </div>
   );
 }

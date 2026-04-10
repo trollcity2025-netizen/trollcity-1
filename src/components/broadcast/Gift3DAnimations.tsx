@@ -548,7 +548,7 @@ function SceneDefault({ color }: { color: string }) {
   return (
     <>
       <Float speed={2} rotationIntensity={0.4} floatIntensity={0.6}>
-        <AnimatedMesh geometry="dodecahedron" color={color} scale={0.8} distort={0.2} speed={1.5} />
+        <AnimatedMesh geometry="sphere" color={color} scale={0.8} distort={0.2} speed={1.5} />
       </Float>
       <Sparkles count={60} scale={5} size={3} speed={0.5} color={color} />
       <pointLight position={[0, 2, 3]} intensity={5} color={color} distance={8} />

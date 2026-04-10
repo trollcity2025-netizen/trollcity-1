@@ -57,7 +57,7 @@ export default function BroadcastTicker({ className }: BroadcastTickerProps) {
   const lastTimeRef = useRef<number>(0);
 
   const themeStyle = THEME_STYLES[settings.theme] || THEME_STYLES.neon;
-  const positionClass = POSITION_CLASSES[settings.position] || POSITION_CLASSES.top;
+  const positionClass = POSITION_CLASSES[settings.position] || POSITION_CLASSES.bottom;
   const speedPxPerSec = SPEED_MAP[settings.speed] || SPEED_MAP.medium;
 
   // Build the scrolling content - duplicate messages for seamless loop

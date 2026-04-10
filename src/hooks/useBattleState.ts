@@ -2,16 +2,22 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../lib/store';
 
+export type BattleStatus = 'idle' | 'waiting_for_opponent' | 'pending_locked' | 'countdown' | 'active' | 'ended' | 'cancelled';
+
 export interface BattleState {
   active: boolean;
   battleId: string | null;
-  hostId: string | null;
-  challengerId: string | null;
-  broadcasterScore: number;
-  challengerScore: number;
+  teamACaptain: string | null;
+  teamBCaptain: string | null;
+  teamAMembers: string[];
+  teamBMembers: string[];
+  teamAScore: number;
+  teamBScore: number;
   startedAt: Date | null;
   endsAt: Date | null;
   suddenDeath: boolean;
+  status: BattleStatus;
+  scheduledStartAt: Date | null;
 }
 
 export interface BattleSupporter {
@@ -31,13 +37,17 @@ export function useBattleState({ streamId, localUserId, isHost, hostId }: UseBat
   const [battleState, setBattleState] = useState<BattleState>({
     active: false,
     battleId: null,
-    hostId: null,
-    challengerId: null,
-    broadcasterScore: 0,
-    challengerScore: 0,
+    teamACaptain: null,
+    teamBCaptain: null,
+    teamAMembers: [],
+    teamBMembers: [],
+    teamAScore: 0,
+    teamBScore: 0,
     startedAt: null,
     endsAt: null,
     suddenDeath: false,
+    status: 'idle',
+    scheduledStartAt: null,
   });
   const [supporters, setSupporters] = useState<Map<string, BattleSupporter>>(new Map());
   const [userTeam, setUserTeam] = useState<'broadcaster' | 'challenger' | null>(null);
@@ -71,52 +81,185 @@ export function useBattleState({ streamId, localUserId, isHost, hostId }: UseBat
       }
     };
   }, [battleState.battleId, battleState.active]);
-
-  // Timer countdown effect
+  
+  // ✅ SINGLE BATTLE STATE CHANNEL
+  // ALL CLIENTS SUBSCRIBE TO THIS. ONLY UPDATE FROM SERVER RECORD.
   useEffect(() => {
-    if (battleState.active && battleState.endsAt) {
-      // Clear any existing timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+    if (!battleState.battleId) return;
+    
+    const battleChannel = supabase.channel(`battle:${battleState.battleId}`);
+    
+    battleChannel
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'battles',
+        filter: `id=eq.${battleState.battleId}`
+      }, (payload) => {
+        const battle = payload.new;
+        
+        // ✅ ONLY UPDATE STATE FROM SERVER RECORD
+        setBattleState({
+          active: battle.status === 'active',
+          battleId: battle.id,
+          teamACaptain: battle.team_a_captain,
+          teamBCaptain: battle.team_b_captain,
+          teamAMembers: battle.team_a_member_ids || [],
+          teamBMembers: battle.team_b_member_ids || [],
+          teamAScore: battle.team_a_score || 0,
+          teamBScore: battle.team_b_score || 0,
+          startedAt: battle.started_at ? new Date(battle.started_at) : null,
+          endsAt: battle.ends_at ? new Date(battle.ends_at) : null,
+          suddenDeath: false,
+          status: battle.status,
+          scheduledStartAt: battle.scheduled_start_at ? new Date(battle.scheduled_start_at) : null,
+        });
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(battleChannel);
+    };
+  }, [battleState.battleId]);
+  
+  // ✅ LISTEN FOR BATTLE RECORD CHANGES - SERVER IS ONLY AUTHORITY
+  useEffect(() => {
+    if (!battleState.battleId) return;
+    
+    const battleChannel = supabase.channel(`battle-state:${battleState.battleId}`);
+    
+    // Subscribe FIRST before listening
+    battleChannel.subscribe((status) => {
+      console.log('[BattleState] Battle channel status:', status);
+    });
+    
+    battleChannel
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'battles',
+        filter: `id=eq.${battleState.battleId}`
+      }, (payload) => {
+        const battle = payload.new;
+        console.log('[BattleState] Battle updated:', battle);
+        
+        // ✅ ONLY UPDATE FROM SERVER - NO CLIENT DECISIONS
+        setBattleState({
+          active: battle.status === 'active',
+          battleId: battle.id,
+          teamACaptain: battle.team_a_captain,
+          teamBCaptain: battle.team_b_captain,
+          teamAMembers: battle.team_a_member_ids || [],
+          teamBMembers: battle.team_b_member_ids || [],
+          teamAScore: battle.team_a_score || 0,
+          teamBScore: battle.team_b_score || 0,
+          startedAt: battle.started_at ? new Date(battle.started_at) : null,
+          endsAt: battle.ends_at ? new Date(battle.ends_at) : null,
+          suddenDeath: false,
+          status: battle.status,
+          scheduledStartAt: battle.scheduled_start_at ? new Date(battle.scheduled_start_at) : null,
+        });
+      });
+      
+    return () => {
+      supabase.removeChannel(battleChannel);
+    };
+  }, [battleState.battleId]);
 
-      const updateTimer = () => {
-        const now = Date.now();
-        const endsAt = battleState.endsAt?.getTime() || 0;
-        const remaining = Math.max(0, Math.floor((endsAt - now) / 1000));
+  // ✅ LISTEN FOR BATTLE STATE CHANGES - SERVER IS ONLY AUTHORITY
+  useEffect(() => {
+    if (!streamId || battleState.battleId) return;
+
+    const streamChannel = supabase.channel(`stream-battle:${streamId}`);
+    
+    // Subscribe FIRST, then react to updates
+    streamChannel.subscribe((status) => {
+      console.log('[BattleState] Stream channel status:', status);
+    });
+    
+    streamChannel
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'streams',
+        filter: `id=eq.${streamId}`
+      }, (payload) => {
+        console.log('[BattleState] Stream updated:', payload.new);
+        
+        // Only react to battle_id being set - that means BOTH sides have clicked
+        if (payload.new.battle_id && !payload.old.battle_id) {
+          console.log('[BattleState] Battle confirmed for this stream:', payload.new.battle_id);
+          setBattleState(prev => ({
+            ...prev,
+            battleId: payload.new.battle_id,
+          }));
+        }
+        // Clear battle state if battle_id is removed
+        if (!payload.new.battle_id && payload.old.battle_id) {
+          setBattleState({
+            active: false,
+            battleId: null,
+            teamACaptain: null,
+            teamBCaptain: null,
+            teamAMembers: [],
+            teamBMembers: [],
+            teamAScore: 0,
+            teamBScore: 0,
+            startedAt: null,
+            endsAt: null,
+            suddenDeath: false,
+            status: 'idle',
+            scheduledStartAt: null,
+          });
+        }
+      });
+      
+    return () => {
+      supabase.removeChannel(streamChannel);
+    };
+  }, [streamId, battleState.battleId]);
+
+  // ✅ SERVER-AUTHORITATIVE TIMER
+  // NO LOCAL DECISIONS. NO DRIFT. PERFECT SYNC.
+  useEffect(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    
+    const updateTimer = () => {
+      const now = Date.now();
+      
+      // Countdown phase - count down to server scheduled start time
+      if (battleState.status === 'countdown' && battleState.scheduledStartAt) {
+        const remaining = Math.max(0, Math.floor((battleState.scheduledStartAt.getTime() - now) / 1000));
+        setRemainingTime(remaining);
+        return;
+      }
+      
+      // Active battle
+      if (battleState.status === 'active' && battleState.endsAt) {
+        const remaining = Math.max(0, Math.floor((battleState.endsAt.getTime() - now) / 1000));
         setRemainingTime(remaining);
 
-        // Check for sudden death (last 10 seconds)
         if (remaining <= 10 && remaining > 0 && !battleState.suddenDeath) {
           setBattleState(prev => ({ ...prev, suddenDeath: true }));
         }
-
-        // Battle ended
-        if (remaining === 0) {
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-          }
-          // Auto-end battle when timer reaches 0
-          setBattleState(prev => ({ ...prev, active: false }));
-        }
-      };
-
-      updateTimer();
-      timerRef.current = setInterval(updateTimer, 1000);
-
-      return () => {
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-        }
-      };
-    } else if (battleState.active && battleState.startedAt && !battleState.endsAt) {
-      // Fallback: calculate endsAt from startedAt if not set in DB
-      const calculatedEndsAt = new Date(battleState.startedAt.getTime() + 3.5 * 60 * 1000);
-      setBattleState(prev => ({ ...prev, endsAt: calculatedEndsAt }));
-    } else {
+        
+        return;
+      }
+      
       setRemainingTime(0);
-    }
-  }, [battleState.active, battleState.endsAt, battleState.suddenDeath, battleState.startedAt]);
+    };
+
+    updateTimer();
+    timerRef.current = setInterval(updateTimer, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [battleState.status, battleState.scheduledStartAt, battleState.endsAt, battleState.suddenDeath]);
 
   // Subscribe to battle state changes via Supabase realtime
   useEffect(() => {
@@ -125,41 +268,45 @@ export function useBattleState({ streamId, localUserId, isHost, hostId }: UseBat
     // Fetch current battle state on mount (for users who join after battle starts)
     const fetchCurrentBattle = async () => {
       try {
-        // Check both challenger_stream_id and opponent_stream_id
-        const { data: challengerBattle } = await supabase
+        // Check both team_a_stream_id and team_b_stream_id
+        const { data: teamABattle } = await supabase
           .from('battles')
           .select('*')
-          .eq('challenger_stream_id', streamId)
-          .eq('status', 'active')
+          .eq('team_a_stream_id', streamId)
+          .in('status', ['waiting_for_opponent', 'pending_locked', 'countdown', 'active'])
           .maybeSingle();
 
-        const { data: opponentBattle } = await supabase
+        const { data: teamBBattle } = await supabase
           .from('battles')
           .select('*')
-          .eq('opponent_stream_id', streamId)
-          .eq('status', 'active')
+          .eq('team_b_stream_id', streamId)
+          .in('status', ['waiting_for_opponent', 'pending_locked', 'countdown', 'active'])
           .maybeSingle();
 
-        const currentBattle = challengerBattle || opponentBattle;
+        const currentBattle = teamABattle || teamBBattle;
 
         if (currentBattle) {
-          console.log('[BattleState] Found active battle on mount:', currentBattle.id);
-          setBattleState({
+          console.log('[BattleState] Found battle on mount:', currentBattle.id);
+           setBattleState({
             active: currentBattle.status === 'active',
             battleId: currentBattle.id,
-            hostId: currentBattle.host_id,
-            challengerId: currentBattle.challenger_id,
-            broadcasterScore: currentBattle.broadcaster_score || 0,
-            challengerScore: currentBattle.challenger_score || 0,
+            teamACaptain: currentBattle.team_a_captain,
+            teamBCaptain: currentBattle.team_b_captain,
+            teamAMembers: currentBattle.team_a_member_ids || [],
+            teamBMembers: currentBattle.team_b_member_ids || [],
+            teamAScore: currentBattle.team_a_score || 0,
+            teamBScore: currentBattle.team_b_score || 0,
             startedAt: currentBattle.started_at ? new Date(currentBattle.started_at) : null,
             endsAt: currentBattle.ends_at ? new Date(currentBattle.ends_at) : null,
-            suddenDeath: currentBattle.sudden_death || false,
+            suddenDeath: false,
+            status: currentBattle.status,
+            scheduledStartAt: currentBattle.scheduled_start_at ? new Date(currentBattle.scheduled_start_at) : null,
           });
 
           // Auto-assign team
-          if (localUserId === currentBattle.challenger_id) {
+          if (localUserId === currentBattle.team_b_captain) {
             setUserTeam('challenger');
-          } else if (localUserId === currentBattle.host_id) {
+          } else if (localUserId === currentBattle.team_a_captain) {
             setUserTeam('broadcaster');
           }
         }
@@ -177,7 +324,7 @@ export function useBattleState({ streamId, localUserId, isHost, hostId }: UseBat
           event: 'INSERT',
           schema: 'public',
           table: 'battles',
-          filter: `challenger_stream_id=eq.${streamId}`
+          filter: `team_a_stream_id=eq.${streamId}`
         },
         (payload) => {
           console.log('[BattleState] Battle INSERT received:', payload.new);
@@ -298,17 +445,22 @@ export function useBattleState({ streamId, localUserId, isHost, hostId }: UseBat
         (payload) => {
           console.log('[BattleState] Opponent battle UPDATE received:', payload.new);
           const updated = payload.new;
-          setBattleState(prev => ({
-            ...prev,
-            active: updated.status === 'active',
-            battleId: updated.id || prev.battleId,
-            hostId: updated.host_id || prev.hostId,
-            challengerId: updated.challenger_id || prev.challengerId,
-            broadcasterScore: updated.broadcaster_score || 0,
-            challengerScore: updated.challenger_score || 0,
-            suddenDeath: updated.sudden_death || false,
-            endsAt: updated.ends_at ? new Date(updated.ends_at) : prev.endsAt,
-          }));
+           setBattleState(prev => ({
+             ...prev,
+             active: updated.status === 'active',
+             battleId: updated.id || prev.battleId,
+             hostId: updated.host_id || prev.hostId,
+             challengerId: updated.challenger_id || prev.challengerId,
+             broadcasterScore: updated.broadcaster_score || 0,
+             challengerScore: updated.challenger_score || 0,
+             suddenDeath: updated.sudden_death || false,
+             startedAt: updated.started_at ? new Date(updated.started_at) : prev.startedAt,
+             endsAt: updated.ends_at ? new Date(updated.ends_at) : prev.endsAt,
+             status: updated.status,
+             hostReady: updated.host_ready || false,
+             opponentReady: updated.opponent_ready || false,
+             scheduledStartAt: updated.scheduled_start_at ? new Date(updated.scheduled_start_at) : prev.scheduledStartAt,
+           }));
           
           if (updated.status === 'ended') {
             setJoinWindowOpen(false);
@@ -329,18 +481,23 @@ export function useBattleState({ streamId, localUserId, isHost, hostId }: UseBat
   }, [streamId, localUserId]);
 
   // Start a battle (called by guest who is in a seat)
-  const startBattle = useCallback(async () => {
-    if (!localUserId || !streamId) {
-      console.error('[BattleState] Cannot start battle: missing user or stream');
+  const startBattle = useCallback(async (opponentId: string, opponentStreamId: string) => {
+    if (!localUserId || !streamId || !opponentId || !opponentStreamId) {
+      console.error('[BattleState] Cannot start battle: missing required parameters');
       return;
     }
 
     try {
-      console.log('[BattleState] Starting battle:', { streamId, challengerId: localUserId });
+      console.log('[BattleState] Starting battle:', { streamId, hostId: hostId, opponentId, opponentStreamId });
       
-      const { data, error } = await supabase.rpc('start_battle', {
-        p_stream_id: streamId,
-        p_challenger_id: localUserId,
+      const { data, error } = await supabase.functions.invoke('battles', {
+        body: {
+          action: 'start_battle',
+          stream_id: streamId,
+          host_id: hostId,
+          opponent_id: opponentId,
+          opponent_stream_id: opponentStreamId,
+        },
       });
 
       if (error) {
@@ -348,22 +505,23 @@ export function useBattleState({ streamId, localUserId, isHost, hostId }: UseBat
         return;
       }
 
-      console.log('[BattleState] Battle started response:', data);
+      console.log('[BattleState] Battle created response:', data);
       
-      // Optimistic update - immediately show battle UI
-      // Data might be the battle ID directly or an object
-      const battleId = typeof data === 'string' ? data : data?.id;
-      if (battleId) {
+      if (data.battle) {
         setBattleState({
-          active: true,
-          battleId: battleId,
-          hostId: hostId || null,
-          challengerId: localUserId,
+          active: false,
+          battleId: data.battle.id,
+          hostId: data.battle.host_id,
+          challengerId: data.battle.opponent_id,
           broadcasterScore: 0,
           challengerScore: 0,
-          startedAt: new Date(),
-          endsAt: new Date(Date.now() + 3.5 * 60 * 1000),
+          startedAt: null,
+          endsAt: null,
           suddenDeath: false,
+          status: 'pending',
+          hostReady: false,
+          opponentReady: false,
+          scheduledStartAt: new Date(data.battle.scheduled_start_at),
         });
         setJoinWindowOpen(true);
         joinWindowTimerRef.current = setTimeout(() => {
@@ -374,6 +532,89 @@ export function useBattleState({ streamId, localUserId, isHost, hostId }: UseBat
       console.error('[BattleState] Exception starting battle:', err);
     }
   }, [streamId, localUserId, hostId]);
+
+  // ✅ LISTEN FOR FORFEIT EVENTS
+  useEffect(() => {
+    if (!battleState.battleId) return;
+    
+    const forfeitChannel = supabase.channel(`battle:${battleState.battleId}`);
+    forfeitChannel.on('broadcast', { event: 'battle_forfeited' }, (payload) => {
+      const data = payload.payload;
+      
+      // Reset battle state
+      setBattleState({
+        active: false,
+        battleId: null,
+        hostId: null,
+        challengerId: null,
+        broadcasterScore: 0,
+        challengerScore: 0,
+        startedAt: null,
+        endsAt: null,
+        suddenDeath: false,
+        status: null,
+        hostReady: false,
+        opponentReady: false,
+        scheduledStartAt: null,
+      });
+      
+      // Show victory/defeat popup
+      const isWinner = (data.winner === 'A' && isHost) || (data.winner === 'B' && !isHost);
+      
+      // Trigger redirect back to broadcast
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('battle:ended', { 
+          detail: { victory: isWinner, crowns: isWinner ? 2 : 0 }
+        }));
+      }, 1500);
+    }).subscribe();
+    
+    return () => {
+      supabase.removeChannel(forfeitChannel);
+    };
+  }, [battleState.battleId, isHost]);
+
+  // Confirm broadcaster is ready for battle
+  const confirmBattleReady = useCallback(async () => {
+    if (!battleState.battleId) {
+      console.error('[BattleState] No active battle to confirm ready');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('battles', {
+        body: {
+          action: 'confirm_battle_screen',
+          battle_id: battleState.battleId,
+        },
+      });
+
+      if (error) {
+        console.error('[BattleState] Error confirming ready:', error);
+        return;
+      }
+
+      console.log('[BattleState] Ready confirmed:', data);
+      
+      if (data.countdown_started) {
+        setBattleState(prev => ({
+          ...prev,
+          status: 'pending',
+          scheduledStartAt: new Date(data.start_time),
+          hostReady: true,
+          opponentReady: true,
+        }));
+      } else {
+        setBattleState(prev => ({
+          ...prev,
+          hostReady: data.host_confirmed,
+          opponentReady: data.opponent_confirmed,
+        }));
+      }
+    } catch (err) {
+      console.error('[BattleState] Exception confirming ready:', err);
+    }
+  }, [battleState.battleId]);
 
   // Pick a side (broadcaster or challenger)
   const pickSide = useCallback(async (team: 'broadcaster' | 'challenger') => {
@@ -504,6 +745,7 @@ export function useBattleState({ streamId, localUserId, isHost, hostId }: UseBat
     joinWindowOpen,
     remainingTime,
     startBattle,
+    confirmBattleReady,
     pickSide,
     endBattle,
     isBroadcasterTeam,
