@@ -2,7 +2,7 @@ import React from 'react'
 import { useAuthStore } from '../lib/store'
 import { supabase } from '@/lib/supabase'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Boxes, Sparkles, KeyRound } from 'lucide-react'
+import { Settings, Boxes, Sparkles, KeyRound, Trash2 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { setResetPin } from '@/services/passwordManager'
@@ -288,6 +288,22 @@ export default function ProfileSettings() {
             className={`px-4 py-2 rounded-lg ${trollCityTheme.gradients.button} text-white text-sm font-semibold`}
           >
             Open
+          </button>
+        </div>
+
+        <div className={`${trollCityTheme.components.card} border border-red-500/30 flex items-center justify-between`}>
+          <div className="flex items-center gap-3">
+            <Trash2 className="w-5 h-5 text-red-400" />
+            <div>
+              <h2 className="text-lg font-semibold text-red-400">Delete Account</h2>
+              <p className={`text-xs ${trollCityTheme.text.muted}`}>Permanently delete your account and all data.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/profile/delete')}
+            className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-white text-sm font-semibold"
+          >
+            Delete
           </button>
         </div>
       </div>

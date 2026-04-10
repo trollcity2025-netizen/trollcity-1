@@ -120,6 +120,7 @@ const GiveawaysPage = lazyWithRetry(() => import("./pages/GiveawaysPage"));
 const UserInventory = lazyWithRetry(() => import("./pages/UserInventory"));
 const Troting = lazyWithRetry(() => import("./pages/Troting"));
 const ProfileSettings = lazyWithRetry(() => import("./pages/ProfileSettings"));
+const DeleteAccount = lazyWithRetry(() => import("./pages/DeleteAccount"));
 const SellOnTrollCity = lazyWithRetry(() => import("./pages/SellOnTrollCity"));
 const SellerOrders = lazyWithRetry(() => import("./pages/SellerOrders"));
 const MyOrders = lazyWithRetry(() => import("./pages/MyOrders"));
@@ -1199,6 +1200,7 @@ function AppContent() {
                   <Route path="/inventory" element={<UserInventory />} />
           <Route path="/troting" element={<Troting />} />
           <Route path="/profile/settings" element={<ProfileSettings />} />
+                  <Route path="/profile/delete" element={<DeleteAccount />} />
                   <Route path="/bank" element={<TrollBank />} />
                   <Route path="/leaderboard" element={<Leaderboard />} />
                   <Route path="/credit-scores" element={<CreditScorePage />} />
