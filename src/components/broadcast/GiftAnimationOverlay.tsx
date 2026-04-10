@@ -25,7 +25,7 @@ const getGiftDetails = (gift: BroadcastGift): { id: string; name: string; icon: 
     return { id: officialGift.id, name: officialGift.name, icon: officialGift.icon, cost: officialGift.cost };
   }
   // Try to get amount from gift payload
-  const giftAmount = gift.amount || giftData?.quantity || giftData?.cost || 0;
+  const giftAmount = gift.amount || gift.quantity || 0;
   return {
     id: gift.gift_id || gift.gift_slug || 'unknown',
     name: gift.gift_name || 'Gift',

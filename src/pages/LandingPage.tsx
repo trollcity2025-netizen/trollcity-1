@@ -8,8 +8,6 @@ import { supabase } from '../lib/supabase';
 import { trollCityTheme } from '../styles/trollCityTheme';
 import HomeLiveGrid from '@/components/broadcast/HomeLiveGrid';
 import AppLayout from '@/components/layout/AppLayout';
-import EventCountdown from '@/components/EventCountdown';
-import { useEventTheme } from '@/components/GlobalEventThemeLayer';
 
 interface PlatformStats {
   totalUsers: number;
@@ -20,7 +18,6 @@ interface PlatformStats {
 export default function LandingPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { isActive, primaryColor, secondaryColor, backgroundAccent, particleEffect } = useEventTheme();
   const [isEntering, setIsEntering] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [stats, setStats] = useState<PlatformStats>({
@@ -132,9 +129,6 @@ export default function LandingPage() {
           />
         )}
         
-        {/* Event Countdown Banner */}
-        <EventCountdown />
-
         {/* Money Rain Effect */}
         {isEntering && <MoneyRain />}
 

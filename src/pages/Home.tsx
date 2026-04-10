@@ -4,14 +4,10 @@ import { useNavigate, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/lib/store'
 import { trollCityTheme } from '@/styles/trollCityTheme'
-import EventCountdown from '@/components/EventCountdown'
 import TrollWallFeed from '@/components/home/TrollWallFeed'
 import { FloatingUserBackground } from '@/components/home/FloatingUserBackground'
 import { supabase } from '@/lib/supabase'
 import { Radio, Mic, Users, Play, Eye, X, ChevronRight, Link2 } from 'lucide-react'
-import EasterEggOverlay from '@/components/easter/EasterEggOverlay'
-import EasterHuntBanner from '@/components/easter/EasterHuntBanner'
-import { useEventTheme } from '@/components/GlobalEventThemeLayer'
 
 const PWAInstallPrompt = lazy(() => import('../components/PWAInstallPrompt'))
 const TCNNPopupWidget = lazy(() => import('@/components/tcnn/TCNNPopupWidget'))
@@ -61,7 +57,6 @@ type TabType = 'live' | 'pods' | 'wall'
 export default function Home() {
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
-  const { isActive, primaryColor, secondaryColor, backgroundAccent } = useEventTheme()
   const [activeTab, setActiveTab] = useState<TabType>('wall')
   const [liveItems, setLiveItems] = useState<LiveItem[]>([])
   const [podItems, setPodItems] = useState<LiveItem[]>([])
@@ -175,27 +170,11 @@ export default function Home() {
   }
 
   return (
-    <div className={`relative h-dvh flex flex-col overflow-hidden ${isActive ? backgroundAccent : trollCityTheme.backgrounds.primary}`}>
+    <div className={`relative h-dvh flex flex-col overflow-hidden ${trollCityTheme.backgrounds.primary}`}>
       {/* TCNN Popup - Only shows when TCNN is live */}
       <Suspense fallback={null}>
         <TCNNPopupWidget onRequireAuth={requireAuth} />
       </Suspense>
-
-      {/* Event Theme Overlay - More visible for testing */}
-      {isActive && (
-        <div 
-          className="absolute inset-0 pointer-events-none z-30"
-          style={{
-            background: `linear-gradient(135deg, ${primaryColor}20 0%, ${secondaryColor}20 100%)`,
-          }}
-        />
-      )}
-
-      {/* Event Countdown Banner */}
-      <EventCountdown />
-
-      {/* Easter Hunt Banner */}
-      <EasterHuntBanner />
 
       {/* Animated Background */}
       <AnimatedGradient />
@@ -206,16 +185,13 @@ export default function Home() {
         <PWAInstallPrompt />
       </Suspense>
 
-      {/* Content */}
+{/* Content */}
         <div className="relative z-10 flex flex-col flex-1 min-h-0 px-3 md:px-5 pt-2 pb-1 safe-top">
-        {/* Easter Egg Overlay */}
-        <EasterEggOverlay pageId="home" />
 
         <div className="max-w-7xl mx-auto flex flex-col flex-1 min-h-0 w-full">
           {/* Header with Tabs */}
           <section 
             className={`${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} rounded-2xl p-2 flex-shrink-0`}
-            style={isActive ? { borderColor: `${primaryColor}40` } : {}}
           >
             {/* Tabs */}
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
@@ -223,13 +199,9 @@ export default function Home() {
                 onClick={() => setActiveTab('wall')}
                 className={`px-2 py-1 rounded-lg font-semibold text-xs transition-all whitespace-nowrap ${
                   activeTab === 'wall'
-                    ? isActive ? '' : 'bg-purple-600 text-white'
+                    ? 'bg-purple-600 text-white'
                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
                 }`}
-                style={activeTab === 'wall' && isActive ? {
-                  backgroundColor: primaryColor,
-                  color: 'white',
-                } : {}}
               >
                 Troll Feed
               </button>
@@ -237,13 +209,9 @@ export default function Home() {
                 onClick={() => setActiveTab('live')}
                 className={`flex items-center gap-1.5 px-2 py-1 rounded-lg font-semibold text-xs transition-all whitespace-nowrap ${
                   activeTab === 'live'
-                    ? isActive ? '' : 'bg-red-600 text-white'
+                    ? 'bg-red-600 text-white'
                     : 'bg-white/5 text-slate-400 hover:bg-white/10'
                 }`}
-                style={activeTab === 'live' && isActive ? {
-                  backgroundColor: primaryColor,
-                  color: 'white',
-                } : {}}
               >
                 <Radio className="w-3.5 h-3.5" />
                 Live Now

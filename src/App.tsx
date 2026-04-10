@@ -4,7 +4,6 @@ import React, { useEffect, Suspense, useState, useRef } from "react";
 import TrollProvider from "./troll/TrollProvider";
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./lib/store";
-import { GlobalEventThemeLayer } from "./components/GlobalEventThemeLayer";
 import { GlobalEventProvider } from "./contexts/GlobalEventContext";
 
 import { useEligibilityStore } from "./lib/eligibilityStore";
@@ -20,7 +19,6 @@ import GlobalPodBanner from "./components/GlobalPodBanner";
 import BugAlertPopup from "./components/BugAlertPopup";
 import { useBugAlertStore } from "./stores/useBugAlertStore";
 import DailyChurchNotification from "./components/church/DailyChurchNotification";
-import GlobalEventsBanner from "./components/GlobalEventsBanner";
 import { useGlobalApp } from "./contexts/GlobalAppContext";
 import { updateRoute } from "./utils/sessionStorage";
 import { useDebouncedProfileUpdate } from "./hooks/useDebouncedProfileUpdate";
@@ -102,7 +100,6 @@ const AudioSettings = lazyWithRetry(() => import("./pages/live/AudioSettings"));
 const TCPS = lazyWithRetry(() => import("./pages/TCPS"));
 const MatchPage = lazyWithRetry(() => import("./pages/MatchPage"));
 const TMFamilyInviteHandler = lazyWithRetry(() => import("./components/trollmatch/TMFamilyInviteHandler"));
-const EasterEggGlobalOverlay = lazyWithRetry(() => import("./components/easter/EasterEggGlobalOverlay"));
 const TrollPodsListing = lazyWithRetry(() => import("./pages/pods/TrollPodsListing"));
 const TrollPodRoom = lazyWithRetry(() => import("./pages/pods/TrollPodRoom"));
 const PodSummary = lazyWithRetry(() => import("./pages/pods/PodSummary"));
@@ -1027,7 +1024,6 @@ function AppContent() {
       <GlobalErrorBanner />
       
       <GlobalPayoutBanner />
-      <GlobalEventsBanner />
       {/* Officer Alert Banner */}
       <OfficerAlertBanner />
       
@@ -1950,13 +1946,7 @@ function App() {
   return (
     <GlobalEventProvider>
       <TrollProvider>
-        <GlobalEventThemeLayer>
-          <AppContent />
-        </GlobalEventThemeLayer>
-        {/* Easter Egg Global Overlay - eggs on all pages during hunt */}
-        <Suspense fallback={null}>
-          <EasterEggGlobalOverlay />
-        </Suspense>
+        <AppContent />
         {/* TM Family Invite Handler - shows pending invites as notifications */}
         <TMFamilyInviteHandler />
       </TrollProvider>
