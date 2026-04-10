@@ -566,16 +566,24 @@ function ViewerPage() {
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
         let totalUsers = 0;
+        const broadcasterId = stream?.user_id;
         for (const [key, users] of Object.entries(state)) {
-          totalUsers += (users as any[]).length;
+          // Exclude broadcaster from viewer count
+          if (key !== broadcasterId) {
+            totalUsers += (users as any[]).length;
+          }
         }
         setViewerCount(totalUsers);
       })
       .on('presence', { event: 'join' }, ({ newPresences }) => {
         const state = channel.presenceState();
         let totalUsers = 0;
+        const broadcasterId = stream?.user_id;
         for (const [key, users] of Object.entries(state)) {
-          totalUsers += (users as any[]).length;
+          // Exclude broadcaster from viewer count
+          if (key !== broadcasterId) {
+            totalUsers += (users as any[]).length;
+          }
         }
         setViewerCount(totalUsers);
         
@@ -588,8 +596,12 @@ function ViewerPage() {
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
         const state = channel.presenceState();
         let totalUsers = 0;
+        const broadcasterId = stream?.user_id;
         for (const [key, users] of Object.entries(state)) {
-          totalUsers += (users as any[]).length;
+          // Exclude broadcaster from viewer count
+          if (key !== broadcasterId) {
+            totalUsers += (users as any[]).length;
+          }
         }
         setViewerCount(totalUsers);
       });
