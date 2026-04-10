@@ -241,8 +241,8 @@ const Header = () => {
         <RGBSearchBar />
       </div>
 
-      {/* Center: Global Ticker */}
-      <div className="flex-1 hidden md:block mx-6 z-10 overflow-hidden">
+      {/* Center: Global Ticker - Show on all screen sizes */}
+      <div className="flex-1 mx-2 md:mx-6 z-10 overflow-hidden">
         <GlobalTicker />
       </div>
 

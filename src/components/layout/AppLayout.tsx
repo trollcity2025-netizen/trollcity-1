@@ -11,9 +11,6 @@ import { setupGlobalMessageNotifications, OFFICER_GROUP_CONVERSATION_ID } from '
 import ChatBubble from '../ChatBubble'
 import { useSidebarStore } from '../../stores/useSidebarStore'
 
-
-import GlobalTicker from '../header/GlobalTicker';
-
 interface AppLayoutProps {
   children: React.ReactNode
   showSidebar?: boolean
@@ -84,9 +81,6 @@ export default function AppLayout({
             <Header />
           </div>
         )}
-
-        {/* Global Ticker - Shows at top of mobile app */}
-        {!isAuthPage && <GlobalTicker />}
 
         {/* User Compliance Prompt */}
         {!isAuthPage && <UserCompliancePrompt />}
