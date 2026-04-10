@@ -236,20 +236,20 @@ const Header = () => {
 
   return (
     <header className="h-[72px] bg-[#0c101f]/80 backdrop-blur-2xl border-b border-white/[0.06] flex items-center justify-between px-4 md:px-8 sticky top-0 z-50">
-      {/* Left: Search Bar */}
-      <div className="flex-none z-10">
+      {/* Left: Search Bar - Smaller on mobile */}
+      <div className="flex-none z-10 w-20 md:w-auto">
         <RGBSearchBar />
       </div>
 
       {/* Center: Global Ticker - Show on all screen sizes */}
-      <div className="flex-1 mx-2 md:mx-6 z-10 overflow-hidden">
+      <div className="flex-1 mx-1 md:mx-6 z-10 overflow-hidden">
         <GlobalTicker />
       </div>
 
-      {/* Right: Icons and User Menu */}
-      <div className="flex-none relative z-10 flex items-center space-x-5">
+      {/* Right: Icons and User Menu - Hide login/signup on mobile (in bubble nav) */}
+      <div className="flex-none relative z-10 flex items-center space-x-3 md:space-x-5">
         {!user && (
-          <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-3">
             <button
               onClick={() => navigate('/auth?mode=login')}
               className="px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white transition-colors duration-200"
