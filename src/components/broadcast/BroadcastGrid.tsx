@@ -994,19 +994,16 @@ export default function BroadcastGrid({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        // Allow host to click to trigger onJoinSeat (which might open invite menu or similar)
-                        // if (isHost && seatIndex !== 0) {
-                        //     toast.info("Seat is open for guests to join!");
-                        //     return;
-                        // }
+                        e.preventDefault();
+                        console.log('[BroadcastGrid] Join seat clicked:', seatIndex);
                         onJoinSeat(seatIndex);
                       }}
-                      className="flex flex-col items-center text-zinc-500 hover:text-white transition-colors"
+                      className="flex flex-col items-center text-zinc-400 hover:text-white transition-colors w-full h-full"
                     >
-                      <div className="p-3 rounded-full border border-dashed border-zinc-600 hover:border-white mb-2">
+                      <div className="p-3 rounded-full border-2 border-dashed border-zinc-500 hover:border-white mb-2 bg-zinc-900/50">
                         <Plus size={24} />
                       </div>
-                      <span className="text-xs font-medium">Join Stage</span>
+                      <span className="text-xs font-medium">Join Box {seatIndex + 1}</span>
                       {(() => {
                         // Get price for this specific seat - supports per-box pricing
                         const seatPrices = stream.seat_prices;
