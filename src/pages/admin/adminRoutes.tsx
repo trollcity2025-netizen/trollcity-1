@@ -1,8 +1,9 @@
 import { lazy } from 'react'
-import { Database, Shield, RefreshCw, Settings, FileText, AlertTriangle, Phone, Gavel, Trophy, DollarSign, Lock, Zap, MapPin, ShoppingCart, Megaphone } from 'lucide-react'
+import { Database, Shield, RefreshCw, Settings, FileText, AlertTriangle, Phone, Gavel, Trophy, DollarSign, Lock, Zap, MapPin, ShoppingCart, Megaphone, Share2, Image } from 'lucide-react'
 import { UserRole } from '../../lib/supabase'
 
 const AdminAdvertisements = lazy(() => import('./AdminAdvertisements'))
+const XAdsStudio = lazy(() => import('./XAdsStudio'))
 
 const DatabaseBackup = lazy(() => import('./DatabaseBackup'))
 const CityControlCenter = lazy(() => import('./CityControlCenter'))
@@ -132,6 +133,19 @@ export const systemManagementRoutes: AdminRoute[] = [
     tileColor: 'text-purple-200',
     tileBgColor: 'bg-purple-500/10',
     tileBorderColor: 'border-purple-500/30',
+    category: 'economy'
+  },
+  {
+    id: 'x-ads-studio',
+    title: 'X Ads Studio',
+    path: '/admin/x-ads',
+    component: XAdsStudio,
+    roles: [UserRole.ADMIN, UserRole.SECRETARY],
+    description: 'Generate and share promotional assets for X and Instagram',
+    icon: <Share2 className="w-5 h-5 text-blue-200" />,
+    tileColor: 'text-blue-200',
+    tileBgColor: 'bg-blue-500/10',
+    tileBorderColor: 'border-blue-500/30',
     category: 'economy'
   },
   {

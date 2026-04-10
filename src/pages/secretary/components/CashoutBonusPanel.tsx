@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '../../../lib/supabase'
 import { toast } from 'sonner'
 import { DollarSign, Check, X, Plus, Gift } from 'lucide-react'
-import { useAuthStore } from '../../lib/store'
+import { useAuthStore } from '../../../lib/store'
 
 interface CashoutBonusRequest {
   id: string
