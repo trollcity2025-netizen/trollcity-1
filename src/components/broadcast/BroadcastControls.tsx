@@ -727,7 +727,7 @@ function OrbBtn({ active, onClick, icon: Icon, label, glow, size, disabled, tool
                 ? "bg-yellow-500/20 border-yellow-500/40 text-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.3)] animate-pulse"
                 : active
                   ? "bg-white/15 border-white/25 text-white shadow-lg"
-                  : "bg-black/40 border-white/10 text-white/80 hover:text-white hover:bg-white/10",
+                  : "bg-white/10 border-white/20 text-white hover:bg-white/20",
           disabled && "opacity-40 cursor-not-allowed"
         )}
       >
@@ -745,8 +745,7 @@ function SideOrb({ onClick, icon: Icon, color, active, disabled, label }: any) {
         onClick={onClick}
         disabled={disabled}
         className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all",
-          active ? `bg-${color}-500/20 border-${color}-500/40 text-${color}-400` : "bg-black/40 border-white/10 text-white/50 hover:text-white",
+          "w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all bg-white/10 border-white/20 text-white hover:bg-white/20",
           disabled && "opacity-30 cursor-not-allowed"
         )}
       >

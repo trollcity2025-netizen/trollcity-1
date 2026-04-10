@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuthStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
-import { Heart, Users } from 'lucide-react';
+import { Heart, Users, Crown, Gem, Coins, LayoutGrid } from 'lucide-react';
 import { Stream } from '../../types/broadcast';
 import { cn } from '../../lib/utils';
 
@@ -11,6 +11,9 @@ interface BroadcastHeaderProps {
     liveViewerCount?: number;
     handleLike: () => void;
     hasPendingChallenge?: boolean;
+    onAddBox?: () => void;
+    onRemoveBox?: () => void;
+    boxCount?: number;
 }
 
 export default function BroadcastHeader({ 
@@ -18,10 +21,12 @@ export default function BroadcastHeader({
     isHost, 
     liveViewerCount, 
     handleLike,
-    hasPendingChallenge
+    hasPendingChallenge,
+    onAddBox,
+    onRemoveBox,
+    boxCount
 }: BroadcastHeaderProps) {
     const { profile, setProfile } = useAuthStore();
-    const [likes, setLikes] = React.useState(0);
     const [isLiking, setIsLiking] = React.useState(false);
     const profileRef = React.useRef(profile);
 
@@ -77,42 +82,66 @@ export default function BroadcastHeader({
         }
     }, [profile?.id, setProfile]);
 
-    // Prefer live count from presence, fallback to DB count
+// Prefer live count from presence, fallback to DB count
     const displayViewerCount = liveViewerCount !== undefined 
         ? liveViewerCount 
         : (stream.current_viewers || stream.viewer_count || 0);
 
-    // Sync likes with stream object
-    React.useEffect(() => {
-        if (stream.total_likes !== undefined) {
-            setLikes(stream.total_likes);
-        }
-    }, [stream.total_likes]);
-
-
+    // Get likes directly from stream - no local state needed
+    const displayLikes = stream.total_likes || 0;
 
     return (
-        <div className="absolute top-16 left-4 right-4 z-50 flex items-center justify-between gap-3 pointer-events-none">
-            {/* Spacer for left side - Back button removed (using nav bubble instead) */}
-            <div className="w-10" />
+        <div className="absolute top-16 left-4 right-4 z-50 flex items-center justify-between gap-2 pointer-events-none">
+            {/* Left: Balance displays + Layout button */}
+            <div className="flex items-center gap-2">
+                {isHost && (
+                    <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md rounded-full border border-white/10">
+                        <button 
+                            onClick={onRemoveBox}
+                            disabled={!onRemoveBox || (boxCount || 1) <= 1}
+                            className="px-2 py-1.5 text-white hover:bg-white/10 disabled:opacity-30 pointer-events-auto"
+                        >
+                            <LayoutGrid size={12} className="rotate-90" />
+                        </button>
+                        <span className="text-[10px] font-bold text-white min-w-[16px] text-center">{boxCount || 1}</span>
+                        <button 
+                            onClick={onAddBox}
+                            disabled={!onAddBox || (boxCount || 1) >= 6}
+                            className="px-2 py-1.5 text-white hover:bg-white/10 disabled:opacity-30 pointer-events-auto"
+                        >
+                            <LayoutGrid size={12} className="-rotate-90" />
+                        </button>
+                    </div>
+                )}
+                {profile && (
+                    <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md rounded-full px-2 py-1 border border-white/10">
+                        <Crown size={10} className="text-amber-400" />
+                        <span className="text-[10px] font-bold text-white">{profile.battle_crowns || 0}</span>
+                        <Gem size={10} className="text-purple-400" />
+                        <span className="text-[10px] font-bold text-white">{profile.trollmonds || 0}</span>
+                        <Coins size={10} className="text-yellow-400" />
+                        <span className="text-[10px] font-bold text-white">{(profile.troll_coins || 0).toLocaleString()}</span>
+                    </div>
+                )}
+            </div>
 
             {/* Right: Stream Stats */}
-            <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/5">
-                    <Users size={14} className="text-zinc-400" />
-                    <span className="text-xs font-bold text-white">{displayViewerCount}</span>
+            <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md rounded-full px-2 py-1.5 border border-white/10">
+                    <Users size={12} className="text-zinc-400" />
+                    <span className="text-[10px] font-bold text-white">{displayViewerCount}</span>
                 </div>
 
                 <button 
                     onClick={handleLike}
                     disabled={isLiking}
                     className={cn(
-                        "flex items-center gap-1.5 bg-pink-500/20 hover:bg-pink-500/30 backdrop-blur-md rounded-full px-3 py-1.5 border border-pink-500/30 transition-all pointer-events-auto",
+                        "flex items-center gap-1.5 bg-pink-500/20 hover:bg-pink-500/30 backdrop-blur-md rounded-full px-2 py-1.5 border border-pink-500/30 transition-all pointer-events-auto",
                         isLiking && "scale-110"
                     )}
                 >
-                    <Heart size={14} className={cn("text-pink-500", isLiking && "fill-pink-500")} />
-                    <span className="text-xs font-bold text-pink-500">{likes}</span>
+                    <Heart size={12} className={cn("text-pink-500", isLiking && "fill-pink-500")} />
+                    <span className="text-[10px] font-bold text-pink-500">{displayLikes.toLocaleString()}</span>
                 </button>
 
             </div>

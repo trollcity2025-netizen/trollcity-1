@@ -2316,6 +2316,9 @@ const isHost = stream?.user_id === user?.id
             isHost={isHost}
             liveViewerCount={viewerCount > 0 ? viewerCount : remoteParticipants.size}
             handleLike={handleLike}
+            boxCount={boxCount}
+            onAddBox={isHost && categoryConfig.allowAddBox && boxCount < 6 ? incrementBoxCount : undefined}
+            onRemoveBox={isHost && categoryConfig.allowDeductBox && boxCount > 1 ? decrementBoxCount : undefined}
           />
         }
         

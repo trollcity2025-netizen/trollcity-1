@@ -975,8 +975,6 @@ function ViewerPage() {
             isHost={false}
             liveViewerCount={viewerCount}
             handleLike={handleLike}
-            onStartBattle={undefined}
-            categoryBattleTerm={undefined}
           />
         }
         

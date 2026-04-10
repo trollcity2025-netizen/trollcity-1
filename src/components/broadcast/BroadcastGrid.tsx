@@ -1292,26 +1292,24 @@ export default function BroadcastGrid({
 
               {/* Host-only side orbs inside broadcaster box (box 0) */}
               {seatIndex === 0 && isHost && canEditBoxes && (
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-2">
-                  <div className="flex flex-col items-center gap-0.5">
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 z-40 flex items-center gap-2">
+                  <div className="flex items-center gap-0.5">
                     <button
                       onClick={(e) => { e.stopPropagation(); onAddBox?.(); }}
                       disabled={!onAddBox}
-                      className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all bg-black/40 border-white/10 text-white/50 hover:text-white"
+                      className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all bg-white/10 border-white/20 text-white hover:bg-white/20"
                     >
                       <Plus size={14} />
                     </button>
-                    <span className="text-[7px] text-slate-500 font-medium leading-none">+</span>
                   </div>
-                  <div className="flex flex-col items-center gap-0.5">
+                  <div className="flex items-center gap-0.5">
                     <button
                       onClick={(e) => { e.stopPropagation(); onRemoveBox?.(); }}
                       disabled={!onRemoveBox}
-                      className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all bg-black/40 border-white/10 text-white/50 hover:text-white"
+                      className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all bg-white/10 border-white/20 text-white hover:bg-white/20"
                     >
                       <Minus size={14} />
                     </button>
-                    <span className="text-[7px] text-slate-500 font-medium leading-none">-</span>
                   </div>
                   <div className="flex flex-col items-center gap-0.5">
                     <button
