@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, MessageSquare, Video, Shield, Gavel, LogOut, FileText, ShoppingBag, Banknote, Mic, Menu, X, LogIn, UserPlus, Trash2, Building2, Landmark, Warehouse, Package, Store, Coins, TrendingUp, Shuffle, Scale, Crown, LifeBuoy, Waves, Globe, Gamepad2, Compass, Lock, BookOpen, Radio, LayoutDashboard, Newspaper, DollarSign, Users, AlertTriangle, Settings, Star, Eye, Siren, ClipboardList, BarChart3, MonitorDot, ScrollText, Calendar, Wallet, Trophy, Bell, Megaphone, Database } from 'lucide-react'
+import { Home, MessageSquare, Video, Shield, Gavel, LogOut, FileText, ShoppingBag, Banknote, Mic, Menu, X, LogIn, UserPlus, Trash2, Building2, Landmark, Warehouse, Package, Store, Coins, TrendingUp, Shuffle, Scale, Crown, LifeBuoy, Waves, Globe, Gamepad2, Compass, Lock, BookOpen, Radio, LayoutDashboard, Newspaper, DollarSign, Users, AlertTriangle, Settings, Star, Eye, Siren, ClipboardList, BarChart3, MonitorDot, ScrollText, Calendar, Wallet, Trophy, Bell, Megaphone, Database, Heart } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown'
 import { usePresidentSystem } from '@/hooks/usePresidentSystem'
@@ -429,6 +429,8 @@ export default function BottomNavigation() {
     { category: 'Public Services', label: 'Neighbors', icon: Building2, path: '/neighbors' },
     // Social
     { category: 'Social', label: 'Postal Service', icon: MessageSquare, path: '/tcps', badge: totalUnreadCount, onClick: handleMessagesClick },
+    { category: 'Social', label: 'Notifications', icon: Bell, path: '/notifications', badge: notificationCount, onClick: handleMessagesClick },
+    { category: 'Social', label: 'Troll Match', icon: Heart, path: '/match' },
     { category: 'Social', label: 'Troll Pods', icon: Mic, path: '/pods' },
     ...(isPresident ? [{ category: 'Social', label: 'President', icon: Crown, path: '/president' }] : []),
     { category: 'Social', label: 'Public Pool', icon: Waves, path: '/pool' },

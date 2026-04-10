@@ -85,6 +85,9 @@ export default function AppLayout({
           </div>
         )}
 
+        {/* Global Ticker - Shows at top of mobile app */}
+        {!isAuthPage && <GlobalTicker />}
+
         {/* User Compliance Prompt */}
         {!isAuthPage && <UserCompliancePrompt />}
 
