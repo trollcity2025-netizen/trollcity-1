@@ -64,9 +64,10 @@ export function MatchPage() {
 
   // Handle onboarding completion
   const handleOnboardingComplete = () => {
-    // Refresh matches after onboarding
+    // Refresh matches after onboarding and navigate to TM main page
     refetchFriends();
     refetchDating();
+    navigate('/match', { replace: true });
   };
 
   // Handle message from match card
