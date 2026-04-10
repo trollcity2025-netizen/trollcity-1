@@ -25,6 +25,7 @@ import GiftBoxModal, { GiftTarget, GiftItem } from '../../components/broadcast/G
 import GiftAnimationOverlay from '../../components/broadcast/GiftAnimationOverlay'
 import PinnedProductOverlay from '../../components/broadcast/PinnedProductOverlay'
 import PinProductModal from '../../components/broadcast/PinProductModal'
+import DraggableWrapper from '../../components/broadcast/DraggableWrapper'
 import { BroadcastGift } from '../../hooks/useBroadcastRealtime'
 import { useBroadcastPinnedProducts } from '../../hooks/useBroadcastPinnedProducts'
 import { useBoxCount } from '../../hooks/useBoxCount'

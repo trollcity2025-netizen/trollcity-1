@@ -27,6 +27,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
   const [isNewUser, setIsNewUser] = useState(true);
   const [checkingNewUser, setCheckingNewUser] = useState(true);
   const NEW_USER_COIN_DISCOUNT = 0.05; // 5% off for new users
+  const MINIMUM_TAX_RATE = 0.03; // 3% minimum tax on all coin packs
 
   // Square Payment Modal
   const [showSquarePayment, setShowSquarePayment] = useState(false);
@@ -95,15 +96,32 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
   }, [isOpen, checkNewUserStatus]);
 
   const handlePackageSelect = (pkg: CoinPackage) => {
-    setSelectedPack(pkg);
+    const finalPrice = getFinalPrice(pkg.price);
+    const pkgWithTax = { ...pkg, price: finalPrice.toFixed(2) };
+    setSelectedPack(pkgWithTax);
     setShowSquarePayment(true);
   };
 
-  // Helper to calculate discounted price
-  const getDiscountedPrice = (price: string) => {
+  // Helper to calculate final price with minimum tax
+  const getFinalPrice = (price: string) => {
     const numPrice = parseFloat(price.replace('$', ''));
     if (isNaN(numPrice)) return price;
-    return `$${(numPrice * (1 - NEW_USER_COIN_DISCOUNT)).toFixed(2)}`;
+    const tax = numPrice * MINIMUM_TAX_RATE;
+    return numPrice + tax;
+  };
+
+  const getTaxAmount = (price: string) => {
+    const numPrice = parseFloat(price.replace('$', ''));
+    if (isNaN(numPrice)) return 0;
+    return numPrice * MINIMUM_TAX_RATE;
+  };
+
+  const getDisplayPrice = (price: string) => {
+    const numPrice = parseFloat(price.replace('$', ''));
+    if (isNaN(numPrice)) return price;
+    const discounted = numPrice * (1 - NEW_USER_COIN_DISCOUNT);
+    const withTax = discounted + (discounted * MINIMUM_TAX_RATE);
+    return `$${withTax.toFixed(2)}`;
   };
   
   const handlePaymentSuccess = (data: any) => {
@@ -138,7 +156,7 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
             <div className="mx-4 mt-4 p-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/40 rounded-lg animate-in slide-in-from-top-2 duration-300">
               <div className="flex items-center justify-center gap-2 text-green-400">
                 <span className="text-lg">🎉</span>
-                <span className="font-bold">New User Special: 5% OFF all coin packs!</span>
+                <span className="font-bold">New User Special: 5% OFF + 3% Tax Included!</span>
                 <span className="text-lg">🎉</span>
               </div>
             </div>
@@ -184,11 +202,11 @@ export default function CoinStoreModal({ isOpen, onClose }: CoinStoreModalProps)
                   </div>
 
                   <div className="flex flex-col items-end gap-1">
-                    {isNewUser && !checkingNewUser && (
-                      <span className="text-xs text-zinc-500 line-through">{pkg.price}</span>
-                    )}
                     <span className={`font-bold bg-zinc-950 px-3 py-1 rounded-md border border-zinc-800 ${isNewUser ? 'text-green-400' : 'text-white'}`}>
-                      {isNewUser ? getDiscountedPrice(pkg.price) : pkg.price}
+                      {isNewUser ? getDisplayPrice(pkg.price) : getFinalPrice(pkg.price)}
+                    </span>
+                    <span className="text-[9px] text-zinc-500">
+                      +${(isNewUser ? getTaxAmount(pkg.price) : getTaxAmount(pkg.price)).toFixed(2)} tax
                     </span>
                   </div>
                 </button>

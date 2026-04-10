@@ -5,6 +5,7 @@ import { useAuthStore } from '../../lib/store'
 import { Stream } from '../../types/broadcast'
 import BroadcastPage from './BroadcastPage'
 import ViewerPage from './ViewerPage'
+import StreamEndedPage from './StreamEndedPage'
 import { Loader2, Lock, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -230,8 +231,7 @@ function BroadcastRouter() {
     )
   }
 
-  // If stream is ended, check if this is a government-ended stream
-  // Government streams should NOT show summary - just redirect to live
+  // If stream is ended, show the ended page
   if (stream.status === 'ended') {
     // Check if user came from government streams (by checking localStorage or URL)
     const fromGovernment = localStorage.getItem('fromGovernmentStreams');
@@ -239,7 +239,7 @@ function BroadcastRouter() {
       localStorage.removeItem('fromGovernmentStreams');
       return <Navigate to="/government/streams" replace />;
     }
-    return <Navigate to={`/broadcast/summary/${streamId}`} replace />
+    return <StreamEndedPage />
   }
 
   // Check if current user is the host

@@ -16,7 +16,8 @@ import {
   MapPin,
   Network,
   Home,
-  Car
+  Car,
+  Gift
 } from 'lucide-react'
 import ExecutiveIntakeList from '../admin/components/shared/ExecutiveIntakeList'
 import CashoutRequestsList from '../admin/components/shared/CashoutRequestsList'
@@ -30,13 +31,14 @@ import AutomatedPayouts from '../admin/components/AutomatedPayouts'
 import SecretaryDashboard from '../president/SecretaryDashboard'
 import ProposalManagementPanel from '../admin/components/shared/ProposalManagementPanel'
 import CashoutForecastPanel from './components/CashoutForecastPanel'
+import CashoutBonusPanel from './components/CashoutBonusPanel'
 import NeighborApprovals from './components/NeighborApprovals'
 import CityAdsManager from './components/CityAdsManager'
 import EmpirePartnerAdminPanel from './components/EmpirePartnerAdminPanel'
 import TrollsTownAdminPanel from './components/TrollsTownAdminPanel'
 import KTAutoAdminPanel from './components/KTAutoAdminPanel'
 
-type Tab = 'intake' | 'cashouts' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors' | 'promo_ads' | 'empire_partners' | 'trolls_town' | 'ktauto'
+type Tab = 'intake' | 'cashouts' | 'bonus' | 'alerts' | 'reports' | 'staff' | 'manual_payments' | 'troll_pass' | 'pastor_apps' | 'automated_payouts' | 'elections' | 'proposals' | 'neighbors' | 'promo_ads' | 'empire_partners' | 'trolls_town' | 'ktauto'
 
 interface TabInfo {
   id: Tab
@@ -52,6 +54,7 @@ const tabs: TabInfo[] = [
   { id: 'elections', label: 'Elections', icon: <Crown className="w-4 h-4" />, color: 'amber' },
   { id: 'proposals', label: 'Proposals', icon: <FileText className="w-4 h-4" />, color: 'purple' },
   { id: 'cashouts', label: 'Cashouts', icon: <CreditCard className="w-4 h-4" />, color: 'emerald' },
+  { id: 'bonus', label: 'Bonus', icon: <Gift className="w-4 h-4" />, color: 'amber' },
   { id: 'reports', label: 'Reports', icon: <FileText className="w-4 h-4" />, color: 'yellow' },
   // Row 2 - Secondary tasks
   { id: 'automated_payouts', label: 'Payouts', icon: <DollarSign className="w-4 h-4" />, color: 'purple' },
@@ -140,6 +143,16 @@ export default function SecretaryConsole() {
               <CashoutForecastPanel />
             </div>
             <CashoutRequestsList viewMode="secretary" />
+          </div>
+        )
+      case 'bonus':
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-white mb-2">Cashout Bonus Approval</h2>
+              <p className="text-slate-400">Add bonus to cashout requests (up to $100).</p>
+            </div>
+            <CashoutBonusPanel />
           </div>
         )
       case 'automated_payouts':

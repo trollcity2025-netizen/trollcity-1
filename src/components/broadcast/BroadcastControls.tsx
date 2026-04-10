@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { getCategoryConfig } from '../../config/broadcastCategories';
 import BannedUsersList from './BannedUsersList';
 import ThemeSelector from './ThemeSelector';
+import BroadcastOfficerModal from './BroadcastOfficerModal';
 import { useAuthStore } from '../../lib/store';
 import { PreflightStore } from '../../lib/preflightStore';
 import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
@@ -112,6 +113,7 @@ export default function BroadcastControls({
 
   const [showBannedList, setShowBannedList] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
+  const [showBroadcastOfficer, setShowBroadcastOfficer] = useState(false);
   const [likes, setLikes] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
   const [isFeatureLoading, setIsFeatureLoading] = useState(false);
@@ -402,6 +404,14 @@ export default function BroadcastControls({
           onClose={() => setShowThemeSelector(false)}
         />
       )}
+      {showBroadcastOfficer && (
+        <BroadcastOfficerModal
+          streamId={stream.id}
+          broadcasterId={stream.broadcaster_id || stream.user_id || ''}
+          isOpen={showBroadcastOfficer}
+          onClose={() => setShowBroadcastOfficer(false)}
+        />
+      )}
 
       {/* Main action orbs - bottom center */}
       <div className="flex items-center gap-3">
@@ -584,6 +594,13 @@ export default function BroadcastControls({
               )}
               {canManageStream && (
                 <MenuOrb icon={UserX} label="Banned" onClick={() => { setShowBannedList(!showBannedList); setMenuOpen(false); }} />
+              )}
+              {isHost && (
+                <MenuOrb 
+                  icon={Shield} 
+                  label="Officers" 
+                  onClick={() => { setShowBroadcastOfficer(true); setMenuOpen(false); }} 
+                />
               )}
               {isOfficerOrAdmin && (
                 <MenuOrb

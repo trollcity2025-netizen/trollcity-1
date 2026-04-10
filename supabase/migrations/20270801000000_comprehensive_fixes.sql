@@ -187,12 +187,17 @@ $$;
 CREATE TABLE IF NOT EXISTS public.broadcast_officers (
     broadcaster_id UUID REFERENCES auth.users(id),
     officer_id UUID REFERENCES auth.users(id),
+    stream_id UUID REFERENCES public.streams(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (broadcaster_id, officer_id)
+    PRIMARY KEY (broadcaster_id, officer_id, stream_id)
 );
 
+-- Add index for stream_id lookups
+CREATE INDEX IF NOT EXISTS idx_broadcast_officers_stream ON public.broadcast_officers(stream_id);
+
 CREATE OR REPLACE FUNCTION public.assign_broadofficer(
-    p_user_id UUID -- The officer to assign
+    p_user_id UUID, -- The officer to assign
+    p_stream_id UUID DEFAULT NULL -- Optional stream_id for stream-specific officers
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -203,15 +208,36 @@ DECLARE
 BEGIN
     v_broadcaster_id := auth.uid();
     
-    INSERT INTO public.broadcast_officers (broadcaster_id, officer_id)
-    VALUES (v_broadcaster_id, p_user_id)
-    ON CONFLICT DO NOTHING;
+    INSERT INTO public.broadcast_officers (broadcaster_id, officer_id, stream_id)
+    VALUES (v_broadcaster_id, p_user_id, p_stream_id)
+    ON CONFLICT (broadcaster_id, officer_id, stream_id) DO NOTHING;
 END;
 $$;
 
 -- ==========================================
 -- 5. Add purchase_rgb_broadcast
 -- ==========================================
+-- Add is_broadcast_officer function
+CREATE OR REPLACE FUNCTION public.is_broadcast_officer(
+    p_user_id UUID,
+    p_stream_id UUID
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_result BOOLEAN := FALSE;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1 FROM public.broadcast_officers
+        WHERE officer_id = p_user_id 
+        AND (stream_id = p_stream_id OR stream_id IS NULL)
+        AND broadcaster_id = (SELECT user_id FROM public.streams WHERE id = p_stream_id)
+    ) INTO v_result;
+    
+    RETURN v_result;
+END;
+$$;
 DROP FUNCTION IF EXISTS public.purchase_rgb_broadcast(UUID, BOOLEAN);
 CREATE OR REPLACE FUNCTION public.purchase_rgb_broadcast(
     p_stream_id UUID,

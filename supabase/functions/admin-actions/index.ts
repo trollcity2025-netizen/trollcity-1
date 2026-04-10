@@ -244,6 +244,38 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case "approve_cashout_bonus": {
+        const { requestId, bonusAmount } = params;
+        if (!requestId) throw new Error("Missing requestId");
+        const bonus = parseFloat(bonusAmount) || 0;
+        if (bonus < 0 || bonus > 100) throw new Error("Bonus must be between $0 and $100");
+
+        const updates = {
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          approved_by: user.id,
+          bonus_amount: bonus
+        };
+
+        const { data, error } = await supabaseAdmin
+          .from('cashout_requests')
+          .update(updates)
+          .eq('id', requestId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        await supabaseAdmin.rpc("log_admin_action", {
+          p_action_type: "approve_cashout_bonus",
+          p_target_id: requestId,
+          p_details: { bonus_amount: bonus, original_approver: user.id },
+        });
+
+        result = data;
+        break;
+      }
+
       case "reject_cashout": {
         const { requestId, reason } = params;
         if (!requestId) throw new Error("Missing requestId");
