@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { useCoins } from '@/lib/hooks/useCoins';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/Dialog';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { toast } from 'sonner';
+import { X } from 'lucide-react';
 
 interface CashoutDepositModalProps {
   isOpen: boolean;
@@ -21,48 +19,52 @@ export default function CashoutDepositModal({ isOpen, onClose }: CashoutDepositM
       return;
     }
 
-    const success = await depositToCashout(numAmount);
-    if (success) {
+    const result = await depositToCashout(numAmount);
+    if (result.success) {
+      toast.success(`Deposited ${numAmount} coins to cashout!`);
       setAmount('');
       onClose();
+    } else {
+      toast.error(result.error || 'Failed to deposit');
     }
   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Deposit to Cashout Escrow</DialogTitle>
-          <DialogDescription>
-            Deposit gifted coins into non-reversible cashout escrow. Once deposited, coins cannot be withdrawn or spent.
-            <br /><br />
-            <span className="text-emerald-400">Only coins that other users purchased and gifted to you are eligible.</span>
-            <br /><br />
-            All deposited coins are automatically reserved for payouts every Thursday at 11:59pm MST.
-          </DialogDescription>
-        </DialogHeader>
+  if (!isOpen) return null;
 
-        <div className="space-y-4 mt-4">
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-md mx-4">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-zinc-400 hover:text-white"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        
+        <h2 className="text-xl font-bold text-white mb-4">Deposit to Cashout</h2>
+        
+        <div className="space-y-4">
           <div>
-            <label className="text-sm text-gray-400">Amount to deposit</label>
-            <Input
+            <label className="block text-sm text-zinc-400 mb-1">Amount</label>
+            <input
               type="number"
-              min="1"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="Enter coin amount"
-              className="mt-1"
+              placeholder="Enter amount"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-white"
             />
           </div>
-
-          <div className="flex gap-3 justify-end">
-            <Button variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleDeposit} loading={loading}>
-              Deposit Coins
-            </Button>
-          </div>
+          
+          <button
+            onClick={handleDeposit}
+            disabled={loading || !amount}
+            className="w-full bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 text-white py-2 rounded-lg font-medium"
+          >
+            {loading ? 'Depositing...' : 'Deposit'}
+          </button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
