@@ -175,7 +175,15 @@ export default function RTCAdminMonitor() {
       }
 
       const rtcSessions = sessions as RTSSession[] || [];
-      const totalSeconds = rtcSessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
+      const now = Date.now();
+      const totalSeconds = rtcSessions.reduce((sum, s) => {
+        if (s.is_active && s.started_at) {
+          const startedAt = new Date(s.started_at).getTime();
+          const liveDuration = Math.floor((now - startedAt) / 1000);
+          return sum + liveDuration;
+        }
+        return sum + (s.duration_seconds || 0);
+      }, 0);
       const totalMinutes = Math.floor(totalSeconds / 60);
       const activeCount = rtcSessions.filter(s => s.is_active).length;
 
