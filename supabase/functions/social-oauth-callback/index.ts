@@ -33,41 +33,53 @@ serve(async (req) => {
     let platformUsername = "";
 
     if (platform === "x") {
+      const stateParts = (state || '').split('|');
+      const codeVerifier = stateParts[0] || "";
+      const callbackClientId = Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
+      const callbackClientSecret = Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";
+
+      console.log('X OAuth - using client_id:', callbackClientId, 'code_verifier:', codeVerifier ? 'yes' : 'none');
+
       const tokenResponse = await fetch("https://api.twitter.com/2/oauth2/token", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "Authorization": `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+          "Authorization": `Basic ${btoa(`${callbackClientId}:${callbackClientSecret}`)}`,
         },
         body: new URLSearchParams({
           grant_type: "authorization_code",
           code: code,
           redirect_uri: `${Deno.env.get("SITE_URL")}/admin/x-ads/oauth-callback`,
-          code_verifier: state || "",
+          code_verifier: codeVerifier,
         }),
       });
 
       tokenData = await tokenResponse.json();
+      console.log('X token response:', tokenData);
 
       if (tokenData.access_token) {
-        const userResponse = await fetch("https://api.twitter.com/2/users/me", {
+        const userResponse = await fetch("https://api.twitter.com/2/users/me?user.fields=id,username,name", {
           headers: {
             "Authorization": `Bearer ${tokenData.access_token}`,
           },
         });
         const userData = await userResponse.json();
+        console.log('X user response:', userData);
         platformUserId = userData.data?.id || "";
         platformUsername = userData.data?.username || "";
       }
     } else if (platform === "instagram") {
+      const igClientId = Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
+      const igClientSecret = Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";
+
       const tokenResponse = await fetch("https://api.instagram.com/oauth/access_token", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
+          client_id: igClientId,
+          client_secret: igClientSecret,
           grant_type: "authorization_code",
           redirect_uri: `${Deno.env.get("SITE_URL")}/admin/x-ads/oauth-callback`,
           code: code,
@@ -83,13 +95,18 @@ serve(async (req) => {
         platformUsername = userData.username || "";
       }
     } else if (platform === "facebook") {
-      const tokenResponse = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token?client_id=${clientId}&redirect_uri=${encodeURIComponent(`${Deno.env.get("SITE_URL")}/admin/x-ads/oauth-callback`)}&client_secret=${clientSecret}&code=${code}`);
+      const fbClientId = Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
+      const fbClientSecret = Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";
+      
+      const tokenResponse = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token?client_id=${fbClientId}&redirect_uri=${encodeURIComponent(`${Deno.env.get("SITE_URL")}/admin/x-ads/oauth-callback`)}&client_secret=${fbClientSecret}&code=${code}`);
       
       tokenData = await tokenResponse.json();
+      console.log('FB token response:', tokenData);
 
       if (tokenData.access_token) {
         const userResponse = await fetch(`https://graph.facebook.com/me?fields=id,name&access_token=${tokenData.access_token}`);
         const userData = await userResponse.json();
+        console.log('FB user response:', userData);
         platformUserId = userData.id || "";
         platformUsername = userData.name || "";
       }

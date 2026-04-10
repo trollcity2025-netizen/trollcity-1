@@ -308,24 +308,42 @@ export default function XAdsStudio() {
     }
   };
 
+  const generateCodeVerifier = (): string => {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return btoa(String.fromCharCode(...array))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  };
+
+  const generateCodeChallenge = async (verifier: string): Promise<string> => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(verifier);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode(...new Uint8Array(hash)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  };
+
   const connectAccount = async (platform: 'x' | 'instagram' | 'facebook') => {
-    if (!oauthClientId) {
-      setShowOauthConfig(true);
-      toast.error('Enter your OAuth credentials first');
-      return;
-    }
-    
     const redirectUrl = customRedirectUrl || 'https://maitrollcity.com/admin/x-ads/oauth-callback';
     
     console.log('Connecting with redirect:', redirectUrl);
     
+    const body: Record<string, string> = { platform };
+    
+    if (platform === 'x') {
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      localStorage.setItem('pkce_code_verifier', codeVerifier);
+      body.code_challenge = codeChallenge;
+      body.code_verifier = codeVerifier;
+    }
+
     const { data, error } = await supabase.functions.invoke('social-oauth-init', {
-      body: { 
-        platform, 
-        redirect_url: redirectUrl,
-        client_id: oauthClientId,
-        client_secret: oauthClientSecret
-      }
+      body
     });
 
     if (error) {

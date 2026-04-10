@@ -57,21 +57,21 @@ serve(async (req) => {
   }
 
   try {
-    const { platform, redirect_url, client_id, client_secret } = await req.json();
+    const { platform, code_challenge, code_verifier } = await req.json();
     
     if (!platform || !["x", "instagram", "facebook"].includes(platform)) {
       throw new Error("Invalid platform. Must be 'x', 'instagram', or 'facebook'");
     }
 
-    // Use provided credentials or fall back to env
-    const finalClientId = client_id || Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
-    const finalClientSecret = client_secret || Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";
-    const finalRedirectUri = redirect_url || 'https://maitrollcity.com/admin/x-ads/oauth-callback';
+    // Use env vars for credentials
+    const finalClientId = Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
+    const finalClientSecret = Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";
+    const finalRedirectUri = Deno.env.get("SITE_URL") + '/admin/x-ads/oauth-callback';
 
-    log('Input', { platform, hasClientId: !!client_id, hasSecret: !!client_secret, redirect_url });
+    log('Input', { platform, hasCodeChallenge: !!code_challenge });
 
     if (!finalClientId) {
-      throw new Error("OAuth client_id required.");
+      throw new Error("OAuth client_id not configured.");
     }
 
     log('Building auth URL', { clientId: finalClientId, redirectUri: finalRedirectUri });
@@ -81,7 +81,12 @@ serve(async (req) => {
 
     if (platform === "x") {
       scopes = "tweet.read tweet.write users.read offline.access";
-      authUrl = `https://twitter.com/i/oauth2/authorize?client_id=${finalClientId}&redirect_uri=${encodeURIComponent(finalRedirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&state=${Date.now()}`;
+      const stateValue = code_verifier ? `${code_verifier}|${Date.now()}` : `${finalClientId}|${Date.now()}`;
+      if (code_challenge) {
+        authUrl = `https://twitter.com/i/oauth2/authorize?client_id=${finalClientId}&redirect_uri=${encodeURIComponent(finalRedirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&code_challenge=${code_challenge}&code_challenge_method=S256&state=${stateValue}`;
+      } else {
+        authUrl = `https://twitter.com/i/oauth2/authorize?client_id=${finalClientId}&redirect_uri=${encodeURIComponent(finalRedirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&state=${stateValue}`;
+      }
       log('X Auth URL built', { authUrl });
     } else if (platform === "instagram") {
       scopes = "instagram_basic,instagram_content_publish,instagram_manage_insights";
