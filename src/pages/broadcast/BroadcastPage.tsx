@@ -1004,6 +1004,14 @@ const isHost = stream?.user_id === user?.id
       return;
     }
 
+    // Only connect to LiveKit if the stream is actually live
+    // This prevents RTC session minutes from accumulating when there's no broadcast
+    const isStreamActuallyLive = stream.status === 'live' || stream.is_live === true;
+    if (!isStreamActuallyLive) {
+      console.log('[BroadcastPage] Stream is not live, skipping LiveKit connection');
+      return;
+    }
+
     if (hasJoinedRef.current) {
       return;
     }

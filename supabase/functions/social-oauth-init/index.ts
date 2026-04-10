@@ -63,6 +63,11 @@ serve(async (req) => {
       throw new Error("Invalid platform. Must be 'x', 'instagram', or 'facebook'");
     }
 
+    // X (Twitter) OAuth2 now requires PKCE
+    if (platform === "x" && !code_challenge) {
+      throw new Error("Missing PKCE code_challenge for X OAuth");
+    }
+
     // Use env vars for credentials
     const finalClientId = Deno.env.get("SOCIAL_OAUTH_CLIENT_ID") || "";
     const finalClientSecret = Deno.env.get("SOCIAL_OAUTH_CLIENT_SECRET") || "";

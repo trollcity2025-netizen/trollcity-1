@@ -310,6 +310,14 @@ function ViewerPage() {
   useEffect(() => {
     if (!streamId || !stream || !user || hasJoinedRef.current) return;
 
+    // Only connect to LiveKit if the stream is actually live
+    // This prevents RTC session minutes from accumulating when there's no broadcast
+    const isStreamActuallyLive = stream.status === 'live' || stream.is_live === true;
+    if (!isStreamActuallyLive) {
+      console.log('[ViewerPage] Stream is not live, skipping LiveKit connection');
+      return;
+    }
+
     hasJoinedRef.current = true;
     console.log('[ViewerPage] Initializing LiveKit for viewer...');
 
