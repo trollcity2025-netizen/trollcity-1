@@ -91,7 +91,7 @@ export default function RTCAdminMonitor() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const timerRef = useRef<number | null>(null);
   const [userListType, setUserListType] = useState<'online' | 'all' | null>(null);
   const [userList, setUserList] = useState<UserListItem[]>([]);
@@ -511,6 +511,11 @@ export default function RTCAdminMonitor() {
   });
 
   const totalViewers = streamDetailsWithDuration.reduce((sum, s) => sum + s.viewers, 0);
+  
+  // Calculate total minutes in real-time from all active streams
+  const totalMinutes = Math.floor(
+    streamDetailsWithDuration.reduce((sum, s) => sum + (s.duration || 0), 0) / 60
+  );
 
   return (
     <>
@@ -548,7 +553,7 @@ export default function RTCAdminMonitor() {
           <div className="p-4 space-y-3">
             {/* Refresh Button */}
             <button
-              onClick={fetchRTCStats}
+              onClick={() => { setNow(Date.now()); fetchRTCStats(); }}
               disabled={isLoading}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 rounded-lg text-blue-400 text-xs transition-colors"
             >
@@ -594,7 +599,7 @@ export default function RTCAdminMonitor() {
                     <TrendingUp className="w-3 h-3 text-purple-400" />
                     <span className="text-[10px] text-purple-400 uppercase">Total Min</span>
                   </div>
-                  <div className="text-xl font-bold text-white">{stats.totalMinutes.toLocaleString()}</div>
+                  <div className="text-xl font-bold text-white">{totalMinutes.toLocaleString()}</div>
                 </div>
               )}
 

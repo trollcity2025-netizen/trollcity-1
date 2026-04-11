@@ -373,7 +373,8 @@ function ViewerPage() {
         });
 
         // Generate a unique viewer identity
-        const viewerIdentity = `viewer-${user.id}-${Date.now()}`;
+        const userId = user?.id || `guest-${Date.now()}`;
+        const viewerIdentity = `viewer-${userId}-${Date.now()}`;
         console.log('[ViewerPage] Viewer identity:', viewerIdentity);
         
         // Request LiveKit token for viewer role
@@ -839,7 +840,7 @@ function ViewerPage() {
     if (!checkClickRate()) {
         setIsClickBlocked(true);
         toast.error('🛑 Autoclicker detected! You are blocked from liking for 30 seconds.');
-        console.warn('[ViewerPage] Autoclicker detected for user:', user.id);
+        console.warn('[ViewerPage] Autoclicker detected for user:', user?.id);
         
         setTimeout(() => {
             setIsClickBlocked(false);
@@ -903,7 +904,7 @@ function ViewerPage() {
                 type: 'broadcast',
                 event: 'like_sent',
                 payload: {
-                    user_id: user.id,
+                    user_id: user?.id || 'anonymous',
                     stream_id: stream.id,
                     total_likes: result.total_likes,
                     timestamp: Date.now()
