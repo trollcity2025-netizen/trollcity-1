@@ -48,6 +48,8 @@ interface BroadcastGridProps {
   hideEmptySeats?: boolean;
   seatPriceOverride?: number;
   localTracks: [LocalAudioTrack | undefined, LocalVideoTrack | undefined];
+  // Camera overlay track for gaming screen share mode
+  cameraOverlayTrack?: LocalVideoTrack | null;
   remoteUsers: RemoteParticipant[];
   localUserId: string;
   toggleCamera: () => void;
@@ -317,6 +319,7 @@ export default function BroadcastGrid({
   hideEmptySeats = false,
   seatPriceOverride,
   localTracks,
+  cameraOverlayTrack,
   remoteUsers,
   localUserId,
   toggleCamera,
@@ -935,11 +938,35 @@ export default function BroadcastGrid({
               })()}
               {/* Always render video player for local user - it handles undefined track internally */}
               {userId === localUserId ? (
-                <LiveKitVideoPlayer
-                  videoTrack={videoTrack}
-                  isLocal={true}
-                  isScreenShare={isScreenShare}
-                />
+                <>
+                  <LiveKitVideoPlayer
+                    videoTrack={videoTrack}
+                    isLocal={true}
+                    isScreenShare={isScreenShare}
+                  />
+                  {/* Camera Overlay for screen share - shown as draggable overlay */}
+                  {cameraOverlayTrack && seatIndex === 0 && (
+                    <div 
+                      className="absolute z-30 cursor-move"
+                      style={{ 
+                        width: 120, 
+                        height: 90, 
+                        top: 8, 
+                        left: 8,
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        border: '2px solid rgba(255,255,255,0.3)',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                      }}
+                    >
+                      <LiveKitVideoPlayer
+                        videoTrack={cameraOverlayTrack}
+                        isLocal={true}
+                        isScreenShare={false}
+                      />
+                    </div>
+                  )}
+                </>
               ) : videoTrack && isCamOn ? (
                 <LiveKitVideoPlayer
                   videoTrack={videoTrack}

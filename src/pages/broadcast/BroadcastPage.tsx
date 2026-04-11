@@ -106,6 +106,7 @@ function BroadcastPage() {
   }, [])
 
   const [isScreenSharing, setIsScreenSharing] = useState(false)
+  const [cameraOverlayEnabled, setCameraOverlayEnabled] = useState(false)
   const [remoteParticipants, setRemoteParticipants] = useState<Map<string, RemoteParticipant>>(new Map())
   // Helper to safely get array from RemoteParticipants Map
   const getRemoteParticipantsArray = () => {
@@ -2359,6 +2360,7 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
                 onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
                 isHost={isHost}
                 localTracks={localTracks}
+                cameraOverlayTrack={cameraOverlayEnabled ? (localTracks?.[1] ?? null) : null}
                 room={roomRef.current}
                 remoteUsers={Array.from(remoteParticipants.values())}
                 localUserId={user?.id || userSeat?.guest_id || ''}
