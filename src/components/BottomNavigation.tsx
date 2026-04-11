@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, MessageSquare, Video, Shield, Gavel, LogOut, FileText, ShoppingBag, Banknote, Mic, Menu, X, LogIn, UserPlus, Trash2, Building2, Landmark, Warehouse, Package, Store, Coins, TrendingUp, Shuffle, Scale, Crown, LifeBuoy, Waves, Globe, Gamepad2, Compass, Lock, BookOpen, Radio, LayoutDashboard, Newspaper, DollarSign, Users, AlertTriangle, Settings, Star, Eye, Siren, ClipboardList, BarChart3, MonitorDot, ScrollText, Calendar, Wallet, Trophy, Bell, Megaphone, Database, Heart } from 'lucide-react'
+import { Home, MessageSquare, Video, Shield, Gavel, LogOut, FileText, ShoppingBag, Banknote, Mic, Menu, X, LogIn, UserPlus, Trash2, Building2, Landmark, Warehouse, Package, Store, Coins, TrendingUp, Shuffle, Scale, Crown, LifeBuoy, Waves, Globe, Gamepad2, Compass, Lock, BookOpen, Radio, LayoutDashboard, Newspaper, DollarSign, Users, AlertTriangle, Settings, Star, Eye, Siren, ClipboardList, BarChart3, MonitorDot, ScrollText, Calendar, Wallet, Trophy, Bell, Megaphone, Database, Heart, User } from 'lucide-react'
 import { useAuthStore } from '../lib/store'
 import { useBroadcastLockdown } from '@/hooks/useBroadcastLockdown'
 import { usePresidentSystem } from '@/hooks/usePresidentSystem'
@@ -427,7 +427,8 @@ export default function BottomNavigation() {
     { category: 'Public Services', label: 'Safety', icon: Shield, path: '/safety' },
     { category: 'Public Services', label: 'Trollified', icon: ShoppingBag, path: '/trollifieds' },
     { category: 'Public Services', label: 'Neighbors', icon: Building2, path: '/neighbors' },
-    // Social
+    // Social & Profile
+    { category: 'Social', label: 'Profile', icon: User, path: `/${profile?.username || user?.id}` },
     { category: 'Social', label: 'Postal Service', icon: MessageSquare, path: '/tcps', badge: totalUnreadCount, onClick: handleMessagesClick },
     { category: 'Social', label: 'Notifications', icon: Bell, path: '/notifications', badge: notificationCount, onClick: handleMessagesClick },
     { category: 'Social', label: 'Troll Match', icon: Heart, path: '/match' },
@@ -530,13 +531,15 @@ export default function BottomNavigation() {
     )
   }
 
-  // Menu Options - Role-based
+  // Menu Options - Role-based, sorted alphabetically
   const getMenuOptions = () => {
-    return [
+    const allOptions = [
       ...basePages,
       ...governmentPages,
       ...adminPages,
     ]
+    // Sort alphabetically by label
+    return allOptions.sort((a, b) => a.label.localeCompare(b.label))
   }
 
   const menuOptions = getMenuOptions()
@@ -808,7 +811,8 @@ export default function BottomNavigation() {
                     ).map(([category, options]: [string, any]) => (
                       <div key={category}>
                         <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.1em] mb-3 px-1">{category}</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {/* Mobile grid - small icons, full width grid */}
+                        <div className="grid grid-cols-4 md:grid-cols-2 gap-2">
                           {options.map((opt: any, i: number) => {
                             const OptIcon = opt.icon
                             return (
@@ -822,14 +826,14 @@ export default function BottomNavigation() {
                                     setIsMenuOpen(false)
                                   }
                                 }}
-                                className="flex items-center gap-4 p-3.5 bg-white/[0.03] hover:bg-white/[0.06] rounded-xl border border-white/[0.05] hover:border-white/[0.1] transition-all duration-200 group"
+                                className="flex flex-col items-center gap-1 p-2 bg-white/[0.03] hover:bg-white/[0.06] rounded-lg border border-white/[0.05] hover:border-white/[0.1] transition-all duration-200 group"
                               >
-                                <div className="p-2.5 rounded-lg bg-purple-500/[0.08] text-purple-400 group-hover:bg-purple-500/[0.14] transition-colors">
-                                  <OptIcon size={20} />
+                                <div className="p-1.5 rounded-lg bg-purple-500/[0.08] text-purple-400 group-hover:bg-purple-500/[0.14] transition-colors">
+                                  <OptIcon size={16} />
                                 </div>
-                                <span className="text-white font-medium text-sm flex-1">{opt.label}</span>
+                                <span className="text-white font-medium text-[10px] flex-1 text-center line-clamp-1">{opt.label}</span>
                                 {opt.badge > 0 && (
-                                  <span className="px-3 py-1 bg-red-500 text-white text-sm font-bold rounded-full">
+                                  <span className="px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full">
                                     {opt.badge > 9 ? '9+' : opt.badge}
                                   </span>
                                 )}
