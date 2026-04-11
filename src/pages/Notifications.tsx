@@ -335,23 +335,10 @@ export default function Notifications() {
         return '/jail'
       case 'release':
         return '/'
-      case 'bond_posted':
-      case 'bond_request':
-        return '/jail'
       case 'message_received':
         return '/tcps'
       case 'appeal_result':
         return '/jail/appeal'
-      case 'moderation_action':
-      case 'stream.kick':
-      case 'stream.ban':
-      case 'security.alert':
-        return metadata?.user_id
-          ? `/admin/moderation?user=${metadata.user_id}`
-          : metadata?.report_id
-          ? `/admin/moderation?tab=reports&id=${metadata.report_id}`
-          : '/admin/moderation'
-
       // Officer
       case 'officer_update':
       case 'officer_clock_in':

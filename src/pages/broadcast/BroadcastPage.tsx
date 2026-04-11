@@ -107,6 +107,11 @@ function BroadcastPage() {
 
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [remoteParticipants, setRemoteParticipants] = useState<Map<string, RemoteParticipant>>(new Map())
+  // Helper to safely get array from RemoteParticipants Map
+  const getRemoteParticipantsArray = () => {
+    if (!remoteParticipants || typeof remoteParticipants.values !== 'function') return []
+    return Array.from(remoteParticipants.values()) as RemoteParticipant[]
+  }
   const [isJoining, setIsJoining] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(true)
   const [canSwipe, setCanSwipe] = useState(false)
@@ -364,7 +369,7 @@ const isHost = stream?.user_id === user?.id
       };
     }
     // Find remote participant by identity
-    const participant = Array.from(remoteParticipants.values()).find(
+    const participant = getRemoteParticipantsArray().find(
       (p) => p.identity === userId || p.identity.substring(0, 8) === userId.replace(/-/g, '').substring(0, 8)
     );
     if (!participant) {
@@ -1096,8 +1101,8 @@ const isHost = stream?.user_id === user?.id
           room.on('trackUnsubscribed', (track, publication, participant) => {
             console.log('[BroadcastPage] Viewer: Track unsubscribed:', track.kind, 'from', participant.identity)
             // Check if participant has any remaining tracks
-            const remainingVideo = Array.from((participant.videoTrackPublications as any)?.values() || []).some((p: any) => p.track)
-            const remainingAudio = Array.from((participant.audioTrackPublications as any)?.values() || []).some((p: any) => p.track)
+const remainingVideo = Array.from((participant.videoTrackPublications as any)?.values?.() || []).some((p: any) => p.track)
+    const remainingAudio = Array.from((participant.audioTrackPublications as any)?.values?.() || []).some((p: any) => p.track)
             
             // Only remove participant if they have no remaining tracks
             if (!remainingVideo && !remainingAudio) {
@@ -1116,7 +1121,7 @@ const isHost = stream?.user_id === user?.id
 
           // Get existing participants who were already in the room (LiveKit v2.x uses remoteParticipants)
           const existingParticipants = room.remoteParticipants
-            ? Array.from(room.remoteParticipants.values()) as RemoteParticipant[]
+            ? Array.from(room.remoteParticipants?.values?.() || []) as RemoteParticipant[]
             : []
           if (existingParticipants.length > 0) {
             console.log('[BroadcastPage] Viewer: Found existing participants:', existingParticipants.length, existingParticipants.map((p: RemoteParticipant) => p.identity))
@@ -1573,7 +1578,7 @@ const isHost = stream?.user_id === user?.id
 
           // Get video track (skip in screen share mode - camera not published)
           if (!isScreenShareTracks) {
-            for (const pub of room.localParticipant.videoTrackPublications.values()) {
+for (const pub of room.localParticipant?.videoTrackPublications?.values?.() || []) {
               if (pub.track && pub.track.kind === 'video') {
                 videoTrack = pub.track as LocalVideoTrack
                 if (typeof videoTrack.getTrackId === 'function') {
@@ -1589,7 +1594,7 @@ const isHost = stream?.user_id === user?.id
           }
 
           // Get audio track - must check audioTrackPublications!
-          for (const pub of room.localParticipant.audioTrackPublications.values()) {
+for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || []) {
             if (pub.track && pub.track.kind === 'audio') {
               audioTrack = pub.track as LocalAudioTrack
               if (typeof audioTrack.getTrackId === 'function') {
