@@ -8,6 +8,7 @@ import { generateUUID } from '../../lib/uuid';
 import { toast } from 'sonner';
 import { useMissionProgress } from '../../hooks/useMissionProgress';
 import GiftBoxModal from './GiftBoxModal';
+import ModActionsPopup from './ModActionsPopup';
 import { shouldAutoHideMessage, canControlSlowMode, shouldShowGoldenBanner } from '../../lib/perkEffects';
 
 interface Message {
@@ -230,6 +231,20 @@ export default function BroadcastChat({
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
   const [hostChatDisabledByOfficer, setHostChatDisabledByOfficer] = useState(false);
   const [streamEnded, setStreamEnded] = useState(false);
+  
+  // Mod actions popup state
+  const [showModActions, setShowModActions] = useState(false);
+  const [modActionTargetUser, setModActionTargetUser] = useState<{
+    id: string;
+    username: string;
+    avatar_url: string;
+    role?: string;
+    troll_role?: string;
+    is_troll_officer?: boolean;
+    is_lead_officer?: boolean;
+    is_admin?: boolean;
+  } | null>(null);
+  const [modActionTargetUserId, setModActionTargetUserId] = useState<string>('');
 
   const redirectGuestToAuth = () => {
     if (!isGuest) return;
@@ -987,6 +1002,22 @@ export default function BroadcastChat({
         toast.error('Chat is disabled for this broadcaster by officer control');
         return;
     }
+
+    // Check if user has been blocked from chat by an officer
+    const { data: chatBlock } = await supabase
+      .from('chat_blocks')
+      .select('id, expires_at')
+      .eq('stream_id', streamId)
+      .eq('user_id', user.id)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle();
+    
+    if (chatBlock) {
+      const remainingTime = Math.ceil((new Date(chatBlock.expires_at).getTime() - Date.now()) / 60000);
+      toast.error(`Your chat is disabled. Try again in ${remainingTime} minute(s).`);
+      return;
+    }
+
     if (isSlowModeEnabled) {
         toast.error('Slow mode is active. Please wait before sending another message.');
         return;
@@ -1088,6 +1119,33 @@ export default function BroadcastChat({
     }
     setGiftRecipientId(targetUserId);
     setIsGiftModalOpen(true);
+  };
+
+  // Check if current user is an officer role
+  const isOfficer = profile?.role === 'admin' || 
+                   profile?.role === 'lead_troll_officer' || 
+                   profile?.role === 'troll_officer' ||
+                   profile?.role === 'secretary' ||
+                   profile?.role === 'prosecutor' ||
+                   profile?.role === 'attorney' ||
+                   profile?.is_admin ||
+                   profile?.is_troll_officer ||
+                   profile?.is_lead_officer;
+
+  const openModActionsForUser = (targetUserId: string, targetUsername: string, targetAvatar?: string, targetRole?: string, targetTrollRole?: string) => {
+    if (!targetUserId) return;
+    setModActionTargetUser({
+      id: targetUserId,
+      username: targetUsername,
+      avatar_url: targetAvatar || '',
+      role: targetRole,
+      troll_role: targetTrollRole,
+      is_troll_officer: targetTrollRole === 'troll_officer' || targetRole === 'troll_officer',
+      is_lead_officer: targetTrollRole === 'lead_troll_officer' || targetRole === 'lead_troll_officer',
+      is_admin: targetRole === 'admin',
+    });
+    setModActionTargetUserId(targetUserId);
+    setShowModActions(true);
   };
 
   const deleteMessage = async (msgId: string) => {
@@ -1208,16 +1266,20 @@ export default function BroadcastChat({
           if (seatUsers.length === 0) return null;
           
           return (
-             <div className="flex gap-1.5 px-3 py-2 overflow-x-auto border-b border-white/5 bg-transparent scrollbar-hide">
+              <div className="flex gap-1.5 px-3 py-2 overflow-x-auto border-b border-white/5 bg-transparent scrollbar-hide">
               {seatUsers.map((seatUser) => (
                 <button
                   key={seatUser.id}
                   onClick={() => {
-                    setGiftRecipientId(seatUser.id);
-                    setIsGiftModalOpen(true);
+                    if (isOfficer) {
+                      openModActionsForUser(seatUser.id, seatUser.username, seatUser.avatar_url || undefined);
+                    } else {
+                      setGiftRecipientId(seatUser.id);
+                      setIsGiftModalOpen(true);
+                    }
                   }}
                   className="flex flex-col items-center gap-0.5 min-w-[48px] group"
-                  title={`Gift ${seatUser.username}`}
+                  title={isOfficer ? `Mod actions for ${seatUser.username}` : `Gift ${seatUser.username}`}
                 >
                   <div className={`relative w-9 h-9 rounded-full overflow-hidden border-2 transition-all group-hover:scale-110 group-hover:shadow-lg ${
                     seatUser.isBroadcaster 
@@ -1336,7 +1398,7 @@ export default function BroadcastChat({
                                 <Sparkles size={12} className="text-yellow-500 flex-shrink-0" />
                                 <button
                                     type="button"
-                                    onClick={() => openGiftForUser(msg.user_id)}
+                                    onClick={() => isOfficer ? openModActionsForUser(msg.user_id, msg.user_profiles?.username || 'User', msg.user_profiles?.avatar_url, msg.user_profiles?.role, msg.user_profiles?.troll_role) : openGiftForUser(msg.user_id)}
                                     className="font-bold text-zinc-300 hover:text-yellow-300 transition-colors flex items-center gap-1 truncate"
                                     title="Send gift"
                                 >
@@ -1424,7 +1486,7 @@ export default function BroadcastChat({
                                 <span className="text-xs">
                                     <button
                                         type="button"
-                                        onClick={() => openGiftForUser(msg.user_id)}
+                                        onClick={() => isOfficer ? openModActionsForUser(msg.user_id, msg.user_profiles?.username || 'User', msg.user_profiles?.avatar_url, msg.user_profiles?.role, msg.user_profiles?.troll_role) : openGiftForUser(msg.user_id)}
                                         className="font-bold text-yellow-400 hover:text-yellow-300 transition-colors"
                                         title="Send gift"
                                     >
@@ -1470,7 +1532,7 @@ export default function BroadcastChat({
                             <div className="flex-1 min-w-0 flex items-center gap-1">
                                 <button
                                     type="button"
-                                    onClick={() => openGiftForUser(msg.user_id)}
+                                    onClick={() => isOfficer ? openModActionsForUser(msg.user_id, msg.user_profiles?.username || 'User', msg.user_profiles?.avatar_url, msg.user_profiles?.role, msg.user_profiles?.troll_role) : openGiftForUser(msg.user_id)}
                                     className={`font-bold text-xs truncate hover:text-yellow-300 transition-colors ${showGoldenBanner && msg.user_id === user?.id ? 'text-yellow-400' : 'text-yellow-400'}`}
                                     title="Send gift"
                                 >
@@ -1522,15 +1584,30 @@ export default function BroadcastChat({
             </div>
         </form>
 
-        <GiftBoxModal
-          isOpen={isGiftModalOpen}
+                <GiftBoxModal
+                  isOpen={isGiftModalOpen}
+                  onClose={() => {
+                    setIsGiftModalOpen(false);
+                    setGiftRecipientId(null);
+                  }}
+                  recipientId={giftRecipientId || hostId}
+                  streamId={streamId}
+                  sharedChannel={broadcastChannelRef.current}
+                />
+
+        <ModActionsPopup
+          isOpen={showModActions}
           onClose={() => {
-            setIsGiftModalOpen(false);
-            setGiftRecipientId(null);
+            setShowModActions(false);
+            setModActionTargetUser(null);
+            setModActionTargetUserId('');
           }}
-          recipientId={giftRecipientId || hostId}
+          targetUser={modActionTargetUser}
+          targetUsername={modActionTargetUser?.username || ''}
+          targetUserId={modActionTargetUserId}
           streamId={streamId}
-          sharedChannel={broadcastChannelRef.current}
+          hostId={hostId}
+          currentUserId={user?.id}
         />
     </div>
   );

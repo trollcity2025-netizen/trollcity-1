@@ -48,6 +48,16 @@ import { useTrollToe } from '../../hooks/useTrollToe'
 import TrollToeController from '../../components/broadcast/TrollToeController'
 import TrollToeViewerUI from '../../components/broadcast/TrollToeViewerUI'
 import GamePicker from '../../components/broadcast/GamePicker'
+import TrollUsGameController from '../../components/broadcast/TrollUsGameController'
+import { useTrollopoly } from '../../hooks/useTrollopoly'
+import TrollopolyLobby from '../../components/broadcast/TrollopolyLobby'
+import TrollopolyBoard from '../../components/broadcast/TrollopolyBoard'
+import TrollopolyController from '../../components/broadcast/TrollopolyController'
+import TrollopolyViewerUI from '../../components/broadcast/TrollopolyViewerUI'
+import { CityHeatBar } from '../../components/CityHeatBar'
+import { GlassCrackEffect } from '../../components/GlassCrackEffect'
+import TCPSMessageBubble from '../../components/broadcast/TCPSMessageBubble'
+import { useBroadcastEffects } from '../../contexts/BroadcastEffectsContext'
 
 function BroadcastPage() {
   const params = useParams()
@@ -64,6 +74,17 @@ function BroadcastPage() {
     profile.role === 'superadmin' || profile.is_superadmin ||
     profile.role === 'owner'
   ))
+  
+  // Check if user is an officer role
+  const isOfficer = !!(profile && (
+    profile.role === 'admin' || profile.is_admin ||
+    profile.role === 'lead_troll_officer' || profile.is_lead_officer ||
+    profile.role === 'troll_officer' || profile.is_troll_officer ||
+    profile.role === 'secretary' ||
+    profile.role === 'prosecutor' ||
+    profile.role === 'attorney'
+  ))
+  
   const videoPreset = isStreamAdmin ? VideoPresets.h1080 : VideoPresets.h720
 
   const [stream, setStream] = useState<Stream | null>(null)
@@ -77,6 +98,9 @@ function BroadcastPage() {
   
   const [localTracks, setLocalTracks] = useState<[LocalAudioTrack, LocalVideoTrack] | null>(null)
   const localTracksRef = useRef<[LocalAudioTrack, LocalVideoTrack] | null>(null)
+
+  // Broadcast Effects Engine
+  const { triggerGiftEffect, boostCityHeat } = useBroadcastEffects()
 
   useEffect(() => {
     localTracksRef.current = localTracks
@@ -350,9 +374,17 @@ const isHost = stream?.user_id === user?.id
     enabled: !!streamId && !!(user || anonymousViewerIdRef.current),
   })
 
+  // Trollopoly game
+  const trollopoly = useTrollopoly({
+    streamId: streamId || '',
+    isHost,
+    enabled: !!streamId && !!(user || anonymousViewerIdRef.current),
+  })
+
   // Game picker state
   const [gamePickerOpen, setGamePickerOpen] = useState(false)
-  const [activeGame, setActiveGame] = useState<'troll_toe' | null>(null)
+  const [trollUsGameOpen, setTrollUsGameOpen] = useState(false)
+  const [activeGame, setActiveGame] = useState<'troll_toe' | 'troll_us' | 'trollopoly' | null>(null)
   
   // Quick Coin Store
   const [isCoinStoreOpen, setIsCoinStoreOpen] = useState(false)
@@ -887,11 +919,15 @@ const isHost = stream?.user_id === user?.id
         (payload) => {
           try {
             const likeData = payload.payload;
+            // Ignore likes from self (sender already updated optimistically)
+            if (likeData.user_id === user?.id) {
+              return;
+            }
             setStream((prev: any) => {
               if (!prev) return prev;
               const newTotal = likeData.total_likes !== undefined
                 ? likeData.total_likes
-                : (prev.total_likes || 0) + 1;
+                : (prev.total_likes || 0) + 10;
               return { ...prev, total_likes: newTotal };
             });
           } catch (err) {
@@ -1116,7 +1152,7 @@ const remainingVideo = Array.from((participant.videoTrackPublications as any)?.v
           })
 
           await room.connect(
-            import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud',
+            import.meta.env.VITE_LIVEKIT_URL,
             data.token
           )
 
@@ -1227,7 +1263,7 @@ const remainingVideo = Array.from((participant.videoTrackPublications as any)?.v
         })
 
         await room.connect(
-          import.meta.env.VITE_LIVEKIT_URL || 'wss://troll-yuvlkqig.livekit.cloud',
+                import.meta.env.VITE_LIVEKIT_URL,
           data.token
         )
 
@@ -1895,10 +1931,10 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
     return true;
   };
 
-  const handleLike = async () => {
+const handleLike = async () => {
     if (!user) {
-      navigate('/auth?mode=signup');
-      return;
+        navigate('/auth?mode=signup');
+        return;
     }
     if (isHost) {
         toast.error("Broadcasters cannot like their own broadcast");
@@ -1913,11 +1949,9 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
         return; // Silent fail for rapid clicking
     }
 
-    // Optimistic UI update - add 10 likes instantly
-    setStream((prev: any) => {
-        if (!prev) return prev;
-        return { ...prev, total_likes: (prev.total_likes || 0) + 10 };
-    });
+    // Track this click for optimistic reconciliation
+    const clickTimestamp = Date.now();
+    const expectedLikes = 10;
 
     try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -1958,10 +1992,20 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
         }
 
         if (!response.ok) {
+            // If server fails, don't update UI (the 10 optimistic was never sent)
             toast.error(result?.error || 'Failed to send like');
             return;
         }
 
+        // Only update UI with server response (source of truth)
+        const serverTotal = result.total_likes;
+        setStream((prev: any) => {
+            if (!prev) return prev;
+            // Use server total as source of truth
+            return { ...prev, total_likes: serverTotal };
+        });
+
+        // Broadcast to other users
         const channel = channelRef.current;
         if (channel) {
             await channel.send({
@@ -1970,21 +2014,11 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
                 payload: {
                     user_id: user.id,
                     stream_id: stream.id,
-                    total_likes: result.total_likes,
+                    total_likes: serverTotal,
                     timestamp: Date.now()
                 }
             });
         }
-
-        setStream((prev: any) => {
-            if (!prev) return prev;
-            const serverTotal = result.total_likes;
-            const prevTotal = prev.total_likes || 0;
-            if (typeof serverTotal === 'number' && serverTotal > 0 && serverTotal >= prevTotal) {
-                return { ...prev, total_likes: serverTotal };
-            }
-            return { ...prev, total_likes: prevTotal + 10 };
-        });
 
         if (result.coins_awarded > 0) {
             toast.success(
@@ -1996,7 +2030,7 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
 
     } catch (e) {
         console.error('Like error:', e);
-        toast.error('Failed to send like');
+        // Don't show error toast for network issues - could be temporary
     }
   };
 
@@ -2319,6 +2353,9 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
 
   const isMobileViewer = isMobileWidth && !isHost && !userSeat;
 
+  // Check if game is active that should hide add/remove box buttons
+  const isGameActive = activeGame === 'trollopoly' && trollopoly.match && trollopoly.match.phase !== 'finished';
+
   return (
     <ErrorBoundary>
       <StreamLayout
@@ -2335,8 +2372,8 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
             liveViewerCount={viewerCount > 0 ? viewerCount : remoteParticipants.size}
             handleLike={handleLike}
             boxCount={boxCount}
-            onAddBox={isHost && categoryConfig.allowAddBox && boxCount < 6 ? incrementBoxCount : undefined}
-            onRemoveBox={isHost && categoryConfig.allowDeductBox && boxCount > 1 ? decrementBoxCount : undefined}
+            onAddBox={isHost && categoryConfig.allowAddBox && boxCount < 6 && !isGameActive ? incrementBoxCount : undefined}
+            onRemoveBox={isHost && categoryConfig.allowDeductBox && boxCount > 1 && !isGameActive ? decrementBoxCount : undefined}
           />
         }
         
@@ -2357,8 +2394,10 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
               <BroadcastGrid
                 stream={stream}
                 seats={seats}
+                showTicker={tickerSettings.is_enabled}
                 onJoinSeat={(index) => handleJoinSeat(index, getSeatPrice(index))}
                 isHost={isHost}
+                isOfficer={isOfficer}
                 localTracks={localTracks}
                 cameraOverlayTrack={cameraOverlayEnabled ? (localTracks?.[1] ?? null) : null}
                 room={roomRef.current}
@@ -2372,6 +2411,7 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
                 broadcasterProfile={broadcasterProfile}
                 streamStatus={stream.status}
                 boxCount={boxCount}
+                broadcastMode={stream.broadcast_mode as 'normal' | 'game' | 'battle' | undefined}
                 battleState={battleState}
                 supporters={supporters}
                 onPickSide={pickSide}
@@ -2384,14 +2424,15 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
                 canSwipe={canSwipe}
                 onSwipeUp={() => navigateToAdjacentStream('up')}
                 onSwipeDown={() => navigateToAdjacentStream('down')}
-                onAddBox={isHost && categoryConfig.allowAddBox && boxCount < 6 ? incrementBoxCount : undefined}
-                onRemoveBox={isHost && categoryConfig.allowDeductBox && boxCount > 1 ? decrementBoxCount : undefined}
+                onAddBox={isHost && categoryConfig.allowAddBox && boxCount < 6 && !isGameActive ? incrementBoxCount : undefined}
+                onRemoveBox={isHost && categoryConfig.allowDeductBox && boxCount > 1 && !isGameActive ? decrementBoxCount : undefined}
                 onToggleRgb={isHost ? toggleStreamRgb : undefined}
                 hasRgbEffect={stream.has_rgb_effect}
                 canEditBoxes={isHost}
                 trollToeMatch={trollToe.match}
                 onTrollToeFog={!isHost && trollToe.match?.fogEnabled && trollToe.match?.phase === 'live' ? trollToe.useFog : undefined}
-                canTrollToeFog={!isHost && trollToe.match?.fogEnabled && trollToe.match?.phase === 'live' && trollToe.canUseFog(user?.id || anonymousViewerIdRef.current)}
+                battleFormat={stream.battle_format as '1v1' | '2v2' | '3v3' | '4v4' | '5v5' | undefined}
+                isUniversalBattle={(stream as any).battle_mode === 'universal'}
               />
             </>
             
@@ -2425,6 +2466,23 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
             isLive={stream.status === 'live'}
             onTrollToeController={isHost && stream.status === 'live' ? () => setGamePickerOpen(!gamePickerOpen) : undefined}
             trollToeActive={gamePickerOpen || trollToe.isControllerOpen}
+            onGameSelect={(game) => {
+              console.log('[BroadcastPage] Game selected:', game)
+              setActiveGame(game)
+              setGamePickerOpen(false)
+              if (game === 'troll_toe') {
+                trollToe.setControllerOpen(true)
+              }
+              if (game === 'troll_us') {
+                console.log('[BroadcastPage] Opening Troll Us controller')
+                setTrollUsGameOpen(true)
+              }
+              if (game === 'trollopoly') {
+                console.log('[BroadcastPage] Creating Trollopoly game')
+                trollopoly.createGame()
+              }
+            }}
+            activeGame={activeGame}
           />
         }
         
@@ -2473,17 +2531,33 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
               )}
             </AnimatePresence>
 
+            {/* Troll Us Game Controller (host only) */}
+            <AnimatePresence>
+              {isHost && trollUsGameOpen && (
+                <div className="absolute top-16 right-3 z-[70] pointer-events-auto">
+                  <TrollUsGameController
+                    streamId={streamId!}
+                    onClose={() => { setTrollUsGameOpen(false); setActiveGame(null); }}
+                  />
+                </div>
+              )}
+            </AnimatePresence>
+
             {/* Game Picker Dropdown */}
             <AnimatePresence>
               {isHost && gamePickerOpen && (
                 <div className="absolute top-16 right-3 z-[65] pointer-events-auto">
                   <GamePicker
                     activeGame={activeGame}
+                    category={stream?.category}
                     onSelectGame={(game) => {
                       setActiveGame(game)
                       setGamePickerOpen(false)
                       if (game === 'troll_toe') {
                         trollToe.setControllerOpen(true)
+                      }
+                      if (game === 'trollopoly') {
+                        trollopoly.createGame()
                       }
                     }}
                     onClose={() => setGamePickerOpen(false)}
@@ -2508,11 +2582,65 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
               )}
             </AnimatePresence>
 
-            {/* Broadcast Global Ticker */}
-            {tickerSettings.is_enabled && (
-              <BroadcastTicker />
-            )}
+            {/* Trollopoly Lobby Overlay */}
+            <AnimatePresence>
+              {trollopoly.match && (trollopoly.match.phase === 'lobby' || trollopoly.match.phase === 'piece_selection') && (
+                <TrollopolyLobby
+                  match={trollopoly.match}
+                  isHost={isHost}
+                  currentUserId={user?.id}
+                  availablePieces={trollopoly.availablePieces}
+                  onJoin={trollopoly.joinGame}
+                  onLeave={trollopoly.leaveGame}
+                  onSelectPiece={trollopoly.selectPiece}
+                  onStartGame={trollopoly.startGame}
+                  onClose={() => { trollopoly.resetGame(); setActiveGame(null); }}
+                />
+              )}
+            </AnimatePresence>
 
+            {/* Trollopoly Board (Game View) */}
+            <AnimatePresence>
+              {trollopoly.match && trollopoly.match.phase === 'playing' && (
+                <div className="fixed inset-0 z-40 bg-black">
+                  {/* Board takes center space - video feeds overlay on top */}
+                  <TrollopolyBoard
+                    match={trollopoly.match}
+                    currentUserId={user?.id}
+                    isMyTurn={trollopoly.isMyTurn}
+                    onRollDice={trollopoly.rollDice}
+                  />
+                </div>
+              )}
+            </AnimatePresence>
+
+            {/* Trollopoly Controller (Host Only) */}
+            <AnimatePresence>
+              {isHost && trollopoly.match && trollopoly.match.status !== 'finished' && (
+                <div className="absolute top-16 right-3 z-[60] pointer-events-auto">
+                  <TrollopolyController
+                    match={trollopoly.match}
+                    onStartGame={trollopoly.startGame}
+                    onEndGame={trollopoly.endGame}
+                    onResetGame={trollopoly.resetGame}
+                    onClose={() => { trollopoly.resetGame(); setActiveGame(null); }}
+                  />
+                </div>
+              )}
+            </AnimatePresence>
+
+            {/* Trollopoly Viewer UI */}
+            <AnimatePresence>
+              {!isHost && trollopoly.match && (trollopoly.match.phase === 'playing' || trollopoly.match.status === 'finished') && (
+                <TrollopolyViewerUI
+                  match={trollopoly.match}
+                  currentUserId={user?.id}
+                  userBalance={profile?.troll_coins}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* Gift Animation Overlay */}
             <GiftAnimationOverlay
               gifts={recentGifts}
               participantNames={Object.fromEntries(
@@ -2526,6 +2654,12 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
               }}
             />
 
+            {/* Glass Crack Full Page Effect */}
+            <GlassCrackEffect />
+
+            {/* TCPS Private Message Bubble */}
+            {stream && <TCPSMessageBubble broadcasterId={stream.user_id} />}
+
             {/* Broadcast Ability Effects Overlay */}
             <BroadcastAbilityEffects activeEffects={abilityActiveEffects} />
             
@@ -2535,7 +2669,7 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
                 <button
                   onClick={() => setIsAbilityBoxOpen(true)}
                   className="relative bg-purple-600/90 hover:bg-purple-500 text-white p-3 rounded-full shadow-lg shadow-purple-500/30 transition-all hover:scale-110"
-                  title="Ability Box"
+                  title="Open Ability Box - Use abilities during broadcast"
                 >
                   <Shield className="w-5 h-5" />
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
@@ -2545,21 +2679,23 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
               </div>
             )}
 
-            {/* Ticker Control Button + Panel (host only) */}
-            {isHost && (
+            {/* Ticker Control Button + Panel (host only) - hide during active game */}
+            {isHost && !isGameActive && (
               <>
-                <div className="absolute bottom-20 left-3 z-[50] pointer-events-auto">
+                <DraggableWrapper
+                  initialPos={{ x: 20, y: window.innerHeight - 180 }}
+                >
                   <button
                     onClick={() => setIsTickerPanelOpen(!isTickerPanelOpen)}
                     className="relative bg-cyan-600/90 hover:bg-cyan-500 text-white p-3 rounded-full shadow-lg shadow-cyan-500/30 transition-all hover:scale-110"
-                    title="Ticker Control"
+                    title="Open Ticker Control - Send scrolling announcements"
                   >
                     <Zap className="w-5 h-5" />
                     {tickerSettings.is_enabled && (
                       <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse" />
                     )}
                   </button>
-                </div>
+                </DraggableWrapper>
 
                 <AnimatePresence>
                   {isTickerPanelOpen && (
@@ -2641,6 +2777,21 @@ for (const pub of room.localParticipant?.audioTrackPublications?.values?.() || [
 
                 // Deduct coins
                 await supabase.rpc('deduct_coins', { amount: totalAmount });
+
+                // Trigger broadcast effects based on gift
+                const giftId = giftData.id?.toLowerCase() || giftData.name?.toLowerCase() || '';
+                if (giftId.includes('glass') || giftId.includes('breaker')) {
+                  triggerGiftEffect('glass_breaker');
+                } else if (giftId.includes('flame') || giftId.includes('fire')) {
+                  triggerGiftEffect('troll_flame');
+                } else if (giftId.includes('surge') || giftId.includes('city')) {
+                  triggerGiftEffect('city_surge');
+                } else if (giftId.includes('glitch')) {
+                  triggerGiftEffect('glitch_king');
+                } else {
+                  // Default: boost heat bar for any gift
+                  boostCityHeat(Math.ceil(totalAmount / 100));
+                }
               }}
             />
             

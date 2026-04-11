@@ -9,6 +9,116 @@ import StreamEndedPage from './StreamEndedPage'
 import { Loader2, Lock, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 
+const APP_URL = import.meta.env.VITE_APP_URL || 'https://trollcity.app'
+const FALLBACK_PREVIEW_IMAGE = `${APP_URL}/preview-default.svg`
+
+function injectSocialMetaTags(stream: Stream | null, broadcaster: { username: string; avatar_url: string; thumbnail_url?: string } | null) {
+  if (!stream) return
+  
+  const isLive = stream.status === 'live'
+  const statusText = isLive ? 'LIVE' : 'Ended'
+  const title = `${broadcaster?.username || 'Broadcaster'} is ${statusText} on Troll City`
+  const description = stream.title || `Watch this live broadcast on Troll City`
+  const canonicalUrl = `${APP_URL}/watch/${stream.id}`
+  const previewImage = (stream as any).thumbnail_url || broadcaster?.thumbnail_url || broadcaster?.avatar_url || FALLBACK_PREVIEW_IMAGE
+  
+  document.title = title
+  
+  const updateMeta = (property: string, content: string, isName = false) => {
+    const existing = document.querySelector(isName ? `meta[name="${property}"]` : `meta[property="${property}"]`)
+    if (existing) {
+      existing.setAttribute('content', content)
+    } else {
+      const meta = document.createElement('meta')
+      if (isName) {
+        meta.setAttribute('name', property)
+      } else {
+        meta.setAttribute('property', property)
+      }
+      meta.setAttribute('content', content)
+      document.head.appendChild(meta)
+    }
+  }
+  
+  // Open Graph tags
+  updateMeta('og:type', isLive ? 'video.other' : 'website')
+  updateMeta('og:title', title)
+  updateMeta('og:description', description)
+  updateMeta('og:url', canonicalUrl)
+  updateMeta('og:image', previewImage)
+  updateMeta('og:site_name', 'Troll City')
+  
+  if (isLive) {
+    updateMeta('og:video', `${APP_URL}/embed/${stream.id}`)
+    updateMeta('og:video:secure_url', `${APP_URL}/embed/${stream.id}`)
+    updateMeta('og:video:type', 'text/html')
+    updateMeta('og:video:width', '1280')
+    updateMeta('og:video:height', '720')
+    updateMeta('og:live', 'true')
+    updateMeta('og:stream:status', 'live')
+  }
+  
+  // Twitter Card tags
+  updateMeta('twitter:card', isLive ? 'player' : 'summary_large_image', true)
+  updateMeta('twitter:title', title, true)
+  updateMeta('twitter:description', description, true)
+  updateMeta('twitter:image', previewImage, true)
+  updateMeta('twitter:site', '@trollcityapp', true)
+  
+  if (isLive) {
+    updateMeta('twitter:player', `${APP_URL}/embed/${stream.id}`, true)
+    updateMeta('twitter:player:width', '1280', true)
+    updateMeta('twitter:player:height', '720', true)
+  }
+  
+  // Canonical URL
+  const existingCanonical = document.querySelector('link[rel="canonical"]')
+  if (existingCanonical) {
+    existingCanonical.setAttribute('href', canonicalUrl)
+  } else {
+    const link = document.createElement('link')
+    link.setAttribute('rel', 'canonical')
+    link.setAttribute('href', canonicalUrl)
+    document.head.appendChild(link)
+  }
+}
+
+function injectSafeMetaForPrivateStream(streamId: string, isPrivate: boolean) {
+  const title = isPrivate ? 'Private Broadcast' : 'Stream Not Found'
+  const description = isPrivate 
+    ? 'This is a private broadcast. Log in to request access.'
+    : 'This broadcast is not available.'
+  
+  document.title = title
+  
+  const updateMeta = (property: string, content: string, isName = false) => {
+    const existing = document.querySelector(isName ? `meta[name="${property}"]` : `meta[property="${property}"]`)
+    if (existing) {
+      existing.setAttribute('content', content)
+    } else {
+      const meta = document.createElement('meta')
+      if (isName) {
+        meta.setAttribute('name', property)
+      } else {
+        meta.setAttribute('property', property)
+      }
+      meta.setAttribute('content', content)
+      document.head.appendChild(meta)
+    }
+  }
+  
+  updateMeta('og:type', 'website')
+  updateMeta('og:title', title)
+  updateMeta('og:description', description)
+  updateMeta('og:url', `${APP_URL}/watch/${streamId}`)
+  updateMeta('og:image', FALLBACK_PREVIEW_IMAGE)
+  
+  updateMeta('twitter:card', 'summary_large_image', true)
+  updateMeta('twitter:title', title, true)
+  updateMeta('twitter:description', description, true)
+  updateMeta('twitter:image', FALLBACK_PREVIEW_IMAGE, true)
+}
+
 /**
  * BroadcastRouter - Routes to the appropriate page based on user role
  * 
@@ -23,6 +133,7 @@ function BroadcastRouter() {
   const { user, profile } = useAuthStore()
   
   const [stream, setStream] = useState<Stream | null>(null)
+  const [broadcaster, setBroadcaster] = useState<{ username: string; avatar_url: string; thumbnail_url?: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -86,49 +197,99 @@ function BroadcastRouter() {
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(streamId);
       
       let streamData = null;
+      let broadcasterData = null;
       
       if (isUUID) {
         // It's a UUID - direct stream lookup
-        const { data, error: fetchError } = await supabase
-          .from('streams')
-          .select('*, total_likes, is_protected, password_hash')
-          .eq('id', streamId)
-          .maybeSingle();
-        
-        if (!fetchError && data) {
-          streamData = data;
+        try {
+          const { data, error: fetchError } = await supabase
+            .from('streams')
+            .select('*')
+            .eq('id', streamId)
+            .maybeSingle();
+          
+          console.log('[BroadcastRouter] Stream fetch result:', { data, error: fetchError, streamId });
+          
+          if (!fetchError && data) {
+            streamData = data;
+            // Fetch broadcaster profile separately
+            if (data.user_id) {
+              const { data: profileData } = await supabase
+                .from('user_profiles')
+                .select('id, username, avatar_url, thumbnail_url')
+                .eq('id', data.user_id)
+                .maybeSingle();
+              broadcasterData = profileData;
+            }
+          }
+        } catch (e) {
+          console.error('[BroadcastRouter] Stream fetch error:', e);
         }
       } else {
-        // It's a username - look up user first, then their active stream
+        // It's a username - look up user first, then their stream (any status - live or recently created)
         const { data: userData, error: userError } = await supabase
           .from('user_profiles')
-          .select('id')
+          .select('id, username, avatar_url, thumbnail_url')
           .eq('username', streamId)
           .maybeSingle();
         
+        console.log('[BroadcastRouter] User lookup result:', { userData, error: userError, streamId });
+        
         if (!userError && userData) {
-          // Found user, now look for their active stream
-          const { data: streamDataByUser, error: streamError } = await supabase
-            .from('streams')
-            .select('*, total_likes, is_protected, password_hash')
-            .eq('user_id', userData.id)
-            .eq('is_live', true)
-            .eq('status', 'live')
-            .maybeSingle();
-          
-          if (!streamError && streamDataByUser) {
-            streamData = streamDataByUser;
+          broadcasterData = userData;
+          // Found user, now look for their stream (prefer live, but accept any recent)
+          try {
+            // First try live streams
+            const { data: streamDataByUser, error: streamError } = await supabase
+              .from('streams')
+              .select('*')
+              .eq('user_id', userData.id)
+              .eq('is_live', true)
+              .eq('status', 'live')
+              .maybeSingle();
+            
+            console.log('[BroadcastRouter] Live stream lookup:', { streamDataByUser, error: streamError });
+            
+            if (!streamError && streamDataByUser) {
+              streamData = streamDataByUser;
+            } else {
+              // If no live stream, try finding any recent stream (created within last 10 mins)
+              const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+              const { data: recentStream } = await supabase
+                .from('streams')
+                .select('*')
+                .eq('user_id', userData.id)
+                .gte('created_at', tenMinutesAgo)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              
+              console.log('[BroadcastRouter] Recent stream fallback:', { recentStream });
+              
+              if (recentStream) {
+                streamData = recentStream;
+              }
+            }
+          } catch (e) {
+            console.error('[BroadcastRouter] Stream by user fetch error:', e);
           }
         }
       }
 
       if (!streamData) {
         setError('Stream not found.')
+        // Inject safe meta for not found
+        injectSafeMetaForPrivateStream(streamId, false)
         setIsLoading(false)
         return
       }
 
       setStream(streamData)
+      setBroadcaster(broadcasterData)
+      
+      // Inject social meta tags for SEO
+      injectSocialMetaTags(streamData, broadcasterData)
+      
       setIsLoading(false)
     }
 
@@ -200,6 +361,8 @@ function BroadcastRouter() {
     
     if (isProtected) {
       console.log('[BroadcastRouter] Stream is protected, checking session...')
+      // Inject safe meta for private stream (don't reveal details)
+      injectSafeMetaForPrivateStream(streamId, true)
       // Check if user already validated in this session
       const sessionAccess = sessionStorage.getItem(`stream_access_${streamId}`)
       if (sessionAccess === 'granted') {

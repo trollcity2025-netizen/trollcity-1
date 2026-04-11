@@ -7,6 +7,7 @@ import { useXPStore } from '../stores/useXPStore';
 import CreditScoreBadge from '../components/CreditScoreBadge';
 import BadgesGrid from '../components/badges/BadgesGrid';     
 import UserBadge from '../components/UserBadge';
+import BackgroundCheckView from '../components/broadcast/BackgroundCheckView';
 import { useCreditScore } from '../lib/hooks/useCreditScore';
 import { useProfileViewPayment as _useProfileViewPayment } from '../hooks/useProfileViewPayment';
 import { getLevelName } from '../lib/xp';
@@ -351,6 +352,7 @@ function ProfileInner() {
     viewerRole === 'lead_troll_officer';
   const tabOptions = [
     { key: 'social', label: 'Social', show: true },
+    { key: 'background', label: 'Background Check', show: isAdminViewer || viewerRole === 'secretary' || viewerRole === 'prosecutor' || viewerRole === 'attorney' },
     { key: 'inventory', label: 'Inventory & Perks', show: canSeeFullProfile },
     { key: 'earnings', label: 'Earnings', show: canSeeFullProfile },
     { key: 'purchases', label: 'Purchase History', show: canSeeFullProfile },
@@ -905,11 +907,11 @@ function ProfileInner() {
                onError={(e) => {
                  e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`
                }}
-               onClick={() => {
-                 if (isProfileLive) {
-                   navigate(`/live/${profile.id}`);
-                 }
-               }}
+                onClick={() => {
+                  if (isProfileLive) {
+                    navigate(`/watch/${profile.id}`);
+                  }
+                }}
              />
              {isProfileLive && (
                <div className="absolute bottom-0 right-0 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-slate-950">
@@ -1102,9 +1104,9 @@ function ProfileInner() {
 
         <div className="mt-6">
            {activeTab === 'social' && (
-             <div className="space-y-6">
-               
-               {/* Badges Toggle */}
+              <div className="space-y-6">
+                
+                {/* Badges Toggle */}
               <div className="flex justify-end mb-2">
                 <details className="relative group">
                   <summary className={`list-none cursor-pointer px-4 py-2 ${trollCityTheme.backgrounds.card} ${trollCityTheme.borders.glass} hover:bg-white/5 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition-colors`}>
@@ -1120,7 +1122,11 @@ function ProfileInner() {
 
                <ProfileFeed userId={profile.id} />
              </div>
-           )}
+            )}
+
+          {activeTab === 'background' && (
+            <BackgroundCheckView userId={profile.id} />
+          )}
 
           {activeTab === 'inventory' && (
             <div className="space-y-8">

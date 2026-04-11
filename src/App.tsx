@@ -2,6 +2,7 @@
 // src/App.tsx
 import React, { useEffect, Suspense, useState, useRef } from "react";
 import TrollProvider from "./troll/TrollProvider";
+import { EffectsProvider } from "./contexts/BroadcastEffectsContext";
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./lib/store";
 import { GlobalEventProvider } from "./contexts/GlobalEventContext";
@@ -70,6 +71,7 @@ const AdvertisePage = lazyWithRetry(() => import("./pages/city-registry/Advertis
 const SetupPage = lazyWithRetry(() => import("./pages/broadcast/SetupPage"));
 const BroadcastPage = lazyWithRetry(() => import("./pages/broadcast/BroadcastPage"));
 const BroadcastRouter = lazyWithRetry(() => import("./pages/broadcast/BroadcastRouter"));
+const EmbedPage = lazyWithRetry(() => import("./pages/broadcast/EmbedPage"));
 const StreamSummary = lazyWithRetry(() => import("./pages/broadcast/StreamSummary"));
 const BattlePreview = lazyWithRetry(() => import("./pages/dev/BattlePreview"));
 const FrontendLimitsTest = lazyWithRetry(() => import("./pages/dev/FrontendLimitsTest"));
@@ -1115,6 +1117,7 @@ function AppContent() {
                 <Route path="/explore" element={<ExploreFeed />} />
                 <Route path="/live-swipe" element={<StreamSwipePage />} />
                 <Route path="/watch/:id" element={<BroadcastRouter />} />
+                <Route path="/embed/:id" element={<EmbedPage />} />
 
                 <Route path="/badges" element={<BadgesPage />} />
                 <Route path="/badges/:userId" element={<BadgesPage />} />
@@ -1945,11 +1948,13 @@ function App() {
 
   return (
     <GlobalEventProvider>
-      <TrollProvider>
-        <AppContent />
-        {/* TM Family Invite Handler - shows pending invites as notifications */}
-        <TMFamilyInviteHandler />
-      </TrollProvider>
+      <EffectsProvider>
+        <TrollProvider>
+          <AppContent />
+          {/* TM Family Invite Handler - shows pending invites as notifications */}
+          <TMFamilyInviteHandler />
+        </TrollProvider>
+      </EffectsProvider>
     </GlobalEventProvider>
   );
 }

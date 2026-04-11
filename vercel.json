@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/social/:id",
+      "destination": "/api/social/:id"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

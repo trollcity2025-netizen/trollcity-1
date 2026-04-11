@@ -2,9 +2,10 @@ import { useMemo, useState, useRef, useEffect, useCallback, memo, type CSSProper
 import { motion } from 'framer-motion';
 import { LocalVideoTrack, LocalAudioTrack, RemoteParticipant, RemoteVideoTrack, RemoteAudioTrack } from 'livekit-client';
 import { Stream } from '../../types/broadcast';
-import { User, Coins, Plus, Minus, MicOff, VideoOff, Gift, Gem, Crown, Swords, Shield, Palette, X, Circle, Cloud } from 'lucide-react';
+import { User, Users, Coins, Plus, Minus, MicOff, VideoOff, Gift, Gem, Crown, Swords, Shield, Palette, X, Circle, Cloud } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import UserActionModal from './UserActionModal';
+import ModActionsPopup from './ModActionsPopup';
 import { supabase } from '../../lib/supabase';
 
 import BroadcasterStatsModal from './BroadcasterStatsModal';
@@ -14,6 +15,8 @@ import { useParticipantAttributes } from '../../hooks/useParticipantAttributes';
 import { useAuthStore } from '../../lib/store';
 import { getAllPersistentGifts, type PersistentGift } from '../../lib/persistentGiftStore';
 import type { TrollToeMatch } from '../../types/trollToe';
+import SeatHeatBar from './SeatHeatBar';
+import BroadcastTicker from './BroadcastTicker';
 
 interface BattleState {
   active: boolean;
@@ -36,6 +39,7 @@ interface BroadcastGridProps {
   stream: Stream;
   isHost: boolean;
   isModerator?: boolean;
+  isOfficer?: boolean;
   streamStatus: Stream['status'];
   maxItems?: number;
   onGift: (userId: string) => void;
@@ -69,6 +73,10 @@ interface BroadcastGridProps {
   remainingTime?: number;
   shouldShowSidePicker?: boolean;
   onBattleGift?: (team: 'broadcaster' | 'challenger', amount: number) => Promise<boolean>;
+  // Universal Battle props
+  battleFormat?: '1v1' | '2v2' | '3v3' | '4v4' | '5v5';
+  isUniversalBattle?: boolean;
+  showTicker?: boolean;
   enableStreamSwipe?: boolean;
   canSwipe?: boolean;
   onSwipeUp?: () => void;
@@ -79,6 +87,8 @@ interface BroadcastGridProps {
   onToggleRgb?: () => void;
   hasRgbEffect?: boolean;
   canEditBoxes?: boolean;
+  // Broadcast mode (for hiding controls during game)
+  broadcastMode?: 'normal' | 'game' | 'battle';
   // Troll Toe game overlays
   trollToeMatch?: TrollToeMatch | null;
   onTrollToeFog?: (boxIndex: number) => void;
@@ -308,6 +318,7 @@ export default function BroadcastGrid({
   stream,
   isHost,
   isModerator,
+  isOfficer,
   maxItems,
   onGift,
   onGiftAll: _onGiftAll,
@@ -336,6 +347,8 @@ export default function BroadcastGrid({
   remainingTime = 0,
   shouldShowSidePicker = false,
   onBattleGift,
+  battleFormat,
+  isUniversalBattle,
   enableStreamSwipe = false,
   canSwipe = true,
   onSwipeUp,
@@ -345,9 +358,11 @@ export default function BroadcastGrid({
   onToggleRgb,
   hasRgbEffect = false,
   canEditBoxes = false,
+  broadcastMode = 'normal',
   trollToeMatch = null,
   onTrollToeFog,
   canTrollToeFog = false,
+  showTicker = false,
 }: BroadcastGridProps) {
   const { profile } = useAuthStore();
   
@@ -374,6 +389,17 @@ export default function BroadcastGrid({
   
   const [selectedUserForAction, setSelectedUserForAction] = useState<string | null>(null);
   const [showHostStats, setShowHostStats] = useState(false);
+  const [showModActions, setShowModActions] = useState(false);
+  const [modActionTargetUser, setModActionTargetUser] = useState<{
+    id: string;
+    username: string;
+    avatar_url: string;
+    role?: string;
+    troll_role?: string;
+    is_troll_officer?: boolean;
+    is_lead_officer?: boolean;
+    is_admin?: boolean;
+  } | null>(null);
   const boxRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [persistentGifts, setPersistentGifts] = useState<Map<string, PersistentGift[]>>(new Map());
   const [userReceivedGifts, setUserReceivedGifts] = useState<Record<string, number>>({});
@@ -655,6 +681,13 @@ export default function BroadcastGrid({
 
   const HARD_CAP = 9; // 9 boxes for Troll Toe (3x3 grid)
 
+  // Universal Battle: calculate required boxes based on format
+  let battleRequiredBoxes = 0;
+  if (isUniversalBattle && battleFormat) {
+    const [teamSize] = battleFormat.split('v').map(Number);
+    battleRequiredBoxes = teamSize * 2; // Both teams
+  }
+  
   // Only apply maxItems if it won't hide requiredBoxes
   const maxCap = typeof maxItems === 'number' ? Math.min(maxItems, HARD_CAP) : HARD_CAP;
   
@@ -683,7 +716,9 @@ export default function BroadcastGrid({
     boxes = visibleIndices;
   } else {
     // Standard mode: render boxes based on stream config, but NEVER hide occupied seats
-    effectiveBoxCount = Math.min(baseCount, HARD_CAP);
+    // For Universal Battle, also ensure we have enough boxes for the format
+    const minBoxes = Math.max(baseCount, battleRequiredBoxes);
+    effectiveBoxCount = Math.min(minBoxes, HARD_CAP);
     boxes = Array.from({ length: effectiveBoxCount }, (_, i) => i);
   }
 
@@ -747,15 +782,21 @@ export default function BroadcastGrid({
       className={cn(
         'grid gap-2 w-full p-2 pb-20 min-w-0 overflow-hidden max-w-full h-full',
         isSingleBoxLayout ? 'grid-cols-1 grid-rows-1 auto-rows-fr items-stretch content-stretch' : 'auto-rows-fr',
-        effectiveBoxCount === 1 && 'grid-cols-1 grid-rows-1',
-        effectiveBoxCount === 2 && 'grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1',
-        effectiveBoxCount === 3 && 'grid-cols-1 grid-rows-3 sm:grid-cols-2 sm:grid-rows-2',
-        effectiveBoxCount === 4 && 'grid-cols-1 grid-rows-4 sm:grid-cols-2 sm:grid-rows-2',
-        effectiveBoxCount === 5 && 'grid-cols-2 grid-rows-3 sm:grid-cols-3 sm:grid-rows-2',
-        effectiveBoxCount === 6 && 'grid-cols-2 grid-rows-3 sm:grid-cols-3 sm:grid-rows-2',
-        effectiveBoxCount === 7 && 'grid-cols-2 grid-rows-4 sm:grid-cols-3 sm:grid-rows-3',
-        effectiveBoxCount === 8 && 'grid-cols-2 grid-rows-4 sm:grid-cols-3 sm:grid-rows-3',
-        effectiveBoxCount === 9 && 'grid-cols-3 grid-rows-3',
+        // Universal Battle layouts - special grid for battle format
+        isUniversalBattle && battleFormat === '1v1' && 'grid-cols-2 grid-rows-1',
+        isUniversalBattle && battleFormat === '2v2' && 'grid-cols-2 grid-rows-2',
+        isUniversalBattle && battleFormat === '3v3' && 'grid-cols-3 grid-rows-2',
+        isUniversalBattle && battleFormat === '4v4' && 'grid-cols-4 grid-rows-2',
+        // Standard layouts
+        !isUniversalBattle && effectiveBoxCount === 1 && 'grid-cols-1 grid-rows-1',
+        !isUniversalBattle && effectiveBoxCount === 2 && 'grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1',
+        !isUniversalBattle && effectiveBoxCount === 3 && 'grid-cols-1 grid-rows-3 sm:grid-cols-2 sm:grid-rows-2',
+        !isUniversalBattle && effectiveBoxCount === 4 && 'grid-cols-1 grid-rows-4 sm:grid-cols-2 sm:grid-rows-2',
+        !isUniversalBattle && effectiveBoxCount === 5 && 'grid-cols-2 grid-rows-3 sm:grid-cols-3 sm:grid-rows-2',
+        !isUniversalBattle && effectiveBoxCount === 6 && 'grid-cols-2 grid-rows-3 sm:grid-cols-3 sm:grid-rows-2',
+        !isUniversalBattle && effectiveBoxCount === 7 && 'grid-cols-2 grid-rows-4 sm:grid-cols-3 sm:grid-rows-3',
+        !isUniversalBattle && effectiveBoxCount === 8 && 'grid-cols-2 grid-rows-4 sm:grid-cols-3 sm:grid-rows-3',
+        !isUniversalBattle && effectiveBoxCount === 9 && 'grid-cols-3 grid-rows-3',
         // Force square boxes on mobile - use aspect ratio for grid items
         '[&>*]:aspect-square sm:[&>*]:aspect-auto'
       )}
@@ -764,6 +805,12 @@ export default function BroadcastGrid({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Ticker at top of grid */}
+      {showTicker && (
+        <div className="absolute top-0 left-0 right-0 z-50">
+          <BroadcastTicker />
+        </div>
+      )}
       {/* Battle Score Display with Timer */}
       {battleState?.active && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2">
@@ -797,8 +844,33 @@ export default function BroadcastGrid({
               <Swords className="w-5 h-5 text-blue-400" />
             </button>
           </div>
+          </div>
+        )}
+
+      {/* Universal Battle Score Display */}
+      {isUniversalBattle && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-4 bg-black/80 backdrop-blur-md px-6 py-2 rounded-full border border-white/20">
+            <div className="flex flex-col items-center">
+              <span className="text-red-400 text-xs font-bold uppercase">Team A</span>
+              <span className="text-white font-bold text-lg">{(stream as any).side_a_score || 0}</span>
+            </div>
+            <div className="flex flex-col items-center px-2">
+              <span className="text-zinc-400 text-xs uppercase">VS</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-blue-400 text-xs font-bold uppercase">Team B</span>
+              <span className="text-white font-bold text-lg">{(stream as any).side_b_score || 0}</span>
+            </div>
+          </div>
+          {battleFormat && (
+            <div className="px-3 py-1 bg-red-600/80 text-white text-xs font-bold rounded-full">
+              {battleFormat} BATTLE
+            </div>
+          )}
         </div>
       )}
+
         {boxes.map((seatIndex) => {
           const seat = seats[seatIndex];
           // Use guest_id if user_id is null (for guest users)
@@ -865,6 +937,9 @@ export default function BroadcastGrid({
             battleState?.active && isBroadcasterSide && 'border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]',
             battleState?.active && isChallengerSide && 'border-2 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)]',
             battleState?.suddenDeath && 'animate-pulse',
+            // Universal Battle: Left side = Team A (RED), Right side = Team B (BLUE)
+            isUniversalBattle && seatIndex < (effectiveBoxCount / 2) && 'border-2 border-red-500/50',
+            isUniversalBattle && seatIndex >= (effectiveBoxCount / 2) && 'border-2 border-blue-500/50',
             // Troll Toe game team highlighting
             trollToeMatch && trollToeMatch.phase !== 'waiting' && trollToeMatch.phase !== 'ended' && trollToeBox?.player?.team === 'broadcaster' && 'border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]',
             trollToeMatch && trollToeMatch.phase !== 'waiting' && trollToeMatch.phase !== 'ended' && trollToeBox?.player?.team === 'challenger' && 'border-2 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.4)]',
@@ -899,7 +974,22 @@ export default function BroadcastGrid({
                 if (isStreamHost && seatIndex === 0 && isHost) {
                    setShowHostStats(true);
                 } else if (userId) {
-                   setSelectedUserForAction(userId);
+                   // If officer, show mod actions popup, otherwise show user action modal
+                   if (isOfficer) {
+                     setModActionTargetUser({
+                       id: userId,
+                       username: displayProfile?.username || 'User',
+                       avatar_url: displayProfile?.avatar_url || '',
+                       role: displayProfile?.role,
+                       troll_role: displayProfile?.troll_role,
+                       is_troll_officer: displayProfile?.is_troll_officer,
+                       is_lead_officer: displayProfile?.is_lead_officer,
+                       is_admin: displayProfile?.is_admin,
+                     });
+                     setShowModActions(true);
+                   } else {
+                     setSelectedUserForAction(userId);
+                   }
                 }
               }}
               role={userId ? 'button' : undefined}
@@ -1240,28 +1330,6 @@ export default function BroadcastGrid({
                 </div>
               )}
 
-              {/* Coin Balance in Top Right - with Crowns */}
-              {userId && (
-                <div className="absolute top-2 right-2 md:top-3 md:right-3 z-10 pointer-events-none">
-                  <div className="bg-black/60 backdrop-blur-md px-2 py-1 md:px-3 md:py-1.5 rounded-full border border-yellow-500/30 flex items-center gap-1 md:gap-2 shadow-lg">
-                    <Crown size={10} className="text-amber-400 md:w-3 md:h-3" />
-                    <span className="text-[11px] md:text-sm font-bold text-white">
-                      {(displayProfile?.battle_crowns || 0).toLocaleString()}
-                    </span>
-                    <div className="w-px h-3 md:h-4 bg-white/20" />
-                    <Gem size={10} className="text-purple-400 md:w-3 md:h-3" />
-                    <span className="text-[11px] md:text-sm font-bold text-white">
-                      {(displayProfile?.trollmonds || 0).toLocaleString()}
-                    </span>
-                    <div className="w-px h-3 md:h-4 bg-white/20" />
-                    <Coins size={10} className="text-yellow-400 md:w-3 md:h-3" />
-                    <span className="text-[11px] md:text-sm font-bold text-white">
-                      {(displayProfile?.troll_coins || 0).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              )}
-
               {/* Received Gifts Badge */}
               {userId && userGiftAmount > 0 && (
                 <div className="absolute bottom-20 left-3 z-10 pointer-events-none">
@@ -1271,6 +1339,18 @@ export default function BroadcastGrid({
                       +{userGiftAmount.toLocaleString()}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {/* Seat Heat Bar - only for occupied seats */}
+              {userId && seatIndex !== undefined && (
+                <div className="absolute bottom-2 left-3 right-3 z-10 pointer-events-none">
+                  <SeatHeatBar 
+                    userId={userId} 
+                    streamId={stream.id} 
+                    boxCount={boxCountProp}
+                    isBroadcasterBox={seatIndex === 0}
+                  />
                 </div>
               )}
 
@@ -1320,41 +1400,50 @@ export default function BroadcastGrid({
                 />
               )}
 
-              {/* Host-only side orbs inside broadcaster box (box 0) */}
-              {seatIndex === 0 && isHost && canEditBoxes && (
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 z-40 flex items-center gap-2">
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onAddBox?.(); }}
-                      disabled={!onAddBox}
-                      className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all bg-white/10 border-white/20 text-white hover:bg-white/20"
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onRemoveBox?.(); }}
-                      disabled={!onRemoveBox}
-                      className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all bg-white/10 border-white/20 text-white hover:bg-white/20"
-                    >
-                      <Minus size={14} />
-                    </button>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onToggleRgb?.(); }}
-                      className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all",
-                        hasRgbEffect
-                          ? "bg-purple-500/20 border-purple-500/40 text-purple-400"
-                          : "bg-black/40 border-white/10 text-white/50 hover:text-white"
-                      )}
-                    >
-                      <Palette size={14} />
-                    </button>
-                    <span className="text-[7px] text-slate-500 font-medium leading-none">RGB</span>
-                  </div>
+              {/* Mod Actions Popup for Officers */}
+              {showModActions && modActionTargetUser && (
+                <ModActionsPopup
+                  isOpen={showModActions}
+                  onClose={() => {
+                    setShowModActions(false);
+                    setModActionTargetUser(null);
+                  }}
+                  targetUser={modActionTargetUser}
+                  targetUsername={modActionTargetUser.username}
+                  targetUserId={modActionTargetUser.id}
+                  streamId={stream.id}
+                  hostId={stream.user_id}
+                />
+              )}
+
+              {/* Host-only side orbs inside broadcaster box (box 0) - hide for universal battle, battle and game mode */}
+              {seatIndex === 0 && isHost && canEditBoxes && !isUniversalBattle && !battleState?.active && broadcastMode !== 'game' && (
+                <div className="absolute left-2 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onAddBox?.(); }}
+                    disabled={!onAddBox}
+                    className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border-2 border-white text-white hover:bg-white/20"
+                  >
+                    <Plus size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRemoveBox?.(); }}
+                    disabled={!onRemoveBox}
+                    className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border-2 border-white text-white hover:bg-white/20"
+                  >
+                    <Minus size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onToggleRgb?.(); }}
+                    className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-xl border-2 transition-all",
+                      hasRgbEffect
+                        ? "bg-purple-500/20 border-purple-400 text-purple-400"
+                        : "border-white text-white hover:bg-white/20"
+                    )}
+                  >
+                    <Palette size={14} />
+                  </button>
                   <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-xl border border-white/10 flex items-center justify-center">
                     <span className="text-[10px] font-black text-white">{boxCountProp}</span>
                   </div>
